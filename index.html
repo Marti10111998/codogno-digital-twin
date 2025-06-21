@@ -83,18 +83,19 @@
       buildings = dataSource.entities.values;
 
       buildings.forEach((building, i) => {
-        const name = Building ${i + 1};
+        const name = `Building ${i + 1}`;
         building.name = name;
 
         const height = parseFloat(building.properties?.height?.getValue()) || 10;
 
-        building.polygon.extrudedHeight = height;
-        building.polygon.height = 0;
-        building.polygon.heightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
-        building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
-
-        building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(0.7);
-        building.polygon.outline = false;
+        if (building.polygon) {
+          building.polygon.extrudedHeight = height;
+          building.polygon.height = 0;
+          building.polygon.heightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
+          building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
+          building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(0.7);
+          building.polygon.outline = false;
+        }
 
         const option = document.createElement("option");
         option.value = name;
@@ -102,9 +103,9 @@
         buildingSelector.appendChild(option);
       });
 
-      // Replace zoomTo with explicit flyTo
+      // Camera fly to Codogno
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500), // Center on Codogno
+        destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
         orientation: {
           heading: Cesium.Math.toRadians(0),
           pitch: Cesium.Math.toRadians(-45),
@@ -119,7 +120,7 @@
         const color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
 
         for (const building of buildings) {
-          if (!selected || building.name === selected) {
+          if (building.polygon && (!selected || building.name === selected)) {
             building.polygon.material = color;
           }
         }
@@ -140,7 +141,7 @@
 
       timeSlider.addEventListener("input", () => {
         const hour = parseInt(timeSlider.value);
-        timeLabel.textContent = ${hour}:00;
+        timeLabel.textContent = `${hour}:00`;
 
         const newDate = new Date(2025, 5, 21, hour);
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(newDate);
@@ -151,4 +152,5 @@
   </script>
 </body>
 </html>
+
 
