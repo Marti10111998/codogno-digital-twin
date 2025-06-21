@@ -6,8 +6,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Cesium.js"></script>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
-  <!-- Compass / Navigation plugin -->
-  <script src="https://cdn.jsdelivr.net/npm/cesium-navigation-es6@1.0.7/dist/CesiumNavigation.min.js"></script>
   <style>
     html, body, #cesiumContainer {
       margin: 0;
@@ -38,12 +36,6 @@
       <input type="range" id="alphaRange" min="0" max="1" step="0.1" value="0.7" class="w-full" />
     </div>
     <div>
-      <label class="inline-flex items-center">
-        <input type="checkbox" id="visibilityToggle" checked class="mr-2" />
-        Show Selected Building
-      </label>
-    </div>
-    <div>
       <label class="block font-medium">Time of Day</label>
       <input type="range" id="timeSlider" min="0" max="24" step="1" value="12" class="w-full" />
       <div id="timeLabel" class="text-sm text-gray-600">12:00</div>
@@ -52,12 +44,6 @@
       <label class="inline-flex items-center">
         <input type="checkbox" id="shadowToggle" checked class="mr-2" />
         Enable Shadows
-      </label>
-    </div>
-    <div>
-      <label class="inline-flex items-center">
-        <input type="checkbox" id="fogToggle" checked class="mr-2" />
-        Enable Fog Effect
       </label>
     </div>
   </div>
@@ -73,13 +59,6 @@
         shadows: true
       });
 
-      // Compass navigation control
-      new CesiumNavigation(viewer, {
-        enableCompass: true,
-        enableZoomControls: false,
-        enableDistanceLegend: false
-      });
-
       const terrain = await Cesium.createWorldTerrainAsync();
       viewer.terrainProvider = terrain;
 
@@ -90,11 +69,6 @@
       viewer.scene.shadowMap.normalOffset = true;
       viewer.scene.shadowMap.darkness = 0.3;
       viewer.scene.globe.depthTestAgainstTerrain = true;
-
-      // Enable fog effect
-      viewer.scene.fog.enabled = true;
-      viewer.scene.fog.density = 0.0003;
-      viewer.scene.fog.minimumBrightness = 0.2;
 
       viewer.scene.light = new Cesium.SunLight();
       viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 12));
@@ -109,7 +83,7 @@
       buildings = dataSource.entities.values;
 
       buildings.forEach((building, i) => {
-        const name = `Building ${i + 1}`;
+        const name = Building ${i + 1};
         building.name = name;
 
         const height = parseFloat(building.properties?.height?.getValue()) || 10;
@@ -119,7 +93,7 @@
         building.polygon.heightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
         building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
 
-        building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0); // Fully opaque
+        building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0); // Fully opaque by default
         building.polygon.outline = false;
 
         const option = document.createElement("option");
@@ -128,8 +102,9 @@
         buildingSelector.appendChild(option);
       });
 
+      // Replace zoomTo with explicit flyTo
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
+        destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500), // Center on Codogno
         orientation: {
           heading: Cesium.Math.toRadians(0),
           pitch: Cesium.Math.toRadians(-45),
@@ -141,19 +116,11 @@
         const selected = buildingSelector.value;
         const colorHex = document.getElementById("colorPicker").value;
         const alpha = parseFloat(document.getElementById("alphaRange").value);
-        const visible = document.getElementById("visibilityToggle").checked;
         const color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
 
         for (const building of buildings) {
           if (!selected || building.name === selected) {
             building.polygon.material = color;
-            building.polygon.show = visible;
-          } else if (selected) {
-            building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(0.3);
-            building.polygon.show = true;
-          } else {
-            building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0);
-            building.polygon.show = true;
           }
         }
       }
@@ -161,7 +128,6 @@
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("alphaRange").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
-      document.getElementById("visibilityToggle").addEventListener("change", updateStyles);
 
       document.getElementById("shadowToggle").addEventListener("change", (e) => {
         const enabled = e.target.checked;
@@ -169,16 +135,13 @@
         viewer.scene.shadowMap.enabled = enabled;
       });
 
-      document.getElementById("fogToggle").addEventListener("change", (e) => {
-        viewer.scene.fog.enabled = e.target.checked;
-      });
-
       const timeSlider = document.getElementById("timeSlider");
       const timeLabel = document.getElementById("timeLabel");
 
       timeSlider.addEventListener("input", () => {
         const hour = parseInt(timeSlider.value);
-        timeLabel.textContent = `${hour}:00`;
+        timeLabel.textContent = ${hour}:00;
+
         const newDate = new Date(2025, 5, 21, hour);
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(newDate);
       });
