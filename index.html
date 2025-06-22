@@ -14,6 +14,37 @@
       height: 100%;
       overflow: hidden;
     }
+    #legend {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      background: white;
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      font-family: sans-serif;
+      font-size: 12px;
+      z-index: 10;
+      width: 120px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    #legendGradient {
+      height: 16px;
+      background: linear-gradient(to right, hsl(240, 100%, 50%), hsl(0, 100%, 50%));
+      margin-top: 0.25rem;
+    }
+    #tooltip {
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+      font-size: 13px;
+      pointer-events: none;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      max-width: 220px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -43,7 +74,7 @@
     <div>
       <label class="inline-flex items-center">
         <input type="checkbox" id="heatToggle" checked class="mr-2" />
-        Show Heat Colors (4 p.m.)
+        Show Heat Colors
       </label>
     </div>
     <div>
@@ -54,7 +85,37 @@
     </div>
   </div>
 
+  <!-- Heat Legend -->
+  <div id="legend">
+    <div class="font-semibold">UHI Temperature (°C)</div>
+    <div id="legendGradient"></div>
+    <div class="flex justify-between"><span>30</span><span>36</span></div>
+  </div>
+
+  <!-- Tooltip -->
+  <div id="tooltip"></div>
+
   <script>
+    const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
+    let buildings = [];
+
+    async function fetchUHI() {
+      const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
+      const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
+      const [urbanRes, ruralRes] = await Promise.all([fetch(urbanURL), fetch(ruralURL)]);
+      const urbanData = await urbanRes.json();
+      const ruralData = await ruralRes.json();
+
+      const urbanTemp = urbanData.main.temp;
+      const ruralTemp = ruralData.main.temp;
+
+      buildings.forEach(building => {
+        const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
+        const simTemp = urbanTemp + height * 0.03;
+        building.properties.addProperty("sim_uhi", simTemp);
+      });
+    }
+
     async function startCesiumApp() {
       Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
 
@@ -65,34 +126,24 @@
         shadows: true
       });
 
-      const terrain = await Cesium.createWorldTerrainAsync();
-      viewer.terrainProvider = terrain;
-
+      viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
       viewer.scene.shadowMap.enabled = true;
       viewer.scene.shadowMap.softShadows = true;
       viewer.scene.shadowMap.size = 2048;
-      viewer.scene.shadowMap.normalOffset = true;
       viewer.scene.shadowMap.darkness = 0.3;
-      viewer.scene.globe.depthTestAgainstTerrain = true;
 
-      viewer.scene.light = new Cesium.SunLight();
-      viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 12));
-
-      let buildings = [];
       const buildingSelector = document.getElementById("buildingSelector");
 
-      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_simulated_uhi.geojson", {
-        clampToGround: false
-      });
+      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
       viewer.dataSources.add(dataSource);
       buildings = dataSource.entities.values;
 
       buildings.forEach((building, i) => {
-        const name = Building ${i + 1};
+        const name = `Building ${i + 1}`;
         building.name = name;
 
-        const height = parseFloat(building.properties?.height?.getValue()) || 10;
+        const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
 
         if (building.polygon) {
           building.polygon.extrudedHeight = height;
@@ -109,6 +160,9 @@
         buildingSelector.appendChild(option);
       });
 
+      await fetchUHI();
+      updateStyles();
+
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
         orientation: {
@@ -122,31 +176,52 @@
         const selected = buildingSelector.value;
         const colorHex = document.getElementById("colorPicker").value;
         const alpha = parseFloat(document.getElementById("alphaRange").value);
-        const color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
         const showHeat = document.getElementById("heatToggle").checked;
 
         for (const building of buildings) {
           if (!building.polygon) continue;
 
+          let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
           if (showHeat) {
-            const t = parseFloat(building.properties?.t1600_max?.getValue());
+            const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
             if (!isNaN(t)) {
-              const normalized = Math.min(Math.max((t - 25) / 10, 0), 1); // clamp 0–1
-              const hue = 0.7 - normalized * 0.7; // from blue to red
-              const heatColor = Cesium.Color.fromHsl(hue, 1.0, 0.5, alpha);
-              building.polygon.material = heatColor;
+              const normalized = Math.min(Math.max((t - 30) / 6, 0), 1);
+              const hue = 0.7 - normalized * 0.7;
+              color = Cesium.Color.fromHsl(hue, 1.0, 0.5, alpha);
             }
-          } else if (!selected || building.name === selected) {
+          }
+
+          if (!selected || building.name === selected) {
             building.polygon.material = color;
           }
         }
       }
 
+      // Hover tooltip logic
+      const tooltip = document.getElementById("tooltip");
+
+      viewer.screenSpaceEventHandler.setInputAction(function (movement) {
+        const picked = viewer.scene.pick(movement.endPosition);
+        if (picked && picked.id && picked.id.properties) {
+          const props = picked.id.properties;
+          const t = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi ?? "N/A";
+          const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
+          const name = picked.id.name ?? "Unknown";
+
+          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>Temp: ${parseFloat(t).toFixed(1)} °C`;
+          tooltip.style.left = (movement.endPosition.x + 15) + "px";
+          tooltip.style.top = (movement.endPosition.y + 15) + "px";
+          tooltip.style.display = "block";
+        } else {
+          tooltip.style.display = "none";
+        }
+      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+      // Listeners
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("alphaRange").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
       document.getElementById("heatToggle").addEventListener("change", updateStyles);
-
       document.getElementById("shadowToggle").addEventListener("change", (e) => {
         const enabled = e.target.checked;
         viewer.shadows = enabled;
@@ -155,13 +230,11 @@
 
       const timeSlider = document.getElementById("timeSlider");
       const timeLabel = document.getElementById("timeLabel");
-
       timeSlider.addEventListener("input", () => {
         const hour = parseInt(timeSlider.value);
-        timeLabel.textContent = ${hour}:00;
-
-        const newDate = new Date(2025, 5, 21, hour);
-        viewer.clock.currentTime = Cesium.JulianDate.fromDate(newDate);
+        timeLabel.textContent = `${hour}:00`;
+        viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, hour));
+        updateStyles();
       });
     }
 
@@ -169,6 +242,7 @@
   </script>
 </body>
 </html>
+
 
 
 
