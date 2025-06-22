@@ -64,6 +64,7 @@
         animation: false,
         shadows: true
       });
+      viewer.shadows = true;
 
       const terrain = await Cesium.createWorldTerrainAsync();
       viewer.terrainProvider = terrain;
@@ -97,10 +98,11 @@
         if (building.polygon) {
           building.polygon.extrudedHeight = height;
           building.polygon.height = 0;
-          building.polygon.heightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
-          building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
+          building.polygon.heightReference = Cesium.HeightReference.NONE;
+          building.polygon.extrudedHeightReference = Cesium.HeightReference.NONE;
           building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1);
           building.polygon.outline = false;
+          building.polygon.shadows = Cesium.ShadowMode.ENABLED;
         }
 
         const option = document.createElement("option");
@@ -131,9 +133,25 @@
           if (showHeat) {
             const t = parseFloat(building.properties?.t1600_max?.getValue());
             if (!isNaN(t)) {
-              const normalized = Math.min(Math.max((t - 25) / 10, 0), 1); // clamp 0–1
-              const hue = 0.7 - normalized * 0.7; // from blue to red
-              const heatColor = Cesium.Color.fromHsl(hue, 1.0, 0.5, alpha);
+              const normalized = Math.min(Math.max((t - 25) / 10, 0), 1); // clamp to 0–1
+              let heatColor;
+              if (normalized < 0.5) {
+                const interp = normalized * 2;
+                heatColor = Cesium.Color.fromBytes(
+                  255,
+                  Math.round(255 * (1 - interp)),
+                  0,
+                  Math.round(alpha * 255)
+                );
+              } else {
+                const interp = (normalized - 0.5) * 2;
+                heatColor = Cesium.Color.fromBytes(
+                  255,
+                  0,
+                  Math.round(255 * interp),
+                  Math.round(alpha * 255)
+                );
+              }
               building.polygon.material = heatColor;
             }
           } else if (!selected || building.name === selected) {
@@ -169,6 +187,7 @@
   </script>
 </body>
 </html>
+
 
 
 
