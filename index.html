@@ -28,10 +28,24 @@
       background: linear-gradient(to right, hsl(240, 100%, 50%), hsl(0, 100%, 50%));
       margin-top: 0.25rem;
     }
+    #tooltip {
+      position: absolute;
+      z-index: 1000;
+      background: rgba(0,0,0,0.75);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      font-size: 12px;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <div id="cesiumContainer"></div>
+
+  <!-- Tooltip -->
+  <div id="tooltip"></div>
 
   <!-- UI Panel -->
   <div class="absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-72 space-y-4 z-10 font-sans">
@@ -78,6 +92,7 @@
   <script>
     const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
     let buildings = [];
+    let viewer;
 
     async function fetchUHI() {
       const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
@@ -100,7 +115,7 @@
     async function startCesiumApp() {
       Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
 
-      const viewer = new Cesium.Viewer("cesiumContainer", {
+      viewer = new Cesium.Viewer("cesiumContainer", {
         baseLayerPicker: true,
         timeline: false,
         animation: false,
@@ -109,36 +124,28 @@
 
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
-      viewer.scene.shadowMap.enabled = true;
-      viewer.scene.shadowMap.softShadows = true;
-      viewer.scene.shadowMap.size = 2048;
-      viewer.scene.shadowMap.darkness = 0.3;
 
-      const buildingSelector = document.getElementById("buildingSelector");
-
-      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
+      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", {
+        clampToGround: false
+      });
       viewer.dataSources.add(dataSource);
       buildings = dataSource.entities.values;
 
+      const selector = document.getElementById("buildingSelector");
       buildings.forEach((building, i) => {
         const name = `Building ${i + 1}`;
         building.name = name;
-
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
-
         if (building.polygon) {
           building.polygon.extrudedHeight = height;
           building.polygon.height = 0;
-          building.polygon.heightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
-          building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
           building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1);
           building.polygon.outline = false;
         }
-
-        const option = document.createElement("option");
-        option.value = name;
-        option.textContent = name;
-        buildingSelector.appendChild(option);
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        selector.appendChild(opt);
       });
 
       await fetchUHI();
@@ -153,40 +160,22 @@
         }
       });
 
-      function updateStyles() {
-        const selected = buildingSelector.value;
-        const colorHex = document.getElementById("colorPicker").value;
-        const alpha = parseFloat(document.getElementById("alphaRange").value);
-        const showHeat = document.getElementById("heatToggle").checked;
-
-        for (const building of buildings) {
-          if (!building.polygon) continue;
-
-          let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
-          if (showHeat) {
-            const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
-            if (!isNaN(t)) {
-              const normalized = Math.min(Math.max((t - 30) / 6, 0), 1);
-              const hue = 0.7 - normalized * 0.7;
-              color = Cesium.Color.fromHsl(hue, 1.0, 0.5, alpha);
-            }
-          }
-
-          if (!selected || building.name === selected) {
-            building.polygon.material = color;
-          }
-        }
-      }
-
-      viewer.screenSpaceEventHandler.setInputAction(function (click) {
-        const picked = viewer.scene.pick(click.position);
+      const tooltip = document.getElementById("tooltip");
+      const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+      handler.setInputAction(movement => {
+        const picked = viewer.scene.pick(movement.endPosition);
         if (picked && picked.id && picked.id.properties) {
-          const props = picked.id.properties;
-          const t = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi ?? "N/A";
-          const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
-          alert(`Building Info:\nHeight: ${h} m\nSimulated UHI Temp: ${t.toFixed(1)} °C`);
+          const b = picked.id;
+          const h = b.properties?.height?.getValue?.() ?? "N/A";
+          const t = b.properties?.sim_uhi?.getValue?.() ?? "N/A";
+          tooltip.style.display = "block";
+          tooltip.style.left = movement.endPosition.x + 10 + "px";
+          tooltip.style.top = movement.endPosition.y + 10 + "px";
+          tooltip.innerHTML = `Height: ${h} m<br>UHI: ${parseFloat(t).toFixed(1)} °C`;
+        } else {
+          tooltip.style.display = "none";
         }
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("alphaRange").addEventListener("input", updateStyles);
@@ -208,10 +197,34 @@
       });
     }
 
+    function updateStyles() {
+      const selected = document.getElementById("buildingSelector").value;
+      const colorHex = document.getElementById("colorPicker").value;
+      const alpha = parseFloat(document.getElementById("alphaRange").value);
+      const showHeat = document.getElementById("heatToggle").checked;
+
+      for (const building of buildings) {
+        if (!building.polygon) continue;
+        let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
+        if (showHeat) {
+          const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
+          if (!isNaN(t)) {
+            const norm = Math.max(0, Math.min(1, (t - 30) / 6));
+            const hue = 0.7 - norm * 0.7;
+            color = Cesium.Color.fromHsl(hue, 1.0, 0.5, alpha);
+          }
+        }
+        if (!selected || building.name === selected) {
+          building.polygon.material = color;
+        }
+      }
+    }
+
     startCesiumApp();
   </script>
 </body>
 </html>
+
 
 
 
