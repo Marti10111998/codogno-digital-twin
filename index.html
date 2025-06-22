@@ -146,7 +146,7 @@
           building.polygon.height = 0;
           building.polygon.heightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
           building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
-          building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1);
+          building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0);
           building.polygon.outline = false;
         }
 
@@ -171,7 +171,7 @@
       function updateStyles() {
         const selected = buildingSelector.value;
         const colorHex = document.getElementById("colorPicker").value;
-        const alpha = 1.0; // Force full opacity
+        const alpha = 1.0;
         const showHeat = document.getElementById("heatToggle").checked;
 
         for (const building of buildings) {
@@ -242,6 +242,7 @@
   </script>
 </body>
 </html>
+
 
 
 
