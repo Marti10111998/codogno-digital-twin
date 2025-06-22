@@ -82,7 +82,7 @@
       let buildings = [];
       const buildingSelector = document.getElementById("buildingSelector");
 
-      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_uhi.geojson", {
+      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_simulated_uhi.geojson", {
         clampToGround: false
       });
       viewer.dataSources.add(dataSource);
