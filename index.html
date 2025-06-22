@@ -43,7 +43,7 @@
     <div>
       <label class="inline-flex items-center">
         <input type="checkbox" id="heatToggle" checked class="mr-2" />
-        Show Heat Colors (4 p.m.)
+        Show Heat Colors
       </label>
     </div>
     <div>
@@ -54,9 +54,21 @@
     </div>
   </div>
 
+  <!-- Color Legend -->
+  <div class="absolute bottom-4 left-4 z-10 bg-white/90 p-2 rounded-xl shadow text-xs font-mono">
+    <div class="font-bold">UHI Temperature (C)</div>
+    <div id="legend" class="flex items-center space-x-1 mt-1">
+      <div style="width: 120px; height: 10px; background: linear-gradient(to right, hsl(0, 100%, 50%), hsl(252, 100%, 50%));"></div>
+      <div class="flex justify-between w-full">
+        <span>30</span>
+        <span>36</span>
+      </div>
+    </div>
+  </div>
+
   <script>
     async function startCesiumApp() {
-      Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
+      Cesium.Ion.defaultAccessToken = "YOUR_CESIUM_TOKEN";
 
       const viewer = new Cesium.Viewer("cesiumContainer", {
         baseLayerPicker: true,
@@ -65,49 +77,96 @@
         shadows: true
       });
 
-      const terrain = await Cesium.createWorldTerrainAsync();
-      viewer.terrainProvider = terrain;
-
       viewer.scene.globe.enableLighting = true;
       viewer.scene.shadowMap.enabled = true;
       viewer.scene.shadowMap.softShadows = true;
       viewer.scene.shadowMap.size = 2048;
-      viewer.scene.shadowMap.normalOffset = true;
-      viewer.scene.shadowMap.darkness = 0.3;
-      viewer.scene.globe.depthTestAgainstTerrain = true;
 
       viewer.scene.light = new Cesium.SunLight();
       viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 12));
 
-      let buildings = [];
       const buildingSelector = document.getElementById("buildingSelector");
-
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_simulated_uhi.geojson", {
         clampToGround: false
       });
       viewer.dataSources.add(dataSource);
-      buildings = dataSource.entities.values;
 
+      const buildings = dataSource.entities.values;
       buildings.forEach((building, i) => {
-        const name = `Building ${i + 1}`;
-        building.name = name;
-
-        const height = parseFloat(building.properties?.height?.getValue()) || 10;
+        building.name = `Building ${i + 1}`;
+        const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
 
         if (building.polygon) {
           building.polygon.extrudedHeight = height;
           building.polygon.height = 0;
           building.polygon.heightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
           building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
-          building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1);
           building.polygon.outline = false;
         }
 
         const option = document.createElement("option");
-        option.value = name;
-        option.textContent = name;
+        option.value = building.name;
+        option.textContent = building.name;
         buildingSelector.appendChild(option);
       });
+
+      function updateStyles() {
+        const selected = buildingSelector.value;
+        const alpha = parseFloat(document.getElementById("alphaRange").value);
+        const showHeat = document.getElementById("heatToggle").checked;
+        const hour = parseInt(document.getElementById("timeSlider").value);
+        const tempField = hour >= 18 ? "t2100_max" : "t1600_max";
+
+        for (const building of buildings) {
+          if (!building.polygon) continue;
+
+          let color = Cesium.Color.LIGHTGRAY.withAlpha(alpha);
+          if (showHeat) {
+            const t = parseFloat(building.properties?.[tempField]?.getValue?.() ?? building.properties?.[tempField]);
+            if (!isNaN(t)) {
+              const tMin = 30, tMax = 36;
+              const norm = Math.min(Math.max((t - tMin) / (tMax - tMin), 0), 1);
+              const hue = 0.7 - norm * 0.7;
+              color = Cesium.Color.fromHsl(hue, 1.0, 0.5).withAlpha(alpha);
+            }
+          }
+
+          if (!selected || building.name === selected) {
+            building.polygon.material = color;
+          }
+        }
+      }
+
+      function showInfoOnClick() {
+        const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+        handler.setInputAction(function (movement) {
+          const picked = viewer.scene.pick(movement.position);
+          if (Cesium.defined(picked) && picked.id?.properties) {
+            const props = picked.id.properties;
+            alert("Building Info:\n" +
+              `Name: ${picked.id.name}\n` +
+              `Height: ${props.height}\n` +
+              `t1600_max: ${props.t1600_max}\n` +
+              `t2100_max: ${props.t2100_max}`);
+          }
+        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      }
+
+      document.getElementById("colorPicker").addEventListener("input", updateStyles);
+      document.getElementById("alphaRange").addEventListener("input", updateStyles);
+      document.getElementById("buildingSelector").addEventListener("change", updateStyles);
+      document.getElementById("heatToggle").addEventListener("change", updateStyles);
+      document.getElementById("timeSlider").addEventListener("input", (e) => {
+        document.getElementById("timeLabel").textContent = `${e.target.value}:00`;
+        viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, parseInt(e.target.value)));
+        updateStyles();
+      });
+      document.getElementById("shadowToggle").addEventListener("change", (e) => {
+        viewer.shadows = viewer.scene.shadowMap.enabled = e.target.checked;
+      });
+
+      updateStyles();
+      showInfoOnClick();
 
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
@@ -117,58 +176,13 @@
           roll: 0.0
         }
       });
-
-      function updateStyles() {
-        const selected = buildingSelector.value;
-        const colorHex = document.getElementById("colorPicker").value;
-        const alpha = parseFloat(document.getElementById("alphaRange").value);
-        const color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
-        const showHeat = document.getElementById("heatToggle").checked;
-
-        for (const building of buildings) {
-          if (!building.polygon) continue;
-
-          if (showHeat) {
-            const t = parseFloat(building.properties?.t1600_max?.getValue());
-            if (!isNaN(t)) {
-              const normalized = Math.min(Math.max((t - 25) / 10, 0), 1); // clamp 0–1
-              const hue = 0.7 - normalized * 0.7; // from blue to red
-              const heatColor = Cesium.Color.fromHsl(hue, 1.0, 0.5, alpha);
-              building.polygon.material = heatColor;
-            }
-          } else if (!selected || building.name === selected) {
-            building.polygon.material = color;
-          }
-        }
-      }
-
-      document.getElementById("colorPicker").addEventListener("input", updateStyles);
-      document.getElementById("alphaRange").addEventListener("input", updateStyles);
-      document.getElementById("buildingSelector").addEventListener("change", updateStyles);
-      document.getElementById("heatToggle").addEventListener("change", updateStyles);
-
-      document.getElementById("shadowToggle").addEventListener("change", (e) => {
-        const enabled = e.target.checked;
-        viewer.shadows = enabled;
-        viewer.scene.shadowMap.enabled = enabled;
-      });
-
-      const timeSlider = document.getElementById("timeSlider");
-      const timeLabel = document.getElementById("timeLabel");
-
-      timeSlider.addEventListener("input", () => {
-        const hour = parseInt(timeSlider.value);
-        timeLabel.textContent = `${hour}:00`;
-
-        const newDate = new Date(2025, 5, 21, hour);
-        viewer.clock.currentTime = Cesium.JulianDate.fromDate(newDate);
-      });
     }
 
     startCesiumApp();
   </script>
 </body>
 </html>
+
 
 
 
