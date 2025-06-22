@@ -42,6 +42,12 @@
     </div>
     <div>
       <label class="inline-flex items-center">
+        <input type="checkbox" id="heatToggle" checked class="mr-2" />
+        Show Heat Colors (4 p.m.)
+      </label>
+    </div>
+    <div>
+      <label class="inline-flex items-center">
         <input type="checkbox" id="shadowToggle" checked class="mr-2" />
         Enable Shadows
       </label>
@@ -76,7 +82,7 @@
       let buildings = [];
       const buildingSelector = document.getElementById("buildingSelector");
 
-      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", {
+      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_uhi.geojson", {
         clampToGround: false
       });
       viewer.dataSources.add(dataSource);
@@ -103,7 +109,6 @@
         buildingSelector.appendChild(option);
       });
 
-      // Camera fly to Codogno
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
         orientation: {
@@ -118,9 +123,20 @@
         const colorHex = document.getElementById("colorPicker").value;
         const alpha = parseFloat(document.getElementById("alphaRange").value);
         const color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
+        const showHeat = document.getElementById("heatToggle").checked;
 
         for (const building of buildings) {
-          if (building.polygon && (!selected || building.name === selected)) {
+          if (!building.polygon) continue;
+
+          if (showHeat) {
+            const t = parseFloat(building.properties?.t1600_max?.getValue());
+            if (!isNaN(t)) {
+              const normalized = Math.min(Math.max((t - 25) / 10, 0), 1); // clamp 0–1
+              const hue = 0.7 - normalized * 0.7; // from blue to red
+              const heatColor = Cesium.Color.fromHsl(hue, 1.0, 0.5, alpha);
+              building.polygon.material = heatColor;
+            }
+          } else if (!selected || building.name === selected) {
             building.polygon.material = color;
           }
         }
@@ -129,6 +145,7 @@
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("alphaRange").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
+      document.getElementById("heatToggle").addEventListener("change", updateStyles);
 
       document.getElementById("shadowToggle").addEventListener("change", (e) => {
         const enabled = e.target.checked;
@@ -152,5 +169,6 @@
   </script>
 </body>
 </html>
+
 
 
