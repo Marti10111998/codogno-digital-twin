@@ -8,7 +8,11 @@
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
   <style>
     html, body, #cesiumContainer {
-      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
     }
     #legend {
       position: absolute;
@@ -27,6 +31,19 @@
       height: 16px;
       background: linear-gradient(to right, hsl(240, 100%, 50%), hsl(0, 100%, 50%));
       margin-top: 0.25rem;
+    }
+    #tooltip {
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+      font-size: 13px;
+      pointer-events: none;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      max-width: 220px;
+      display: none;
     }
   </style>
 </head>
@@ -75,6 +92,9 @@
     <div class="flex justify-between"><span>30</span><span>36</span></div>
   </div>
 
+  <!-- Tooltip -->
+  <div id="tooltip"></div>
+
   <script>
     const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
     let buildings = [];
@@ -88,7 +108,6 @@
 
       const urbanTemp = urbanData.main.temp;
       const ruralTemp = ruralData.main.temp;
-      const uhiBase = urbanTemp - ruralTemp;
 
       buildings.forEach(building => {
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
@@ -178,16 +197,27 @@
         }
       }
 
-      viewer.screenSpaceEventHandler.setInputAction(function (click) {
-        const picked = viewer.scene.pick(click.position);
+      // Hover tooltip logic
+      const tooltip = document.getElementById("tooltip");
+
+      viewer.screenSpaceEventHandler.setInputAction(function (movement) {
+        const picked = viewer.scene.pick(movement.endPosition);
         if (picked && picked.id && picked.id.properties) {
           const props = picked.id.properties;
           const t = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi ?? "N/A";
           const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
-          alert(`Building Info:\nHeight: ${h} m\nSimulated UHI Temp: ${t.toFixed(1)} °C`);
-        }
-      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+          const name = picked.id.name ?? "Unknown";
 
+          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>Temp: ${parseFloat(t).toFixed(1)} °C`;
+          tooltip.style.left = (movement.endPosition.x + 15) + "px";
+          tooltip.style.top = (movement.endPosition.y + 15) + "px";
+          tooltip.style.display = "block";
+        } else {
+          tooltip.style.display = "none";
+        }
+      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+      // Listeners
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("alphaRange").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
@@ -212,6 +242,7 @@
   </script>
 </body>
 </html>
+
 
 
 
