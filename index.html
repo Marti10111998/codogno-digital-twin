@@ -63,10 +63,6 @@
       <input type="color" id="colorPicker" class="w-full" value="#cccccc" />
     </div>
     <div>
-      <label class="block font-medium">Transparency</label>
-      <input type="range" id="alphaRange" min="0" max="1" step="0.1" value="0.7" class="w-full" />
-    </div>
-    <div>
       <label class="block font-medium">Time of Day</label>
       <input type="range" id="timeSlider" min="0" max="24" step="1" value="12" class="w-full" />
       <div id="timeLabel" class="text-sm text-gray-600">12:00</div>
@@ -175,26 +171,25 @@
       function updateStyles() {
         const selected = buildingSelector.value;
         const colorHex = document.getElementById("colorPicker").value;
-        const alpha = parseFloat(document.getElementById("alphaRange").value);
+        const alpha = 1.0; // Force full opacity
         const showHeat = document.getElementById("heatToggle").checked;
 
         for (const building of buildings) {
           if (!building.polygon) continue;
 
           let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
+
           if (showHeat) {
             const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
             if (!isNaN(t)) {
               const normalized = Math.min(Math.max((t - 30) / 6, 0), 1);
               let hue;
-                  if (normalized < 0.5) {
-                      // Yellow (60° / 360 = 1/6) → Red (0°)
-                      hue = (1 / 6) * (1 - normalized * 2);
-                  } else {
-                    // Red (0°) → Purple (300° / 360 = 5/6)
-                    hue = (5 / 6) * ((normalized - 0.5) * 2);
-                  }
-                  color = Cesium.Color.fromHsl(hue, 1.0, 0.5, alpha);
+              if (normalized < 0.5) {
+                hue = (1 / 6) * (1 - normalized * 2); // Yellow to Red
+              } else {
+                hue = (5 / 6) * ((normalized - 0.5) * 2); // Red to Purple
+              }
+              color = Cesium.Color.fromHsl(hue, 1.0, 0.5, alpha);
             }
           }
 
@@ -225,7 +220,6 @@
 
       // Listeners
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
-      document.getElementById("alphaRange").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
       document.getElementById("heatToggle").addEventListener("change", updateStyles);
       document.getElementById("shadowToggle").addEventListener("change", (e) => {
@@ -248,6 +242,7 @@
   </script>
 </body>
 </html>
+
 
 
 
