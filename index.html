@@ -29,7 +29,7 @@
     }
     #legendGradient {
       height: 16px;
-      background: linear-gradient(to right, hsl(60, 100%, 50%), hsl(0, 100%, 50%), hsl(300, 100%, 50%));
+      background: linear-gradient(to right, hsl(60, 100%, 50%), hsl(30, 100%, 50%), hsl(0, 100%, 50%), hsl(300, 100%, 50%));
       margin-top: 0.25rem;
     }
     #tooltip {
@@ -184,12 +184,14 @@
             if (!isNaN(t)) {
               const normalized = Math.min(Math.max((t - 30) / 6, 0), 1);
               let hue;
-              if (normalized < 0.5) {
-                hue = (1 / 6) * (1 - normalized * 2); // Yellow to Red
+              if (normalized < 0.33) {
+                hue = 60 - normalized / 0.33 * 30; // Yellow to Orange
+              } else if (normalized < 0.66) {
+                hue = 30 - (normalized - 0.33) / 0.33 * 30; // Orange to Red
               } else {
-                hue = (5 / 6) * ((normalized - 0.5) * 2); // Red to Purple
+                hue = 0 + (normalized - 0.66) / 0.34 * 300; // Red to Purple
               }
-              color = Cesium.Color.fromHsl(hue, 1.0, 0.5, alpha);
+              color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5, alpha);
             }
           }
 
@@ -218,7 +220,6 @@
         }
       }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
-      // Listeners
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
       document.getElementById("heatToggle").addEventListener("change", updateStyles);
@@ -242,6 +243,7 @@
   </script>
 </body>
 </html>
+
 
 
 
