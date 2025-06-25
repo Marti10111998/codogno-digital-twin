@@ -187,7 +187,7 @@
           if (showHeat) {
             const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
             if (!isNaN(t)) {
-              const normalized = Math.min(Math.max((t - 30) / 6, 0), 1);
+              const normalized = 1 - Math.min(Math.max((t - 30) / 6, 0), 1);
               let hue;
               if (normalized < 0.33) {
                 // Yellow (60°) to Orange (30°)
