@@ -29,7 +29,12 @@
     }
     #legendGradient {
       height: 16px;
-      background: linear-gradient(to right, hsl(60, 100%, 50%), hsl(30, 100%, 50%), hsl(0, 100%, 50%), hsl(300, 100%, 50%));
+      background: linear-gradient(to right,
+        hsl(60, 100%, 50%),  /* Yellow */
+        hsl(30, 100%, 50%),  /* Orange */
+        hsl(0, 100%, 50%),   /* Red */
+        hsl(300, 100%, 50%)  /* Purple */
+      );
       margin-top: 0.25rem;
     }
     #tooltip {
@@ -185,11 +190,15 @@
               const normalized = Math.min(Math.max((t - 30) / 6, 0), 1);
               let hue;
               if (normalized < 0.33) {
-                hue = 60 - normalized / 0.33 * 30; // Yellow to Orange
+                // Yellow (60°) to Orange (30°)
+                hue = 60 - normalized / 0.33 * 30;
               } else if (normalized < 0.66) {
-                hue = 30 - (normalized - 0.33) / 0.33 * 30; // Orange to Red
+                // Orange (30°) to Red (0°)
+                hue = 30 - (normalized - 0.33) / 0.33 * 30;
               } else {
-                hue = 0 + (normalized - 0.66) / 0.34 * 300; // Red to Purple
+                // Red (0°) to Purple (300° = -60° → wrapped as 300°)
+                hue = (normalized - 0.66) / 0.34 * 60;
+                hue = 360 - hue; // Wrap to purple
               }
               color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5, alpha);
             }
@@ -243,6 +252,7 @@
   </script>
 </body>
 </html>
+
 
 
 
