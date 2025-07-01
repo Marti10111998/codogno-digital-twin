@@ -188,19 +188,9 @@
             const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
             if (!isNaN(t)) {
               const normalized = 1 - Math.min(Math.max((t - 30) / 6, 0), 1);
-              let hue;
-              if (normalized < 0.33) {
-                // Yellow (60°) to Orange (30°)
-                hue = 60 - normalized / 0.33 * 30;
-              } else if (normalized < 0.66) {
-                // Orange (30°) to Red (0°)
-                hue = 30 - (normalized - 0.33) / 0.33 * 30;
-              } else {
-                // Red (0°) to Purple (300° = -60° → wrapped as 300°)
-                hue = (normalized - 0.66) / 0.34 * 60;
-                hue = 360 - hue; // Wrap to purple
-              }
-              color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5, alpha);
+              const hue = 60 + (1 - normalized) * (330 - 60); // 60 (yellow) to 330 (pink)
+              color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, alpha);
+
             }
           }
 
