@@ -185,11 +185,14 @@
           let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
 
           if (showHeat) {
-            const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
-            if (!isNaN(t)) {
-            const normalized = Math.min(Math.max((t - 25) / 15, 0), 1);  // Normalize to 25–40°C
-            const hue = 60 + (1 - normalized) * (330 - 60);  // Yellow (60°) → Pink (330°)
-            color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, alpha);
+              const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
+              if (!isNaN(t)) {
+              const normalized = Math.min(Math.max((t - 25) / 15, 0), 1);  // 25–40°C
+              const hue = 60 + normalized * (330 - 60);  // Correct direction
+              color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, alpha);
+            }
+          }
+
   }
 }
 
