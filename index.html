@@ -187,9 +187,12 @@
           if (showHeat) {
             const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
             if (!isNaN(t)) {
-              const normalized = Math.min(Math.max((t - 30) / 6, 0), 1);  // 30–36°C range
-              const hue = 60 + (1 - normalized) * (330 - 60);  // ← Invert normalized here
-              color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, alpha);
+            const normalized = Math.min(Math.max((t - 25) / 15, 0), 1);  // Normalize to 25–40°C
+            const hue = 60 + (1 - normalized) * (330 - 60);  // Yellow (60°) → Pink (330°)
+            color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, alpha);
+  }
+}
+
 
             }
           }
