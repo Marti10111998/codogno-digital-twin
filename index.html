@@ -31,9 +31,8 @@
       height: 16px;
       background: linear-gradient(to right,
         hsl(60, 100%, 50%),  /* Yellow */
-        hsl(30, 100%, 50%),  /* Orange */
-        hsl(0, 100%, 50%),   /* Red */
-        hsl(300, 100%, 50%)  /* Purple */
+        hsl(150, 100%, 50%), /* Lime (optional) */
+        hsl(330, 100%, 50%)  /* Pink */
       );
       margin-top: 0.25rem;
     }
@@ -173,34 +172,23 @@
         }
       });
 
-  function updateStyles() {
-  const selected = buildingSelector.value;
-  const colorHex = document.getElementById("colorPicker").value;
-  const alpha = 1.0;
-  const showHeat = document.getElementById("heatToggle").checked;
+      function updateStyles() {
+        const selected = buildingSelector.value;
+        const colorHex = document.getElementById("colorPicker").value;
+        const alpha = 1.0;
+        const showHeat = document.getElementById("heatToggle").checked;
 
-  for (const building of buildings) {
-    if (!building.polygon) continue;
+        for (const building of buildings) {
+          if (!building.polygon) continue;
 
-    let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
+          let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
 
-    if (showHeat) {
-      const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
-      if (!isNaN(t)) {
-        const normalized = Math.min(Math.max((t - 25) / 15, 0), 1);  // 25–40°C range
-        const hue = 60 + normalized * (330 - 60);  // Yellow to Pink
-        color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, alpha);
-      }
-    }
-
-    if (!selected || building.name === selected) {
-      building.polygon.material = color;
-    }
-  }
-}
-
-
-
+          if (showHeat) {
+            const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
+            if (!isNaN(t)) {
+              const normalized = Math.min(Math.max((t - 25) / 15, 0), 1);  // 25–40°C
+              const hue = 60 + normalized * (330 - 60);  // Yellow to Pink
+              color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, alpha);
             }
           }
 
@@ -252,6 +240,7 @@
   </script>
 </body>
 </html>
+
 
 
 
