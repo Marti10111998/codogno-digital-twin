@@ -97,6 +97,10 @@
 
   <script>
     const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
+    const tomtomApiKey = "YOUR_TOMTOM_API_KEY";
+    const segmentIds = [
+      "-00004931-3100-0400-0000-0000013085ef"
+    ];
     let buildings = [];
 
     async function fetchUHI() {
@@ -116,24 +120,47 @@
       });
     }
 
-    async function startCesiumApp() {
-      Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
+    async function fetchTrafficStats(date, timeSet, segmentId) {
+      const url = `https://api.tomtom.com/traffic/services/4/speedStats/segmentStats?key=${tomtomApiKey}&date=${date}&timeSet=${timeSet}&segmentId=${segmentId}`;
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      return response.json();
+    }
 
+    async function getDailyTrafficData(date, timeSet) {
+      const results = [];
+      for (const segmentId of segmentIds) {
+        const data = await fetchTrafficStats(date, timeSet, segmentId);
+        if (data?.segmentStats?.length > 0) {
+          const stats = data.segmentStats[0];
+          results.push({ segmentId, averageSpeed: stats.averageSpeed });
+        }
+      }
+      updateTrafficOverlay(results);
+    }
+
+    function updateTrafficOverlay(trafficData) {
+      for (const building of buildings) {
+        const segId = building.properties?.segmentId?.getValue?.() ?? building.properties?.segmentId;
+        const traffic = trafficData.find(d => d.segmentId === segId);
+        if (!traffic) continue;
+
+        const normSpeed = Math.min(Math.max(traffic.averageSpeed / 90, 0), 1);
+        const hue = 60 + normSpeed * (330 - 60);
+        const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, 1.0);
+
+        if (building.polygon) building.polygon.material = color;
+      }
+    }
+
+    async function startCesiumApp() {
+      Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
       const viewer = new Cesium.Viewer("cesiumContainer", {
-        baseLayerPicker: true,
-        timeline: false,
-        animation: false,
-        shadows: true
+        baseLayerPicker: true, timeline: false, animation: false, shadows: true
       });
 
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
-      viewer.scene.shadowMap.enabled = true;
-      viewer.scene.shadowMap.softShadows = true;
-      viewer.scene.shadowMap.size = 2048;
-      viewer.scene.shadowMap.darkness = 0.3;
-
-      const buildingSelector = document.getElementById("buildingSelector");
 
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
       viewer.dataSources.add(dataSource);
@@ -142,22 +169,14 @@
       buildings.forEach((building, i) => {
         const name = `Building ${i + 1}`;
         building.name = name;
-
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
-
         if (building.polygon) {
           building.polygon.extrudedHeight = height;
           building.polygon.height = 0;
           building.polygon.heightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
           building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
           building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0);
-          building.polygon.outline = false;
         }
-
-        const option = document.createElement("option");
-        option.value = name;
-        option.textContent = name;
-        buildingSelector.appendChild(option);
       });
 
       await fetchUHI();
@@ -165,81 +184,61 @@
 
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
-        orientation: {
-          heading: Cesium.Math.toRadians(0),
-          pitch: Cesium.Math.toRadians(-45),
-          roll: 0.0
-        }
-      });
-
-      function updateStyles() {
-        const selected = buildingSelector.value;
-        const colorHex = document.getElementById("colorPicker").value;
-        const alpha = 1.0;
-        const showHeat = document.getElementById("heatToggle").checked;
-
-        for (const building of buildings) {
-          if (!building.polygon) continue;
-
-          let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
-
-          if (showHeat) {
-            const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
-            if (!isNaN(t)) {
-              const normalized = Math.min(Math.max((t - 25) / 15, 0), 1);  // 25–40°C
-              const hue = 60 + normalized * (330 - 60);  // Yellow to Pink
-              color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, alpha);
-            }
-          }
-
-          if (!selected || building.name === selected) {
-            building.polygon.material = color;
-          }
-        }
-      }
-
-      const tooltip = document.getElementById("tooltip");
-
-      viewer.screenSpaceEventHandler.setInputAction(function (movement) {
-        const picked = viewer.scene.pick(movement.endPosition);
-        if (picked && picked.id && picked.id.properties) {
-          const props = picked.id.properties;
-          const t = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi ?? "N/A";
-          const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
-          const name = picked.id.name ?? "Unknown";
-
-          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>Temp: ${parseFloat(t).toFixed(1)} °C`;
-          tooltip.style.left = (movement.endPosition.x + 15) + "px";
-          tooltip.style.top = (movement.endPosition.y + 15) + "px";
-          tooltip.style.display = "block";
-        } else {
-          tooltip.style.display = "none";
-        }
-      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-      document.getElementById("colorPicker").addEventListener("input", updateStyles);
-      document.getElementById("buildingSelector").addEventListener("change", updateStyles);
-      document.getElementById("heatToggle").addEventListener("change", updateStyles);
-      document.getElementById("shadowToggle").addEventListener("change", (e) => {
-        const enabled = e.target.checked;
-        viewer.shadows = enabled;
-        viewer.scene.shadowMap.enabled = enabled;
+        orientation: { heading: Cesium.Math.toRadians(0), pitch: Cesium.Math.toRadians(-45), roll: 0.0 }
       });
 
       const timeSlider = document.getElementById("timeSlider");
       const timeLabel = document.getElementById("timeLabel");
-      timeSlider.addEventListener("input", () => {
+
+      timeSlider.addEventListener("input", async () => {
         const hour = parseInt(timeSlider.value);
         timeLabel.textContent = `${hour}:00`;
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, hour));
+
+        const timeSet =
+          hour >= 7 && hour < 10 ? "mattina" :
+          hour >= 12 && hour < 14 ? "pranzo" :
+          hour >= 17 && hour < 20 ? "dopolavoro" :
+          hour >= 2 && hour < 4 ? "notte" : null;
+        if (!timeSet) return;
+
+        const today = new Date().toISOString().split("T")[0];
+        await getDailyTrafficData(today, timeSet);
         updateStyles();
       });
+    }
+
+    function updateStyles() {
+      const selected = document.getElementById("buildingSelector").value;
+      const colorHex = document.getElementById("colorPicker").value;
+      const alpha = 1.0;
+      const showHeat = document.getElementById("heatToggle").checked;
+
+      for (const building of buildings) {
+        if (!building.polygon) continue;
+
+        let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
+
+        if (showHeat) {
+          const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
+          if (!isNaN(t)) {
+            const normalized = Math.min(Math.max((t - 25) / 15, 0), 1);
+            const hue = 60 + normalized * (330 - 60);
+            color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, alpha);
+          }
+        }
+
+        if (!selected || building.name === selected) {
+          building.polygon.material = color;
+        }
+      }
     }
 
     startCesiumApp();
   </script>
 </body>
 </html>
+
 
 
 
