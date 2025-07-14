@@ -100,8 +100,8 @@
     let buildings = [];
 
     async function fetchUHI() {
-      const urbanURL = https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey};
-      const ruralURL = https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey};
+      const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
+      const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
       const [urbanRes, ruralRes] = await Promise.all([fetch(urbanURL), fetch(ruralURL)]);
       const urbanData = await urbanRes.json();
       const ruralData = await ruralRes.json();
@@ -140,7 +140,7 @@
       buildings = dataSource.entities.values;
 
       buildings.forEach((building, i) => {
-        const name = Building ${i + 1};
+        const name = `Building ${i + 1}`;
         building.name = name;
 
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
@@ -208,7 +208,7 @@
           const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
           const name = picked.id.name ?? "Unknown";
 
-          tooltip.innerHTML = <strong>${name}</strong><br>Height: ${h} m<br>Temp: ${parseFloat(t).toFixed(1)} °C;
+          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>Temp: ${parseFloat(t).toFixed(1)} °C`;
           tooltip.style.left = (movement.endPosition.x + 15) + "px";
           tooltip.style.top = (movement.endPosition.y + 15) + "px";
           tooltip.style.display = "block";
@@ -230,7 +230,7 @@
       const timeLabel = document.getElementById("timeLabel");
       timeSlider.addEventListener("input", () => {
         const hour = parseInt(timeSlider.value);
-        timeLabel.textContent = ${hour}:00;
+        timeLabel.textContent = `${hour}:00`;
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, hour));
         updateStyles();
       });
@@ -240,11 +240,6 @@
   </script>
 </body>
 </html>
-
-
-
-
-
 
 
 
