@@ -1,10 +1,65 @@
-<!-- ... HEAD unchanged ... -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Codogno Digital Twin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- ✅ FIXED CesiumJS includes using official CDN -->
+  <script src="https://unpkg.com/cesium@1.116/Build/Cesium/Cesium.js"></script>
+  <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+
+  <style>
+    html, body, #cesiumContainer {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    #legend {
+      position: absolute;
+      bottom: 1rem;
+      left: 1rem;
+      background: white;
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      font-family: sans-serif;
+      font-size: 12px;
+      z-index: 10;
+      width: 140px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    #legendGradient {
+      height: 16px;
+      background: linear-gradient(to right,
+        hsl(60, 100%, 50%),
+        hsl(150, 100%, 50%),
+        hsl(330, 100%, 50%)
+      );
+      margin-top: 0.25rem;
+    }
+    #tooltip {
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      padding: 6px 8px;
+      font-size: 13px;
+      pointer-events: none;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      max-width: 220px;
+      display: none;
+    }
+  </style>
+</head>
+
 <body>
   <div id="cesiumContainer"></div>
 
   <!-- UI Panel -->
   <div class="absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-72 space-y-4 z-10 font-sans">
-    <!-- Existing Controls -->
     <div>
       <label class="block font-medium">Select Building</label>
       <select id="buildingSelector" class="w-full border rounded px-2 py-1">
@@ -32,8 +87,6 @@
         Enable Shadows
       </label>
     </div>
-
-    <!-- ✅ New Dropdown for Heatmap -->
     <div>
       <label class="block font-medium">Traffic Heatmap Time</label>
       <select id="heatmapTimeSelector" class="w-full border rounded px-2 py-1">
@@ -45,12 +98,12 @@
     </div>
   </div>
 
-  <!-- Legend & Tooltip remain unchanged -->
   <div id="legend">
     <div class="font-semibold">UHI Temperature (°C)</div>
     <div id="legendGradient"></div>
     <div class="flex justify-between"><span>25</span><span>40</span></div>
   </div>
+
   <div id="tooltip"></div>
 
   <script>
@@ -62,11 +115,8 @@
       const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
       const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
       const [urbanRes, ruralRes] = await Promise.all([fetch(urbanURL), fetch(ruralURL)]);
-      const urbanData = await urbanRes.json();
-      const ruralData = await ruralRes.json();
-
-      const urbanTemp = urbanData.main.temp;
-      const ruralTemp = ruralData.main.temp;
+      const urbanTemp = (await urbanRes.json()).main.temp;
+      const ruralTemp = (await ruralRes.json()).main.temp;
 
       buildings.forEach(building => {
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
@@ -87,13 +137,8 @@
 
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
-      viewer.scene.shadowMap.enabled = true;
-      viewer.scene.shadowMap.softShadows = true;
-      viewer.scene.shadowMap.size = 2048;
-      viewer.scene.shadowMap.darkness = 0.3;
 
       const buildingSelector = document.getElementById("buildingSelector");
-
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
       viewer.dataSources.add(dataSource);
       buildings = dataSource.entities.values;
@@ -101,7 +146,6 @@
       buildings.forEach((building, i) => {
         const name = `Building ${i + 1}`;
         building.name = name;
-
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
 
         if (building.polygon) {
@@ -139,7 +183,6 @@
 
         for (const building of buildings) {
           if (!building.polygon) continue;
-
           let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
 
           if (showHeat) {
@@ -158,8 +201,7 @@
       }
 
       const tooltip = document.getElementById("tooltip");
-
-      viewer.screenSpaceEventHandler.setInputAction(function (movement) {
+      viewer.screenSpaceEventHandler.setInputAction((movement) => {
         const picked = viewer.scene.pick(movement.endPosition);
         if (picked && picked.id && picked.id.properties) {
           const props = picked.id.properties;
@@ -194,11 +236,9 @@
         updateStyles();
       });
 
-      // ✅ Load Heatmap Points
+      // ✅ Heatmap Loader
       async function loadHeatmap(timeOfDay) {
-        for (const entity of heatmapEntities) {
-          viewer.entities.remove(entity);
-        }
+        for (const entity of heatmapEntities) viewer.entities.remove(entity);
         heatmapEntities = [];
 
         const file = `heatmaps/${timeOfDay}_heatpoints.json`;
@@ -207,7 +247,7 @@
 
         for (const [lat, lon, speed] of data) {
           const normalized = Math.min(speed / 60, 1);
-          const hue = (1 - normalized) * 240; // blue (slow) → red (fast)
+          const hue = (1 - normalized) * 240;
           const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
 
           const entity = viewer.entities.add({
@@ -223,7 +263,6 @@
         }
       }
 
-      // Load default
       loadHeatmap("morning");
       document.getElementById("heatmapTimeSelector").addEventListener("change", (e) => {
         loadHeatmap(e.target.value);
