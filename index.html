@@ -30,9 +30,9 @@
     #legendGradient {
       height: 16px;
       background: linear-gradient(to right,
-        hsl(60, 100%, 50%),
-        hsl(150, 100%, 50%),
-        hsl(330, 100%, 50%)
+        hsl(60, 100%, 50%),  /* Yellow */
+        hsl(150, 100%, 50%), /* Lime (optional) */
+        hsl(330, 100%, 50%)  /* Pink */
       );
       margin-top: 0.25rem;
     }
@@ -54,6 +54,7 @@
 <body>
   <div id="cesiumContainer"></div>
 
+  <!-- UI Panel -->
   <div class="absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-72 space-y-4 z-10 font-sans">
     <div>
       <label class="block font-medium">Select Building</label>
@@ -84,12 +85,14 @@
     </div>
   </div>
 
+  <!-- Heat Legend -->
   <div id="legend">
     <div class="font-semibold">UHI Temperature (°C)</div>
     <div id="legendGradient"></div>
     <div class="flex justify-between"><span>25</span><span>40</span></div>
   </div>
 
+  <!-- Tooltip -->
   <div id="tooltip"></div>
 
   <script>
@@ -130,15 +133,8 @@
       viewer.scene.shadowMap.size = 2048;
       viewer.scene.shadowMap.darkness = 0.3;
 
-      // ✅ ADD HEATMAP IMAGE OVERLAY HERE
-      viewer.imageryLayers.addImageryProvider(
-        new Cesium.SingleTileImageryProvider({
-          url: "cesium_heatmap.png",
-          rectangle: Cesium.Rectangle.fromDegrees(9.65, 45.13, 9.72, 45.18)
-        })
-      );
-
       const buildingSelector = document.getElementById("buildingSelector");
+
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
       viewer.dataSources.add(dataSource);
       buildings = dataSource.entities.values;
@@ -146,7 +142,9 @@
       buildings.forEach((building, i) => {
         const name = `Building ${i + 1}`;
         building.name = name;
+
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
+
         if (building.polygon) {
           building.polygon.extrudedHeight = height;
           building.polygon.height = 0;
@@ -155,6 +153,7 @@
           building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0);
           building.polygon.outline = false;
         }
+
         const option = document.createElement("option");
         option.value = name;
         option.textContent = name;
@@ -183,6 +182,7 @@
           if (!building.polygon) continue;
 
           let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
+
           if (showHeat) {
             const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
             if (!isNaN(t)) {
@@ -191,6 +191,7 @@
               color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, alpha);
             }
           }
+
           if (!selected || building.name === selected) {
             building.polygon.material = color;
           }
@@ -198,6 +199,7 @@
       }
 
       const tooltip = document.getElementById("tooltip");
+
       viewer.screenSpaceEventHandler.setInputAction(function (movement) {
         const picked = viewer.scene.pick(movement.endPosition);
         if (picked && picked.id && picked.id.properties) {
@@ -205,6 +207,7 @@
           const t = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi ?? "N/A";
           const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
           const name = picked.id.name ?? "Unknown";
+
           tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>Temp: ${parseFloat(t).toFixed(1)} °C`;
           tooltip.style.left = (movement.endPosition.x + 15) + "px";
           tooltip.style.top = (movement.endPosition.y + 15) + "px";
@@ -237,3 +240,4 @@
   </script>
 </body>
 </html>
+
