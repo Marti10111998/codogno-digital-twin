@@ -241,7 +241,7 @@
         for (const entity of heatmapEntities) viewer.entities.remove(entity);
         heatmapEntities = [];
 
-        const file = `heatmaps/${timeOfDay}_heatpoints.json`;
+        const file = `${timeOfDay}_heatpoints.json`;
         const response = await fetch(file);
         const data = await response.json();
 
