@@ -4,10 +4,8 @@
   <meta charset="UTF-8" />
   <title>Codogno Digital Twin</title>
   <script src="https://cdn.tailwindcss.com"></script>
-
   <script src="https://unpkg.com/cesium@1.116/Build/Cesium/Cesium.js"></script>
   <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
-
   <style>
     html, body, #cesiumContainer {
       margin: 0;
@@ -134,13 +132,11 @@
         shadows: true
       });
 
-      // Enable lighting and shadow settings
       viewer.scene.globe.enableLighting = true;
       viewer.scene.shadowMap.enabled = true;
-      viewer.shadows = true;
       viewer.scene.globe.depthTestAgainstTerrain = true;
+      viewer.shadows = true;
 
-      // Clock setup for sun shadows
       const startTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 0));
       const endTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 23));
       viewer.clock.startTime = startTime.clone();
@@ -149,7 +145,6 @@
       viewer.clock.clockRange = Cesium.ClockRange.CLAMPED;
       viewer.clock.multiplier = 0;
 
-      // ✅ Add OSM Buildings for real 3D shadow testing
       const tileset = await Cesium.createOsmBuildingsAsync();
       viewer.scene.primitives.add(tileset);
 
@@ -162,22 +157,27 @@
         }
       });
 
-      // Load your GeoJSON (UHI simulation)
       const buildingSelector = document.getElementById("buildingSelector");
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
       viewer.dataSources.add(dataSource);
       buildings = dataSource.entities.values;
 
-      buildings.forEach((building, i) => {
+      for (const [i, building] of buildings.entries()) {
         const name = `Building ${i + 1}`;
         building.name = name;
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
 
         if (building.polygon) {
-          building.polygon.extrudedHeight = height;
-          building.polygon.height = 0;
+          const positions = building.polygon.hierarchy.getValue(Cesium.JulianDate.now()).positions;
+          const center = Cesium.BoundingSphere.fromPoints(positions).center;
+          const cartographic = Cesium.Ellipsoid.WGS84.cartesianToCartographic(center);
+          const [sample] = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, [cartographic]);
+          const terrainHeight = sample.height;
+
+          building.polygon.height = terrainHeight;
+          building.polygon.extrudedHeight = terrainHeight + height;
           building.polygon.heightReference = Cesium.HeightReference.NONE;
-          building.polygon.extrudedHeightReference = Cesium.HeightReference.CLAMP_TO_GROUND;
+          building.polygon.extrudedHeightReference = Cesium.HeightReference.NONE;
           building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0);
           building.polygon.outline = false;
         }
@@ -186,7 +186,7 @@
         option.value = name;
         option.textContent = name;
         buildingSelector.appendChild(option);
-      });
+      }
 
       await fetchUHI();
       updateStyles();
@@ -289,5 +289,4 @@
   </script>
 </body>
 </html>
-
 
