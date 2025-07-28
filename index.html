@@ -5,7 +5,6 @@
   <title>Codogno Digital Twin</title>
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- ✅ FIXED CesiumJS includes using official CDN -->
   <script src="https://unpkg.com/cesium@1.116/Build/Cesium/Cesium.js"></script>
   <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
 
@@ -126,7 +125,7 @@
     }
 
     async function startCesiumApp() {
-      Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
+      Cesium.Ion.defaultAccessToken = "YOUR_ACCESS_TOKEN"; // replace with your real token
 
       const viewer = new Cesium.Viewer("cesiumContainer", {
         baseLayerPicker: true,
@@ -135,8 +134,18 @@
         shadows: true
       });
 
-      viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
+      // Enable lighting and shadow configuration
+      const startTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 0));
+      const endTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 23));
+      viewer.clock.startTime = startTime.clone();
+      viewer.clock.stopTime = endTime.clone();
+      viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 12));
+      viewer.clock.clockRange = Cesium.ClockRange.CLAMPED;
+      viewer.clock.multiplier = 0;
+
       viewer.scene.globe.enableLighting = true;
+      viewer.scene.shadowMap.enabled = true;
+      viewer.shadows = true;
 
       const buildingSelector = document.getElementById("buildingSelector");
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
@@ -221,10 +230,12 @@
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
       document.getElementById("heatToggle").addEventListener("change", updateStyles);
+
       document.getElementById("shadowToggle").addEventListener("change", (e) => {
         const enabled = e.target.checked;
         viewer.shadows = enabled;
         viewer.scene.shadowMap.enabled = enabled;
+        viewer.scene.globe.enableLighting = enabled;
       });
 
       const timeSlider = document.getElementById("timeSlider");
@@ -233,10 +244,8 @@
         const hour = parseInt(timeSlider.value);
         timeLabel.textContent = `${hour}:00`;
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, hour));
-        updateStyles();
       });
 
-      // ✅ Heatmap Loader
       async function loadHeatmap(timeOfDay) {
         for (const entity of heatmapEntities) viewer.entities.remove(entity);
         heatmapEntities = [];
