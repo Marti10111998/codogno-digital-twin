@@ -4,11 +4,8 @@
   <meta charset="UTF-8" />
   <title>Codogno Digital Twin</title>
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- ✅ FIXED CesiumJS includes using official CDN -->
   <script src="https://unpkg.com/cesium@1.116/Build/Cesium/Cesium.js"></script>
   <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
-
   <style>
     html, body, #cesiumContainer {
       margin: 0;
@@ -112,8 +109,8 @@
     let heatmapEntities = [];
 
     async function fetchUHI() {
-      const urbanURL = https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey};
-      const ruralURL = https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey};
+      const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
+      const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
       const [urbanRes, ruralRes] = await Promise.all([fetch(urbanURL), fetch(ruralURL)]);
       const urbanTemp = (await urbanRes.json()).main.temp;
       const ruralTemp = (await ruralRes.json()).main.temp;
@@ -144,7 +141,7 @@
       buildings = dataSource.entities.values;
 
       buildings.forEach((building, i) => {
-        const name = Building ${i + 1};
+        const name = `Building ${i + 1}`;
         building.name = name;
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
 
@@ -209,7 +206,7 @@
           const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
           const name = picked.id.name ?? "Unknown";
 
-          tooltip.innerHTML = <strong>${name}</strong><br>Height: ${h} m<br>Temp: ${parseFloat(t).toFixed(1)} °C;
+          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>Temp: ${parseFloat(t).toFixed(1)} °C`;
           tooltip.style.left = (movement.endPosition.x + 15) + "px";
           tooltip.style.top = (movement.endPosition.y + 15) + "px";
           tooltip.style.display = "block";
@@ -231,17 +228,16 @@
       const timeLabel = document.getElementById("timeLabel");
       timeSlider.addEventListener("input", () => {
         const hour = parseInt(timeSlider.value);
-        timeLabel.textContent = ${hour}:00;
+        timeLabel.textContent = `${hour}:00`;
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, hour));
         updateStyles();
       });
 
-      // ✅ Heatmap Loader
       async function loadHeatmap(timeOfDay) {
         for (const entity of heatmapEntities) viewer.entities.remove(entity);
         heatmapEntities = [];
 
-        const file = ${timeOfDay}_heatpoints.json;
+        const file = `${timeOfDay}_heatpoints.json`;
         const response = await fetch(file);
         const data = await response.json();
 
