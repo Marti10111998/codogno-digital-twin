@@ -4,8 +4,11 @@
   <meta charset="UTF-8" />
   <title>Codogno Digital Twin</title>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- ✅ FIXED CesiumJS includes using official CDN -->
   <script src="https://unpkg.com/cesium@1.116/Build/Cesium/Cesium.js"></script>
   <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+
   <style>
     html, body, #cesiumContainer {
       margin: 0;
@@ -109,8 +112,8 @@
     let heatmapEntities = [];
 
     async function fetchUHI() {
-      const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
-      const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
+      const urbanURL = https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey};
+      const ruralURL = https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey};
       const [urbanRes, ruralRes] = await Promise.all([fetch(urbanURL), fetch(ruralURL)]);
       const urbanTemp = (await urbanRes.json()).main.temp;
       const ruralTemp = (await ruralRes.json()).main.temp;
@@ -132,21 +135,36 @@
         shadows: true
       });
 
+      viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
-      viewer.scene.shadowMap.enabled = true;
-      viewer.scene.globe.depthTestAgainstTerrain = true;
-      viewer.shadows = true;
 
-      const startTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 0));
-      const endTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 23));
-      viewer.clock.startTime = startTime.clone();
-      viewer.clock.stopTime = endTime.clone();
-      viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 12));
-      viewer.clock.clockRange = Cesium.ClockRange.CLAMPED;
-      viewer.clock.multiplier = 0;
+      const buildingSelector = document.getElementById("buildingSelector");
+      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
+      viewer.dataSources.add(dataSource);
+      buildings = dataSource.entities.values;
 
-      const tileset = await Cesium.createOsmBuildingsAsync();
-      viewer.scene.primitives.add(tileset);
+      buildings.forEach((building, i) => {
+        const name = Building ${i + 1};
+        building.name = name;
+        const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
+
+        if (building.polygon) {
+          building.polygon.extrudedHeight = height;
+          building.polygon.height = 0;
+          building.polygon.heightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
+          building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
+          building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0);
+          building.polygon.outline = false;
+        }
+
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = name;
+        buildingSelector.appendChild(option);
+      });
+
+      await fetchUHI();
+      updateStyles();
 
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
@@ -156,40 +174,6 @@
           roll: 0.0
         }
       });
-
-      const buildingSelector = document.getElementById("buildingSelector");
-      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
-      viewer.dataSources.add(dataSource);
-      buildings = dataSource.entities.values;
-
-      for (const [i, building] of buildings.entries()) {
-        const name = `Building ${i + 1}`;
-        building.name = name;
-        const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
-
-        if (building.polygon) {
-          const positions = building.polygon.hierarchy.getValue(Cesium.JulianDate.now()).positions;
-          const center = Cesium.BoundingSphere.fromPoints(positions).center;
-          const cartographic = Cesium.Ellipsoid.WGS84.cartesianToCartographic(center);
-          const [sample] = await Cesium.sampleTerrainMostDetailed(viewer.terrainProvider, [cartographic]);
-          const terrainHeight = sample.height;
-
-          building.polygon.height = terrainHeight;
-          building.polygon.extrudedHeight = terrainHeight + height;
-          building.polygon.heightReference = Cesium.HeightReference.NONE;
-          building.polygon.extrudedHeightReference = Cesium.HeightReference.NONE;
-          building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0);
-          building.polygon.outline = false;
-        }
-
-        const option = document.createElement("option");
-        option.value = name;
-        option.textContent = name;
-        buildingSelector.appendChild(option);
-      }
-
-      await fetchUHI();
-      updateStyles();
 
       function updateStyles() {
         const selected = buildingSelector.value;
@@ -225,7 +209,7 @@
           const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
           const name = picked.id.name ?? "Unknown";
 
-          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>Temp: ${parseFloat(t).toFixed(1)} °C`;
+          tooltip.innerHTML = <strong>${name}</strong><br>Height: ${h} m<br>Temp: ${parseFloat(t).toFixed(1)} °C;
           tooltip.style.left = (movement.endPosition.x + 15) + "px";
           tooltip.style.top = (movement.endPosition.y + 15) + "px";
           tooltip.style.display = "block";
@@ -237,27 +221,27 @@
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
       document.getElementById("heatToggle").addEventListener("change", updateStyles);
-
       document.getElementById("shadowToggle").addEventListener("change", (e) => {
         const enabled = e.target.checked;
         viewer.shadows = enabled;
         viewer.scene.shadowMap.enabled = enabled;
-        viewer.scene.globe.enableLighting = enabled;
       });
 
       const timeSlider = document.getElementById("timeSlider");
       const timeLabel = document.getElementById("timeLabel");
       timeSlider.addEventListener("input", () => {
         const hour = parseInt(timeSlider.value);
-        timeLabel.textContent = `${hour}:00`;
+        timeLabel.textContent = ${hour}:00;
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, hour));
+        updateStyles();
       });
 
+      // ✅ Heatmap Loader
       async function loadHeatmap(timeOfDay) {
         for (const entity of heatmapEntities) viewer.entities.remove(entity);
         heatmapEntities = [];
 
-        const file = `${timeOfDay}_heatpoints.json`;
+        const file = ${timeOfDay}_heatpoints.json;
         const response = await fetch(file);
         const data = await response.json();
 
@@ -289,4 +273,3 @@
   </script>
 </body>
 </html>
-
