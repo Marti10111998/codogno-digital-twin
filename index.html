@@ -176,8 +176,8 @@
         if (building.polygon) {
           building.polygon.extrudedHeight = height;
           building.polygon.height = 0;
-          building.polygon.heightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
-          building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
+          building.polygon.heightReference = Cesium.HeightReference.NONE;
+          building.polygon.extrudedHeightReference = Cesium.HeightReference.CLAMP_TO_GROUND;
           building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0);
           building.polygon.outline = false;
         }
