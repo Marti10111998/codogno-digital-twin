@@ -103,6 +103,12 @@
 
   <div id="tooltip"></div>
 
+  <!-- 🟢 Pollution Panel -->
+  <div id="pollutionPanel" class="absolute bottom-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg w-72 space-y-2 z-10 font-sans text-sm">
+    <div class="font-semibold text-gray-700">Predicted Pollution</div>
+    <div id="pollutionOutput">Loading...</div>
+  </div>
+
   <script>
     const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
     let buildings = [];
@@ -162,6 +168,7 @@
 
       await fetchUHI();
       updateStyles();
+      fetchPollutionPrediction();
 
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
@@ -265,7 +272,47 @@
       });
     }
 
+    // 🟢 Pollution Prediction from FastAPI
+    async function fetchPollutionPrediction() {
+      const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=Codogno&appid=${weatherApiKey}&units=metric`;
+
+      try {
+        const res = await fetch(weatherUrl);
+        const weatherJson = await res.json();
+
+        const weatherData = {
+          Temperature: weatherJson.main.temp,
+          Humidity: weatherJson.main.humidity,
+          Precipitation: weatherJson.main.pressure,
+          WindSpeed_m_s: weatherJson.wind.speed
+        };
+
+        const apiRes = await fetch("http://localhost:8501/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(weatherData)
+        });
+
+        if (!apiRes.ok) {
+          document.getElementById("pollutionOutput").textContent = "Failed to fetch prediction.";
+          return;
+        }
+
+        const prediction = await apiRes.json();
+        let html = "";
+        for (const [key, value] of Object.entries(prediction)) {
+          html += `<div><strong>${key}</strong>: ${value}</div>`;
+        }
+        document.getElementById("pollutionOutput").innerHTML = html;
+
+      } catch (error) {
+        console.error("Pollution prediction error:", error);
+        document.getElementById("pollutionOutput").textContent = "Error loading pollution data.";
+      }
+    }
+
     startCesiumApp();
   </script>
 </body>
 </html>
+
