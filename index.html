@@ -125,7 +125,7 @@
     }
 
     async function startCesiumApp() {
-      Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw"; // replace with your real token
+      Cesium.Ion.defaultAccessToken = "your-token-here";
 
       const viewer = new Cesium.Viewer("cesiumContainer", {
         baseLayerPicker: true,
@@ -134,7 +134,13 @@
         shadows: true
       });
 
-      // Enable lighting and shadow configuration
+      // Enable lighting and shadow settings
+      viewer.scene.globe.enableLighting = true;
+      viewer.scene.shadowMap.enabled = true;
+      viewer.shadows = true;
+      viewer.scene.globe.depthTestAgainstTerrain = true;
+
+      // Clock setup for sun shadows
       const startTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 0));
       const endTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, 23));
       viewer.clock.startTime = startTime.clone();
@@ -143,10 +149,20 @@
       viewer.clock.clockRange = Cesium.ClockRange.CLAMPED;
       viewer.clock.multiplier = 0;
 
-      viewer.scene.globe.enableLighting = true;
-      viewer.scene.shadowMap.enabled = true;
-      viewer.shadows = true;
+      // ✅ Add OSM Buildings for real 3D shadow testing
+      const tileset = await Cesium.createOsmBuildingsAsync();
+      viewer.scene.primitives.add(tileset);
 
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
+        orientation: {
+          heading: Cesium.Math.toRadians(0),
+          pitch: Cesium.Math.toRadians(-45),
+          roll: 0.0
+        }
+      });
+
+      // Load your GeoJSON (UHI simulation)
       const buildingSelector = document.getElementById("buildingSelector");
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
       viewer.dataSources.add(dataSource);
@@ -174,15 +190,6 @@
 
       await fetchUHI();
       updateStyles();
-
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
-        orientation: {
-          heading: Cesium.Math.toRadians(0),
-          pitch: Cesium.Math.toRadians(-45),
-          roll: 0.0
-        }
-      });
 
       function updateStyles() {
         const selected = buildingSelector.value;
@@ -282,4 +289,5 @@
   </script>
 </body>
 </html>
+
 
