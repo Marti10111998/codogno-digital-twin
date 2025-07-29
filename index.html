@@ -299,11 +299,32 @@
         }
 
         const prediction = await apiRes.json();
-        let html = "";
-        for (const [key, value] of Object.entries(prediction)) {
-          html += `<div><strong>${key}</strong>: ${value}</div>`;
-        }
-        document.getElementById("pollutionOutput").innerHTML = html;
+        function getColorByPollutant(p, value) {
+  const thresholds = {
+    "O3": 100,
+    "NO2": 40,
+    "NO": 50,
+    "CO": 10,
+    "NH3": 2
+  };
+
+  const t = thresholds[p] || 9999;
+  if (value < t * 0.6) return "bg-green-100 text-green-800";
+  else if (value < t) return "bg-yellow-100 text-yellow-800";
+  else return "bg-red-100 text-red-800";
+}
+
+let html = "<div class='space-y-2'>";
+for (const [key, value] of Object.entries(prediction)) {
+  const classes = getColorByPollutant(key, value);
+  html += `
+    <div class="p-2 rounded-lg ${classes} flex justify-between items-center">
+      <span class="font-medium">${key}</span>
+      <span class="font-semibold">${value}</span>
+    </div>`;
+}
+html += "</div>";
+document.getElementById("pollutionOutput").innerHTML = html;
 
       } catch (error) {
         console.error("Pollution prediction error:", error);
