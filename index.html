@@ -94,15 +94,15 @@
       </select>
     </div>
 
-    <!-- ✅ Live Traffic controls -->
+    <!-- Live Traffic controls -->
     <div>
       <label class="inline-flex items-center">
-        <input type="checkbox" id="liveTrafficToggle" class="mr-2" />
+        <input type="checkbox" id="liveTrafficToggle" class="mr-2" checked />
         Live Traffic (TomTom)
       </label>
       <select id="trafficRefresh" class="w-full border rounded px-2 py-1 mt-2">
-        <option value="15">Refresh: 15s</option>
-        <option value="30" selected>Refresh: 30s</option>
+        <option value="15" selected>Refresh: 15s</option>
+        <option value="30">Refresh: 30s</option>
         <option value="60">Refresh: 60s</option>
       </select>
     </div>
@@ -116,7 +116,7 @@
 
   <div id="tooltip"></div>
 
-  <!-- 🟢 Pollution Panel -->
+  <!-- Pollution Panel -->
   <div id="pollutionPanel" class="absolute bottom-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg w-72 space-y-2 z-10 font-sans text-sm">
     <div class="font-semibold text-gray-700">Predicted Pollution</div>
     <div id="pollutionOutput">Loading...</div>
@@ -125,8 +125,8 @@
   <script>
     const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
 
-    // 🔑 TomTom Traffic API (tile layer)
-    const tomtomKey = "EigZWFMHWSfuvKIYWqXJjPeyWJQURHPy";
+    // 🔑 TomTom Traffic API (Traffic product enabled)
+    const tomtomKey = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";
 
     let buildings = [];
     let heatmapEntities = [];
@@ -160,7 +160,7 @@
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
 
-      // Make viewer accessible in other handlers
+      // Expose viewer
       window.viewer = viewer;
 
       const buildingSelector = document.getElementById("buildingSelector");
@@ -294,20 +294,43 @@
         loadHeatmap(e.target.value);
       });
 
-      // === 🚦 Live Traffic: TomTom tiles as a real-time heat overlay ===
+      // === Live Traffic (TomTom) with status + auto-refresh ===
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
       const trafficRefresh = document.getElementById("trafficRefresh");
 
+      // status badge
+      const trafficStatus = document.createElement("div");
+      trafficStatus.style.position = "absolute";
+      trafficStatus.style.right = "1rem";
+      trafficStatus.style.top = "1rem";
+      trafficStatus.style.zIndex = "20";
+      trafficStatus.style.background = "rgba(255,255,255,0.9)";
+      trafficStatus.style.padding = "6px 10px";
+      trafficStatus.style.borderRadius = "10px";
+      trafficStatus.style.fontFamily = "system-ui, sans-serif";
+      trafficStatus.style.fontSize = "12px";
+      trafficStatus.style.boxShadow = "0 2px 6px rgba(0,0,0,.15)";
+      trafficStatus.textContent = "Traffic: starting…";
+      document.body.appendChild(trafficStatus);
+
+      function setTrafficStatus(msg) {
+        trafficStatus.textContent = `Traffic: ${msg}`;
+      }
+
       function addOrUpdateTrafficLayer() {
-        // cache-bust param so we always fetch fresh tiles
-        const ts = Date.now();
+        const ts = Date.now(); // cache-bust to force fresh tiles
 
         const provider = new Cesium.UrlTemplateImageryProvider({
-          // TomTom Traffic Flow "relative" style (green→red by congestion)
+          // TomTom Traffic Flow (relative) — green→red by congestion
           url: `https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key=${tomtomKey}&ts=${ts}`,
           maximumLevel: 20,
           tilingScheme: new Cesium.WebMercatorTilingScheme(),
           credit: "TomTom Traffic"
+        });
+
+        provider.errorEvent.addEventListener((e) => {
+          console.error("Traffic tile error:", e);
+          setTrafficStatus(`error (${e?.message || "tile load"})`);
         });
 
         if (trafficLayer) {
@@ -316,14 +339,24 @@
         }
 
         trafficLayer = viewer.imageryLayers.addImageryProvider(provider);
-        trafficLayer.alpha = 0.7; // blend over basemap like a heatmap
-        viewer.scene.requestRender();
+        trafficLayer.alpha = 0.7;
+
+        const started = performance.now();
+        const waitReady = () => {
+          if (provider.ready) {
+            const dt = ((performance.now() - started) / 1000).toFixed(1);
+            setTrafficStatus(`updated @ ${new Date().toLocaleTimeString()} (+${dt}s)`);
+            viewer.scene.requestRender();
+          } else {
+            requestAnimationFrame(waitReady);
+          }
+        };
+        waitReady();
       }
 
       function beginTrafficUpdates() {
         addOrUpdateTrafficLayer();
-        const everyMs = parseInt(trafficRefresh.value, 10) * 1000;
-
+        const everyMs = Math.max(15000, parseInt(trafficRefresh.value, 10) * 1000);
         if (trafficTimer) clearInterval(trafficTimer);
         trafficTimer = setInterval(addOrUpdateTrafficLayer, everyMs);
       }
@@ -336,8 +369,9 @@
         if (trafficLayer) {
           viewer.imageryLayers.remove(trafficLayer, /*destroy=*/false);
           trafficLayer = null;
-          viewer.scene.requestRender();
         }
+        setTrafficStatus("off");
+        viewer.scene.requestRender();
       }
 
       liveTrafficToggle.addEventListener("change", (e) => {
@@ -349,13 +383,12 @@
         if (liveTrafficToggle.checked) beginTrafficUpdates();
       });
 
-      // If you want traffic ON by default, uncomment:
-      // liveTrafficToggle.checked = true;
-      // beginTrafficUpdates();
-      // ================================================================
+      // turn on by default
+      beginTrafficUpdates();
+      // =========================================================
     }
 
-    // 🟢 Pollution Prediction from FastAPI
+    // Pollution Prediction (your FastAPI endpoint must allow CORS)
     async function fetchPollutionPrediction() {
       const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=Codogno&appid=${weatherApiKey}&units=metric`;
 
@@ -384,14 +417,7 @@
         const prediction = await apiRes.json();
 
         function getColorByPollutant(p, value) {
-          const thresholds = {
-            "O3": 100,
-            "NO2": 40,
-            "NO": 50,
-            "CO": 10,
-            "NH3": 2
-          };
-
+          const thresholds = { "O3": 100, "NO2": 40, "NO": 50, "CO": 10, "NH3": 2 };
           const t = thresholds[p] || 9999;
           if (value < t * 0.6) return "bg-green-100 text-green-800";
           else if (value < t) return "bg-yellow-100 text-yellow-800";
@@ -420,5 +446,3 @@
   </script>
 </body>
 </html>
-
-
