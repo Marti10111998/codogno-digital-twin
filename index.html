@@ -93,6 +93,19 @@
         <option value="night">Night</option>
       </select>
     </div>
+
+    <!-- ✅ Live Traffic controls -->
+    <div>
+      <label class="inline-flex items-center">
+        <input type="checkbox" id="liveTrafficToggle" class="mr-2" />
+        Live Traffic (TomTom)
+      </label>
+      <select id="trafficRefresh" class="w-full border rounded px-2 py-1 mt-2">
+        <option value="15">Refresh: 15s</option>
+        <option value="30" selected>Refresh: 30s</option>
+        <option value="60">Refresh: 60s</option>
+      </select>
+    </div>
   </div>
 
   <div id="legend">
@@ -111,8 +124,14 @@
 
   <script>
     const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
+
+    // 🔑 TomTom Traffic API (tile layer)
+    const tomtomKey = "EigZWFMHWSfuvKIYWqXJjPeyWJQURHPy";
+
     let buildings = [];
     let heatmapEntities = [];
+    let trafficLayer = null;
+    let trafficTimer = null;
 
     async function fetchUHI() {
       const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
@@ -140,6 +159,9 @@
 
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
+
+      // Make viewer accessible in other handlers
+      window.viewer = viewer;
 
       const buildingSelector = document.getElementById("buildingSelector");
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
@@ -202,6 +224,7 @@
             building.polygon.material = color;
           }
         }
+        viewer.scene.requestRender();
       }
 
       const tooltip = document.getElementById("tooltip");
@@ -270,6 +293,66 @@
       document.getElementById("heatmapTimeSelector").addEventListener("change", (e) => {
         loadHeatmap(e.target.value);
       });
+
+      // === 🚦 Live Traffic: TomTom tiles as a real-time heat overlay ===
+      const liveTrafficToggle = document.getElementById("liveTrafficToggle");
+      const trafficRefresh = document.getElementById("trafficRefresh");
+
+      function addOrUpdateTrafficLayer() {
+        // cache-bust param so we always fetch fresh tiles
+        const ts = Date.now();
+
+        const provider = new Cesium.UrlTemplateImageryProvider({
+          // TomTom Traffic Flow "relative" style (green→red by congestion)
+          url: `https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key=${tomtomKey}&ts=${ts}`,
+          maximumLevel: 20,
+          tilingScheme: new Cesium.WebMercatorTilingScheme(),
+          credit: "TomTom Traffic"
+        });
+
+        if (trafficLayer) {
+          viewer.imageryLayers.remove(trafficLayer, /*destroy=*/false);
+          trafficLayer = null;
+        }
+
+        trafficLayer = viewer.imageryLayers.addImageryProvider(provider);
+        trafficLayer.alpha = 0.7; // blend over basemap like a heatmap
+        viewer.scene.requestRender();
+      }
+
+      function beginTrafficUpdates() {
+        addOrUpdateTrafficLayer();
+        const everyMs = parseInt(trafficRefresh.value, 10) * 1000;
+
+        if (trafficTimer) clearInterval(trafficTimer);
+        trafficTimer = setInterval(addOrUpdateTrafficLayer, everyMs);
+      }
+
+      function stopTrafficUpdates() {
+        if (trafficTimer) {
+          clearInterval(trafficTimer);
+          trafficTimer = null;
+        }
+        if (trafficLayer) {
+          viewer.imageryLayers.remove(trafficLayer, /*destroy=*/false);
+          trafficLayer = null;
+          viewer.scene.requestRender();
+        }
+      }
+
+      liveTrafficToggle.addEventListener("change", (e) => {
+        if (e.target.checked) beginTrafficUpdates();
+        else stopTrafficUpdates();
+      });
+
+      trafficRefresh.addEventListener("change", () => {
+        if (liveTrafficToggle.checked) beginTrafficUpdates();
+      });
+
+      // If you want traffic ON by default, uncomment:
+      // liveTrafficToggle.checked = true;
+      // beginTrafficUpdates();
+      // ================================================================
     }
 
     // 🟢 Pollution Prediction from FastAPI
@@ -299,32 +382,33 @@
         }
 
         const prediction = await apiRes.json();
+
         function getColorByPollutant(p, value) {
-  const thresholds = {
-    "O3": 100,
-    "NO2": 40,
-    "NO": 50,
-    "CO": 10,
-    "NH3": 2
-  };
+          const thresholds = {
+            "O3": 100,
+            "NO2": 40,
+            "NO": 50,
+            "CO": 10,
+            "NH3": 2
+          };
 
-  const t = thresholds[p] || 9999;
-  if (value < t * 0.6) return "bg-green-100 text-green-800";
-  else if (value < t) return "bg-yellow-100 text-yellow-800";
-  else return "bg-red-100 text-red-800";
-}
+          const t = thresholds[p] || 9999;
+          if (value < t * 0.6) return "bg-green-100 text-green-800";
+          else if (value < t) return "bg-yellow-100 text-yellow-800";
+          else return "bg-red-100 text-red-800";
+        }
 
-let html = "<div class='space-y-2'>";
-for (const [key, value] of Object.entries(prediction)) {
-  const classes = getColorByPollutant(key, value);
-  html += `
-    <div class="p-2 rounded-lg ${classes} flex justify-between items-center">
-      <span class="font-medium">${key}</span>
-      <span class="font-semibold">${value}</span>
-    </div>`;
-}
-html += "</div>";
-document.getElementById("pollutionOutput").innerHTML = html;
+        let html = "<div class='space-y-2'>";
+        for (const [key, value] of Object.entries(prediction)) {
+          const classes = getColorByPollutant(key, value);
+          html += `
+            <div class="p-2 rounded-lg ${classes} flex justify-between items-center">
+              <span class="font-medium">${key}</span>
+              <span class="font-semibold">${value}</span>
+            </div>`;
+        }
+        html += "</div>";
+        document.getElementById("pollutionOutput").innerHTML = html;
 
       } catch (error) {
         console.error("Pollution prediction error:", error);
@@ -336,4 +420,5 @@ document.getElementById("pollutionOutput").innerHTML = html;
   </script>
 </body>
 </html>
+
 
