@@ -3,51 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <title>Codogno Digital Twin</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/cesium@1.116/Build/Cesium/Cesium.js"></script>
   <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
   <style>
-    html, body, #cesiumContainer {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
+    html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
     #legend {
-      position: absolute;
-      bottom: 1rem;
-      left: 1rem;
-      background: white;
-      padding: 0.5rem;
-      border-radius: 0.5rem;
-      font-family: sans-serif;
-      font-size: 12px;
-      z-index: 10;
-      width: 140px;
+      position: absolute; bottom: 1rem; left: 1rem; background: white; padding: 0.5rem;
+      border-radius: 0.5rem; font-family: sans-serif; font-size: 12px; z-index: 10; width: 140px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
     #legendGradient {
       height: 16px;
-      background: linear-gradient(to right,
-        hsl(60, 100%, 50%),
-        hsl(150, 100%, 50%),
-        hsl(330, 100%, 50%)
-      );
+      background: linear-gradient(to right, hsl(60,100%,50%), hsl(150,100%,50%), hsl(330,100%,50%));
       margin-top: 0.25rem;
     }
     #tooltip {
-      position: absolute;
-      background: white;
-      border: 1px solid #ccc;
-      padding: 6px 8px;
-      font-size: 13px;
-      pointer-events: none;
-      border-radius: 6px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-      z-index: 1000;
-      max-width: 220px;
-      display: none;
+      position: absolute; background: white; border: 1px solid #ccc; padding: 6px 8px; font-size: 13px;
+      pointer-events: none; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 1000; max-width: 220px; display: none;
     }
   </style>
 </head>
@@ -123,22 +98,36 @@
   </div>
 
   <script>
+    // -------------------- CONFIG / KEYS --------------------
     const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
 
-    // 🔑 TomTom Traffic API (Traffic product enabled)
-    const tomtomKey = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";
+    // TomTom key: can be overridden via URL param `?ttk=...`
+    const urlKey = new URLSearchParams(location.search).get("ttk");
+    let tomtomKey = urlKey || "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";
+    console.log("[Traffic] Using TomTom key:", tomtomKey.slice(0, 6) + "…");
 
+    // On-screen badge showing key prefix + traffic status
+    const keyBadge = document.createElement("div");
+    keyBadge.style.cssText =
+      "position:absolute;right:1rem;top:1rem;z-index:20;background:rgba(255,255,255,.92);" +
+      "padding:6px 10px;border-radius:10px;font:12px system-ui, sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.15)";
+    keyBadge.innerHTML = `Traffic key: <strong>${tomtomKey.slice(0,6)}…</strong> <span id="trafficStatus">starting…</span>`;
+    document.body.appendChild(keyBadge);
+    const setTrafficStatus = (msg) => { document.getElementById("trafficStatus").textContent = " | " + msg; };
+
+    // -------------------- STATE --------------------
     let buildings = [];
     let heatmapEntities = [];
     let trafficLayer = null;
     let trafficTimer = null;
 
+    // -------------------- UHI SIM --------------------
     async function fetchUHI() {
       const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
       const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
       const [urbanRes, ruralRes] = await Promise.all([fetch(urbanURL), fetch(ruralURL)]);
       const urbanTemp = (await urbanRes.json()).main.temp;
-      const ruralTemp = (await ruralRes.json()).main.temp;
+      const ruralTemp = (await ruralRes.json()).main.temp; // reserved if you want UHI = urban - rural
 
       buildings.forEach(building => {
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
@@ -147,8 +136,9 @@
       });
     }
 
+    // -------------------- CESIUM --------------------
     async function startCesiumApp() {
-      Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
+      Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXRpOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
 
       const viewer = new Cesium.Viewer("cesiumContainer", {
         baseLayerPicker: true,
@@ -159,9 +149,7 @@
 
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
-
-      // Expose viewer
-      window.viewer = viewer;
+      window.viewer = viewer; // expose for handlers
 
       const buildingSelector = document.getElementById("buildingSelector");
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
@@ -194,11 +182,7 @@
 
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
-        orientation: {
-          heading: Cesium.Math.toRadians(0),
-          pitch: Cesium.Math.toRadians(-45),
-          roll: 0.0
-        }
+        orientation: { heading: Cesium.Math.toRadians(0), pitch: Cesium.Math.toRadians(-45), roll: 0.0 }
       });
 
       function updateStyles() {
@@ -294,31 +278,13 @@
         loadHeatmap(e.target.value);
       });
 
-      // === Live Traffic (TomTom) with status + auto-refresh ===
+      // -------------------- LIVE TRAFFIC --------------------
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
       const trafficRefresh = document.getElementById("trafficRefresh");
 
-      // status badge
-      const trafficStatus = document.createElement("div");
-      trafficStatus.style.position = "absolute";
-      trafficStatus.style.right = "1rem";
-      trafficStatus.style.top = "1rem";
-      trafficStatus.style.zIndex = "20";
-      trafficStatus.style.background = "rgba(255,255,255,0.9)";
-      trafficStatus.style.padding = "6px 10px";
-      trafficStatus.style.borderRadius = "10px";
-      trafficStatus.style.fontFamily = "system-ui, sans-serif";
-      trafficStatus.style.fontSize = "12px";
-      trafficStatus.style.boxShadow = "0 2px 6px rgba(0,0,0,.15)";
-      trafficStatus.textContent = "Traffic: starting…";
-      document.body.appendChild(trafficStatus);
-
-      function setTrafficStatus(msg) {
-        trafficStatus.textContent = `Traffic: ${msg}`;
-      }
-
       function addOrUpdateTrafficLayer() {
-        const ts = Date.now(); // cache-bust to force fresh tiles
+        const ts = Date.now(); // cache-bust to fetch fresh tiles
+        setTrafficStatus("updating…");
 
         const provider = new Cesium.UrlTemplateImageryProvider({
           // TomTom Traffic Flow (relative) — green→red by congestion
@@ -330,28 +296,26 @@
 
         provider.errorEvent.addEventListener((e) => {
           console.error("Traffic tile error:", e);
-          setTrafficStatus(`error (${e?.message || "tile load"})`);
+          setTrafficStatus(`error (${e?.message || "tile"})`);
         });
 
         if (trafficLayer) {
-          viewer.imageryLayers.remove(trafficLayer, /*destroy=*/false);
+          viewer.imageryLayers.remove(trafficLayer, false);
           trafficLayer = null;
         }
-
         trafficLayer = viewer.imageryLayers.addImageryProvider(provider);
         trafficLayer.alpha = 0.7;
 
-        const started = performance.now();
-        const waitReady = () => {
+        const t0 = performance.now();
+        (function waitReady(){
           if (provider.ready) {
-            const dt = ((performance.now() - started) / 1000).toFixed(1);
+            const dt = ((performance.now() - t0) / 1000).toFixed(1);
             setTrafficStatus(`updated @ ${new Date().toLocaleTimeString()} (+${dt}s)`);
             viewer.scene.requestRender();
           } else {
             requestAnimationFrame(waitReady);
           }
-        };
-        waitReady();
+        })();
       }
 
       function beginTrafficUpdates() {
@@ -362,12 +326,9 @@
       }
 
       function stopTrafficUpdates() {
-        if (trafficTimer) {
-          clearInterval(trafficTimer);
-          trafficTimer = null;
-        }
+        if (trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
         if (trafficLayer) {
-          viewer.imageryLayers.remove(trafficLayer, /*destroy=*/false);
+          viewer.imageryLayers.remove(trafficLayer, false);
           trafficLayer = null;
         }
         setTrafficStatus("off");
@@ -383,12 +344,12 @@
         if (liveTrafficToggle.checked) beginTrafficUpdates();
       });
 
-      // turn on by default
+      // Turn on by default
+      liveTrafficToggle.checked = true;
       beginTrafficUpdates();
-      // =========================================================
     }
 
-    // Pollution Prediction (your FastAPI endpoint must allow CORS)
+    // -------------------- POLLUTION (CORS: adjust your FastAPI) --------------------
     async function fetchPollutionPrediction() {
       const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=Codogno&appid=${weatherApiKey}&units=metric`;
 
@@ -442,7 +403,9 @@
       }
     }
 
+    // -------------------- BOOT --------------------
     startCesiumApp();
   </script>
 </body>
 </html>
+
