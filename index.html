@@ -12,9 +12,7 @@
       position:absolute; bottom:1rem; left:1rem; background:white; padding:.5rem; border-radius:.5rem;
       font-family:sans-serif; font-size:12px; z-index:10; width:160px; box-shadow:0 2px 4px rgba(0,0,0,.2);
     }
-    #legendGradient {
-      height:16px; background:linear-gradient(to right, hsl(60 100% 50%), hsl(150 100% 50%), hsl(330 100% 50%)); margin-top:.25rem;
-    }
+    #legendGradient { height:16px; background:linear-gradient(to right, hsl(60 100% 50%), hsl(150 100% 50%), hsl(330 100% 50%)); margin-top:.25rem; }
     #tooltip {
       position:absolute; background:white; border:1px solid #ccc; padding:6px 8px; font-size:13px; pointer-events:none;
       border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:220px; display:none;
@@ -106,11 +104,14 @@
 
   <script type="module">
     // ==========================
-    // 🔑 KEYS (already provided)
+    // 🔑 KEYS
     // ==========================
     const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";   // OpenWeather (current weather)
     const tomtomKey     = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";   // TomTom Traffic
     Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
+
+    // 👉 Your RF API (change to your HTTPS URL when deployed)
+    const POLLUTION_API = "http://localhost:8000";
 
     // ==========================
     // App-wide state
@@ -118,11 +119,8 @@
     let viewer, buildings = [], heatmapEntities = [];
     let trafficLayer = null, trafficTimer = null;
 
-    const histories = {
-      urbanTemp: [],  // °C (from urban point)
-      O3: [], NO2: [], NO: [], CO: [], NH3: []
-    };
-    let lastWeather = { temp: null, wind: 0, clouds: 0, humidity: 0, pressure: 0 };
+    const histories = { urbanTemp: [], O3: [], NO2: [], NO: [], CO: [], NH3: [] };
+    let lastWeather = { temp: null, wind: 0, clouds: 0, humidity: 0, pressure: 0, rain1h: 0 };
     const HORIZON_STEPS = 6;  // 6 x 10min = 60 minutes
     const STEP_MINUTES  = 10;
 
@@ -149,7 +147,6 @@
         if (kind === "FORECAST") {
           const { histories, horizon, stepMinutes } = payload;
 
-          // Holt-Winters (tiny)
           function hw(series, a=0.5,b=0.3,g=0.2, m=24, h=6){
             if (!series || series.length < 3) return Array(h).fill(series && series[series.length-1] || 0);
             const L=[series[0]], T=[series[1]-series[0]], S = new Array(m).fill(0);
@@ -190,15 +187,38 @@
       if (e.data?.kind === "PREDICTIONS") {
         latestPredictions = e.data.data;
         updatePredictedUHIForBuildings();
-        paintPollutionPanelNow(); // show "now" prediction
+        paintPollutionPanelNow();
       }
     };
+
+    // ==========================
+    // RF API helper (uses RAIN in mm)
+    // ==========================
+    async function predictWithAPI(weather) {
+      const features = {
+        Temperature: weather.temp,
+        Humidity: weather.humidity,
+        Precipitation: (weather.rain1h || 0),   // your model uses rain
+        WindSpeed_m_s: weather.wind
+      };
+      try {
+        const r = await fetch(`${POLLUTION_API}/predict`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(features)
+        });
+        if (!r.ok) throw new Error("API error");
+        return await r.json(); // {O3, NO2, NO, CO, NH3}
+      } catch (e) {
+        console.warn("Model API failed, using heuristic", e);
+        return null;
+      }
+    }
 
     // ==========================
     // Weather + UHI (realtime)
     // ==========================
     async function fetchUHIAndUpdate(){
-      // Urban & "rural" samples near Codogno
       const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
       const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
 
@@ -208,36 +228,37 @@
         const rJson = await rRes.json();
 
         const urbanTemp = uJson.main?.temp ?? 28;
-        const ruralTemp = rJson.main?.temp ?? 26;
 
         lastWeather = {
           temp: urbanTemp,
           wind: uJson.wind?.speed ?? 1.5,
           clouds: uJson.clouds?.all ?? 20,
           humidity: uJson.main?.humidity ?? 50,
-          pressure: uJson.main?.pressure ?? 1013
+          pressure: uJson.main?.pressure ?? 1013,
+          rain1h: (uJson.rain && (uJson.rain["1h"] ?? uJson.rain["h1"])) || 0
         };
 
-        // Push to history (cap length to 96 samples ~ last 16 hours @10min, although we update 60s)
         histories.urbanTemp.push(urbanTemp);
         if (histories.urbanTemp.length > 200) histories.urbanTemp.shift();
 
-        // Simple simulated pollutant "now" using weather (keeps things moving without a server)
-        const nowPoll = simulatePollutionFromWeather(lastWeather);
+        // ⬇️ use your RF API; fallback to heuristic if it fails
+        let nowPoll = await predictWithAPI(lastWeather);
+        if (!nowPoll) nowPoll = simulatePollutionFromWeather(lastWeather);
+
         for (const k of ["O3","NO2","NO","CO","NH3"]) {
-          histories[k].push(nowPoll[k]);
+          histories[k].push(Number(nowPoll[k]) || 0);
           if (histories[k].length > 200) histories[k].shift();
         }
 
-        // Update current (simulated) UHI on buildings
+        // update current UHI on buildings
         for (const building of buildings) {
           const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
           const simTemp = computeUHI(urbanTemp, height, lastWeather.wind, lastWeather.clouds);
           building.properties.addProperty("sim_uhi", simTemp);
         }
 
-        requestForecast();     // ask the worker to forecast next hour
-        updateStyles();        // repaint colors
+        requestForecast();
+        updateStyles();
         paintPollutionPanelNow();
 
       } catch (err) {
@@ -246,12 +267,11 @@
     }
 
     function computeUHI(urbanTemp, height, wind, clouds){
-      // heuristic: taller = hotter; wind & clouds cool it a bit
       return urbanTemp + 0.03*height - 0.2*wind - 0.02*clouds;
     }
 
+    // kept as backup only
     function simulatePollutionFromWeather(w){
-      // purely illustrative, keeps values plausible and reactive
       const { temp, wind, humidity, pressure, clouds } = w;
       const base = (x,min,max)=>Math.max(min, Math.min(max, x));
       return {
@@ -263,7 +283,6 @@
       };
     }
 
-    // Ask worker to forecast next hour based on histories
     function requestForecast(){
       worker.postMessage({
         kind: "FORECAST",
@@ -271,7 +290,6 @@
       });
     }
 
-    // Build predicted UHI per building as a time series property (next hour)
     function updatePredictedUHIForBuildings(){
       if (!latestPredictions) return;
       const predUrban = latestPredictions.urbanTemp || [];
@@ -280,8 +298,6 @@
 
       for (const b of buildings) {
         const height = parseFloat(b.properties?.height?.getValue?.() ?? b.properties?.height) || 10;
-
-        // Build a Cesium SampledProperty with time-tagged predicted temps
         const prop = new Cesium.SampledProperty(Number);
         for (let i=0; i<predUrban.length; i++){
           const t = new Date(now + i * STEP_MINUTES * 60 * 1000);
@@ -297,17 +313,12 @@
     // Cesium App
     // ==========================
     async function startCesiumApp(){
-      viewer = new Cesium.Viewer("cesiumContainer", {
-        baseLayerPicker: true, timeline: false, animation: false, shadows: true
-      });
-
-      // performance: render only on demand
+      viewer = new Cesium.Viewer("cesiumContainer", { baseLayerPicker:true, timeline:false, animation:false, shadows:true });
       viewer.scene.requestRenderMode = true;
       viewer.scene.maximumRenderTimeChange = 1/30;
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
 
-      // Load buildings
       const buildingSelector = document.getElementById("buildingSelector");
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround:false });
       viewer.dataSources.add(dataSource);
@@ -332,17 +343,14 @@
         buildingSelector.appendChild(option);
       });
 
-      // First data pull + set interval
       await fetchUHIAndUpdate();
-      setInterval(fetchUHIAndUpdate, 60_000); // realtime: every minute
+      setInterval(fetchUHIAndUpdate, 60_000);
 
-      // Camera
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
         orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 }
       });
 
-      // === UI & Styling ===
       function getTempForEntity(ent){
         const usePred = document.getElementById("predictionToggle").checked;
         const props = ent.properties;
@@ -366,8 +374,8 @@
           if (showHeat) {
             const t = getTempForEntity(building);
             if (typeof t === "number") {
-              const normalized = clamp01((t - 25) / 15); // 25–40 °C ramp
-              const hue = 60 + normalized * (330 - 60);  // yellow -> magenta
+              const normalized = clamp01((t - 25) / 15);
+              const hue = 60 + normalized * (330 - 60);
               color = hueColor(hue, alpha);
             }
           }
@@ -377,7 +385,6 @@
         viewer.scene.requestRender();
       }
 
-      // Tooltip on hover
       const tooltip = document.getElementById("tooltip");
       viewer.screenSpaceEventHandler.setInputAction((movement) => {
         const picked = viewer.scene.pick(movement.endPosition);
@@ -399,7 +406,6 @@
         }
       }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
-      // Inputs
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
       document.getElementById("heatToggle").addEventListener("change", updateStyles);
@@ -412,7 +418,6 @@
         viewer.scene.requestRender();
       });
 
-      // Time slider controls the Cesium clock (date is arbitrary)
       const timeSlider = document.getElementById("timeSlider");
       const timeLabel  = document.getElementById("timeLabel");
       function setClockHour(h){
@@ -431,7 +436,7 @@
         });
       });
 
-      // Heatmap (static points from files)
+      // Static heatmap
       async function loadHeatmap(timeOfDay){
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities = [];
@@ -455,7 +460,7 @@
       loadHeatmap("morning");
       document.getElementById("heatmapTimeSelector").addEventListener("change", (e)=>loadHeatmap(e.target.value));
 
-      // === Live Traffic with crossfade ===
+      // Live Traffic
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
       const trafficRefresh = document.getElementById("trafficRefresh");
 
@@ -478,18 +483,10 @@
         provider.errorEvent.addEventListener((e)=>{ console.error("Traffic tile error:", e); setTrafficStatus(`error`); });
 
         const newLayer = viewer.imageryLayers.addImageryProvider(provider);
-        newLayer.alpha = 0.0;
+        newLayer.alpha = 0.7;
 
-        const old = trafficLayer; trafficLayer = newLayer;
-        const start = performance.now();
-        (function fade(){
-          const t = Math.min(1, (performance.now()-start)/600);
-          newLayer.alpha = t * 0.7;
-          if (old) old.alpha = (1-t)*0.7;
-          viewer.scene.requestRender();
-          if (t<1) requestAnimationFrame(fade);
-          else if (old) viewer.imageryLayers.remove(old, false);
-        })();
+        if (trafficLayer) viewer.imageryLayers.remove(trafficLayer, false);
+        trafficLayer = newLayer;
 
         const started = performance.now();
         (function waitReady(){
@@ -515,16 +512,16 @@
       }
       liveTrafficToggle.addEventListener("change", (e)=> e.target.checked ? beginTrafficUpdates() : stopTrafficUpdates());
       trafficRefresh.addEventListener("change", ()=> { if (liveTrafficToggle.checked) beginTrafficUpdates(); });
-      beginTrafficUpdates(); // default on
+      beginTrafficUpdates();
     }
 
     // ==========================
-    // Pollution panel (uses latestPredictions or simulated "now")
+    // Pollution panel
     // ==========================
     function paintPollutionPanelNow(){
       const out = latestPredictions
         ? { O3: latestPredictions.O3[0], NO2: latestPredictions.NO2[0], NO: latestPredictions.NO[0], CO: latestPredictions.CO[0], NH3: latestPredictions.NH3[0] }
-        : histories; // fallback (first elements)
+        : histories;
       const thresholds = { O3:100, NO2:40, NO:50, CO:10, NH3:2 };
       const level = (p, v)=> v < thresholds[p]*0.6 ? "bg-green-100 text-green-800"
                              : v < thresholds[p]     ? "bg-yellow-100 text-yellow-800"
@@ -546,4 +543,5 @@
   </script>
 </body>
 </html>
+
 
