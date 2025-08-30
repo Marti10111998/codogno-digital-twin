@@ -10,12 +10,12 @@
     html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
     #legend {
       position:absolute; bottom:1rem; left:1rem; background:white; padding:.5rem; border-radius:.5rem;
-      font-family:sans-serif; font-size:12px; z-index:10; width:160px; box-shadow:0 2px 4px rgba(0,0,0,.2);
+      font-family:sans-serif; font-size:12px; z-index:10; width:180px; box-shadow:0 2px 4px rgba(0,0,0,.2);
     }
-    #legendGradient { height:16px; background:linear-gradient(to right, hsl(60 100% 50%), hsl(150 100% 50%), hsl(330 100% 50%)); margin-top:.25rem; }
+    #legendGradient { height:16px; background:linear-gradient(to right,#313695,#4575b4,#74add1,#fee090,#d73027); margin-top:.25rem; }
     #tooltip {
       position:absolute; background:white; border:1px solid #ccc; padding:6px 8px; font-size:13px; pointer-events:none;
-      border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:220px; display:none;
+      border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:240px; display:none;
     }
   </style>
 </head>
@@ -106,11 +106,11 @@
     // ==========================
     // 🔑 KEYS
     // ==========================
-    const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";   // OpenWeather (current weather)
-    const tomtomKey     = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";   // TomTom Traffic
+    const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
+    const tomtomKey     = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";
     Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
 
-    // 👉 Your RF API (change to your HTTPS URL when deployed)
+    // 👉 Your RF API (switch to your deployed HTTPS URL later)
     const POLLUTION_API = "http://localhost:8000";
 
     // ==========================
@@ -136,7 +136,67 @@
       throw new Error("fetch failed: " + url);
     }
     const clamp01 = (x)=>Math.max(0,Math.min(1,x));
-    const hueColor = (h, a=1)=>Cesium.Color.fromHsl(h/360,1,.6,a);
+    const hueColor = (h, a=1)=>Cesium.Color.fromHsl(h/360,1,.6,a); // kept for UI base color
+
+    // ==========================
+    // UHI color ramp & autoscale (blue → red)
+    // ==========================
+    let UHI_MIN = 25, UHI_MAX = 40;
+    let UHI_AUTOSCALE = true;  // set false to keep 25–40 fixed
+
+    function setLegendText(min, max) {
+      const legend = document.querySelector("#legend .flex");
+      if (!legend) return;
+      legend.children[0].textContent = Math.round(min);
+      legend.children[1].textContent = Math.round(max);
+    }
+
+    const UHI_STOPS = [
+      { p: 0.00, c: Cesium.Color.fromBytes(49, 54,149,255) },
+      { p: 0.25, c: Cesium.Color.fromBytes(69,117,180,255) },
+      { p: 0.50, c: Cesium.Color.fromBytes(116,173,209,255) },
+      { p: 0.75, c: Cesium.Color.fromBytes(254,224,144,255) },
+      { p: 1.00, c: Cesium.Color.fromBytes(215, 48, 39,255) }
+    ];
+    function lerp(a,b,t){ return a + (b-a)*t; }
+    function interpolateColor(stops,t){
+      t = clamp01(t);
+      for (let i=1;i<stops.length;i++){
+        if (t <= stops[i].p){
+          const a=stops[i-1], b=stops[i], w=(t-a.p)/(b.p-a.p);
+          return new Cesium.Color(
+            lerp(a.c.red,b.c.red,w),
+            lerp(a.c.green,b.c.green,w),
+            lerp(a.c.blue,b.c.blue,w),
+            lerp(a.c.alpha,b.c.alpha,w)
+          );
+        }
+      }
+      return stops[stops.length-1].c.clone();
+    }
+    function uhiToColor(temp, alpha=1){
+      const t = (temp - UHI_MIN) / (UHI_MAX - UHI_MIN);
+      const c = interpolateColor(UHI_STOPS, t);
+      return new Cesium.Color(c.red, c.green, c.blue, alpha);
+    }
+    function computeCurrentUHIBounds(){
+      if (!UHI_AUTOSCALE) { setLegendText(UHI_MIN, UHI_MAX); return; }
+      let min=1e9, max=-1e9, count=0;
+      for (const b of buildings){
+        const v = getTempForEntity(b);
+        if (typeof v === "number" && isFinite(v)){
+          min = Math.min(min, v);
+          max = Math.max(max, v);
+          count++;
+        }
+      }
+      if (count>0){
+        UHI_MIN = Math.floor(min);
+        UHI_MAX = Math.ceil(max);
+        if (UHI_MAX - UHI_MIN < 5) UHI_MAX = UHI_MIN + 5;
+        setLegendText(UHI_MIN, UHI_MAX);
+      }
+    }
 
     // ==========================
     // Inline Web Worker (Forecast engine)
@@ -181,7 +241,6 @@
     `;
     const worker = new Worker(URL.createObjectURL(new Blob([workerCode], {type:'application/javascript'})));
 
-    // Receive predictions from worker
     let latestPredictions = null;
     worker.onmessage = (e) => {
       if (e.data?.kind === "PREDICTIONS") {
@@ -198,7 +257,7 @@
       const features = {
         Temperature: weather.temp,
         Humidity: weather.humidity,
-        Precipitation: (weather.rain1h || 0),   // your model uses rain
+        Precipitation: (weather.rain1h || 0),
         WindSpeed_m_s: weather.wind
       };
       try {
@@ -241,7 +300,7 @@
         histories.urbanTemp.push(urbanTemp);
         if (histories.urbanTemp.length > 200) histories.urbanTemp.shift();
 
-        // ⬇️ use your RF API; fallback to heuristic if it fails
+        // use RF API; fallback to heuristic
         let nowPoll = await predictWithAPI(lastWeather);
         if (!nowPoll) nowPoll = simulatePollutionFromWeather(lastWeather);
 
@@ -270,7 +329,7 @@
       return urbanTemp + 0.03*height - 0.2*wind - 0.02*clouds;
     }
 
-    // kept as backup only
+    // backup heuristic (only if API down)
     function simulatePollutionFromWeather(w){
       const { temp, wind, humidity, pressure, clouds } = w;
       const base = (x,min,max)=>Math.max(min, Math.min(max, x));
@@ -313,12 +372,33 @@
     // Cesium App
     // ==========================
     async function startCesiumApp(){
-      viewer = new Cesium.Viewer("cesiumContainer", { baseLayerPicker:true, timeline:false, animation:false, shadows:true });
+      viewer = new Cesium.Viewer("cesiumContainer", {
+        baseLayerPicker: true, timeline: false, animation: false, shadows: true
+      });
+
+      // render on demand
       viewer.scene.requestRenderMode = true;
       viewer.scene.maximumRenderTimeChange = 1/30;
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
 
+      // --- Shadows like the reference ---
+      viewer.shadows = true;
+      viewer.scene.light = new Cesium.SunLight(); // directional sunlight
+      const sm = viewer.scene.shadowMap;
+      sm.enabled = true;
+      sm.softShadows = true;
+      sm.size = 2048;
+      sm.maximumDistance = 3000;
+      sm.darkness = 0.4;
+      viewer.scene.globe.shadows = Cesium.ShadowMode.ENABLED;
+
+      // keep the sun updated with time slider
+      viewer.clock.onTick.addEventListener(() => {
+        viewer.scene.light = new Cesium.SunLight();
+      });
+
+      // Load buildings
       const buildingSelector = document.getElementById("buildingSelector");
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround:false });
       viewer.dataSources.add(dataSource);
@@ -336,6 +416,7 @@
           building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
           building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0);
           building.polygon.outline = false;
+          building.polygon.shadows = Cesium.ShadowMode.ENABLED; // enable shadows per-entity
         }
 
         const option = document.createElement("option");
@@ -344,7 +425,7 @@
       });
 
       await fetchUHIAndUpdate();
-      setInterval(fetchUHIAndUpdate, 60_000);
+      setInterval(fetchUHIAndUpdate, 60_000); // realtime: every minute
 
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
@@ -364,20 +445,22 @@
         const colorHex = document.getElementById("colorPicker").value;
         const alpha = 1.0;
         const showHeat = document.getElementById("heatToggle").checked;
+
         document.getElementById("legendMode").textContent =
           "Mode: " + (document.getElementById("predictionToggle").checked ? "Predicted" : "Measured");
 
+        // autoscale before painting
+        computeCurrentUHIBounds();
+
         for (const building of buildings) {
           if (!building.polygon) continue;
+
+          // base color if no heat or no temp
           let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
 
           if (showHeat) {
             const t = getTempForEntity(building);
-            if (typeof t === "number") {
-              const normalized = clamp01((t - 25) / 15);
-              const hue = 60 + normalized * (330 - 60);
-              color = hueColor(hue, alpha);
-            }
+            if (typeof t === "number" && isFinite(t)) color = uhiToColor(t, alpha);
           }
 
           if (!selected || building.name === selected) building.polygon.material = color;
@@ -385,6 +468,7 @@
         viewer.scene.requestRender();
       }
 
+      // Tooltip on hover
       const tooltip = document.getElementById("tooltip");
       viewer.screenSpaceEventHandler.setInputAction((movement) => {
         const picked = viewer.scene.pick(movement.endPosition);
@@ -418,12 +502,14 @@
         viewer.scene.requestRender();
       });
 
+      // Time slider controls the Cesium clock (date is arbitrary)
       const timeSlider = document.getElementById("timeSlider");
       const timeLabel  = document.getElementById("timeLabel");
       function setClockHour(h){
         timeSlider.value = h;
         timeLabel.textContent = `${h}:00`;
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, h));
+        viewer.scene.requestRender();
         updateStyles();
       }
       timeSlider.addEventListener("input", ()=>setClockHour(parseInt(timeSlider.value)));
@@ -436,7 +522,7 @@
         });
       });
 
-      // Static heatmap
+      // Static traffic heat map
       async function loadHeatmap(timeOfDay){
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities = [];
@@ -543,5 +629,3 @@
   </script>
 </body>
 </html>
-
-
