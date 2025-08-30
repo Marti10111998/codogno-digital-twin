@@ -2,52 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Codogno Digital Twin</title>
+  <title>Codogno Digital Twin — Realtime + Predictive</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/cesium@1.116/Build/Cesium/Cesium.js"></script>
   <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
   <style>
-    html, body, #cesiumContainer {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
+    html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
     #legend {
-      position: absolute;
-      bottom: 1rem;
-      left: 1rem;
-      background: white;
-      padding: 0.5rem;
-      border-radius: 0.5rem;
-      font-family: sans-serif;
-      font-size: 12px;
-      z-index: 10;
-      width: 140px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      position:absolute; bottom:1rem; left:1rem; background:white; padding:.5rem; border-radius:.5rem;
+      font-family:sans-serif; font-size:12px; z-index:10; width:160px; box-shadow:0 2px 4px rgba(0,0,0,.2);
     }
     #legendGradient {
-      height: 16px;
-      background: linear-gradient(to right,
-        hsl(60, 100%, 50%),
-        hsl(150, 100%, 50%),
-        hsl(330, 100%, 50%)
-      );
-      margin-top: 0.25rem;
+      height:16px; background:linear-gradient(to right, hsl(60 100% 50%), hsl(150 100% 50%), hsl(330 100% 50%)); margin-top:.25rem;
     }
     #tooltip {
-      position: absolute;
-      background: white;
-      border: 1px solid #ccc;
-      padding: 6px 8px;
-      font-size: 13px;
-      pointer-events: none;
-      border-radius: 6px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-      z-index: 1000;
-      max-width: 220px;
-      display: none;
+      position:absolute; background:white; border:1px solid #ccc; padding:6px 8px; font-size:13px; pointer-events:none;
+      border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:220px; display:none;
     }
   </style>
 </head>
@@ -55,56 +25,66 @@
 <body>
   <div id="cesiumContainer"></div>
 
-  <!-- UI Panel -->
-  <div class="absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-72 space-y-4 z-10 font-sans">
-    <div>
-      <label class="block font-medium">Select Building</label>
-      <select id="buildingSelector" class="w-full border rounded px-2 py-1">
-        <option value="">-- All Buildings --</option>
-      </select>
-    </div>
-    <div>
-      <label class="block font-medium">Color</label>
-      <input type="color" id="colorPicker" class="w-full" value="#cccccc" />
-    </div>
-    <div>
-      <label class="block font-medium">Time of Day</label>
-      <input type="range" id="timeSlider" min="0" max="24" step="1" value="12" class="w-full" />
-      <div id="timeLabel" class="text-sm text-gray-600">12:00</div>
-    </div>
-    <div>
-      <label class="inline-flex items-center">
-        <input type="checkbox" id="heatToggle" checked class="mr-2" />
-        Show Heat Colors
-      </label>
-    </div>
-    <div>
-      <label class="inline-flex items-center">
-        <input type="checkbox" id="shadowToggle" checked class="mr-2" />
-        Enable Shadows
-      </label>
-    </div>
-    <div>
-      <label class="block font-medium">Traffic Heatmap Time</label>
-      <select id="heatmapTimeSelector" class="w-full border rounded px-2 py-1">
-        <option value="morning">Morning</option>
-        <option value="lunch">Lunch</option>
-        <option value="evening">Evening</option>
-        <option value="night">Night</option>
-      </select>
-    </div>
+  <!-- Control Panel -->
+  <div class="absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-80 space-y-4 z-10 font-sans">
+    <div class="text-lg font-semibold">Codogno Digital Twin</div>
 
-    <!-- Live Traffic controls -->
-    <div>
-      <label class="inline-flex items-center">
-        <input type="checkbox" id="liveTrafficToggle" class="mr-2" checked />
-        Live Traffic (TomTom)
-      </label>
-      <select id="trafficRefresh" class="w-full border rounded px-2 py-1 mt-2">
-        <option value="15" selected>Refresh: 15s</option>
-        <option value="30">Refresh: 30s</option>
-        <option value="60">Refresh: 60s</option>
-      </select>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="col-span-2">
+        <label class="block font-medium">Select Building</label>
+        <select id="buildingSelector" class="w-full border rounded px-2 py-1">
+          <option value="">-- All Buildings --</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block font-medium">Base Color</label>
+        <input type="color" id="colorPicker" class="w-full" value="#cccccc" />
+      </div>
+
+      <div class="col-span-2">
+        <label class="block font-medium">Time of Day</label>
+        <input type="range" id="timeSlider" min="0" max="24" step="1" value="12" class="w-full" />
+        <div class="text-sm text-gray-600 flex items-center justify-between">
+          <span id="timeLabel">12:00</span>
+          <div class="space-x-2">
+            <button data-mins="0"  class="snapBtn text-xs px-2 py-1 rounded bg-gray-100">Now</button>
+            <button data-mins="10" class="snapBtn text-xs px-2 py-1 rounded bg-gray-100">+10m</button>
+            <button data-mins="30" class="snapBtn text-xs px-2 py-1 rounded bg-gray-100">+30m</button>
+            <button data-mins="60" class="snapBtn text-xs px-2 py-1 rounded bg-gray-100">+60m</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="inline-flex items-center"><input type="checkbox" id="heatToggle" checked class="mr-2" /> Show Heat Colors</label>
+      </div>
+      <div>
+        <label class="inline-flex items-center"><input type="checkbox" id="shadowToggle" checked class="mr-2" /> Enable Shadows</label>
+      </div>
+      <div class="col-span-2">
+        <label class="inline-flex items-center"><input type="checkbox" id="predictionToggle" checked class="mr-2" /> Show Predicted Heat (next hour)</label>
+        <div id="modelBadge" class="text-[11px] text-gray-600 mt-1">Forecast: Holt-Winters (Web Worker)</div>
+      </div>
+
+      <div class="col-span-2">
+        <label class="block font-medium">Traffic Heatmap Time</label>
+        <select id="heatmapTimeSelector" class="w-full border rounded px-2 py-1">
+          <option value="morning">Morning</option>
+          <option value="lunch">Lunch</option>
+          <option value="evening">Evening</option>
+          <option value="night">Night</option>
+        </select>
+      </div>
+
+      <div class="col-span-2">
+        <label class="inline-flex items-center"><input type="checkbox" id="liveTrafficToggle" class="mr-2" checked /> Live Traffic (TomTom)</label>
+        <select id="trafficRefresh" class="w-full border rounded px-2 py-1 mt-2">
+          <option value="15" selected>Refresh: 15s</option>
+          <option value="30">Refresh: 30s</option>
+          <option value="60">Refresh: 60s</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -112,64 +92,229 @@
     <div class="font-semibold">UHI Temperature (°C)</div>
     <div id="legendGradient"></div>
     <div class="flex justify-between"><span>25</span><span>40</span></div>
+    <div id="legendMode" class="text-[11px] text-gray-600 mt-1">Mode: Predicted</div>
   </div>
 
   <div id="tooltip"></div>
 
   <!-- Pollution Panel -->
   <div id="pollutionPanel" class="absolute bottom-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg w-72 space-y-2 z-10 font-sans text-sm">
-    <div class="font-semibold text-gray-700">Predicted Pollution</div>
+    <div class="font-semibold text-gray-700">Predicted Pollution (now)</div>
     <div id="pollutionOutput">Loading...</div>
+    <div id="pollutionStamp" class="text-[11px] text-gray-600">—</div>
   </div>
 
-  <script>
-    const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
+  <script type="module">
+    // ==========================
+    // 🔑 KEYS (already provided)
+    // ==========================
+    const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";   // OpenWeather (current weather)
+    const tomtomKey     = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";   // TomTom Traffic
+    Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
 
-    // 🔑 TomTom Traffic API (Traffic product enabled)
-    const tomtomKey = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";
+    // ==========================
+    // App-wide state
+    // ==========================
+    let viewer, buildings = [], heatmapEntities = [];
+    let trafficLayer = null, trafficTimer = null;
 
-    let buildings = [];
-    let heatmapEntities = [];
-    let trafficLayer = null;
-    let trafficTimer = null;
+    const histories = {
+      urbanTemp: [],  // °C (from urban point)
+      O3: [], NO2: [], NO: [], CO: [], NH3: []
+    };
+    let lastWeather = { temp: null, wind: 0, clouds: 0, humidity: 0, pressure: 0 };
+    const HORIZON_STEPS = 6;  // 6 x 10min = 60 minutes
+    const STEP_MINUTES  = 10;
 
-    async function fetchUHI() {
+    // ==========================
+    // Utility
+    // ==========================
+    async function resilientFetch(url, tries=3, base=500){
+      for (let i=0;i<tries;i++){
+        const r = await fetch(url, { cache: "no-store" });
+        if (r.ok) return r;
+        await new Promise(res => setTimeout(res, base * 2**i + Math.random()*200));
+      }
+      throw new Error("fetch failed: " + url);
+    }
+    const clamp01 = (x)=>Math.max(0,Math.min(1,x));
+    const hueColor = (h, a=1)=>Cesium.Color.fromHsl(h/360,1,.6,a);
+
+    // ==========================
+    // Inline Web Worker (Forecast engine)
+    // ==========================
+    const workerCode = `
+      self.onmessage = (e) => {
+        const { kind, payload } = e.data || {};
+        if (kind === "FORECAST") {
+          const { histories, horizon, stepMinutes } = payload;
+
+          // Holt-Winters (tiny)
+          function hw(series, a=0.5,b=0.3,g=0.2, m=24, h=6){
+            if (!series || series.length < 3) return Array(h).fill(series && series[series.length-1] || 0);
+            const L=[series[0]], T=[series[1]-series[0]], S = new Array(m).fill(0);
+            for(let t=1;t<series.length;t++){
+              const s=S[(t-1)%m];
+              const l=a*(series[t]-s)+(1-a)*(L[t-1]+T[t-1]);
+              const tt=b*(l-L[t-1])+(1-b)*T[t-1];
+              S[t%m]=g*(series[t]-l)+(1-g)*s;
+              L[t]=l; T[t]=tt;
+            }
+            const last=series.length-1;
+            return Array.from({length:h},(_,i)=>(L[last]+(i+1)*T[last])+S[(last+1+i)%m]);
+          }
+
+          function ensure(series, seed=20){
+            if (!series || series.length===0) return [seed, seed*1.02, seed*1.01, seed*1.03];
+            return series;
+          }
+
+          const out = {
+            urbanTemp: hw(ensure(histories.urbanTemp, 28), 0.5,0.3,0.2, 24, horizon),
+            O3:  hw(ensure(histories.O3, 80),  0.5,0.3,0.2, 24, horizon),
+            NO2: hw(ensure(histories.NO2, 30), 0.5,0.3,0.2, 24, horizon),
+            NO:  hw(ensure(histories.NO, 20),  0.5,0.3,0.2, 24, horizon),
+            CO:  hw(ensure(histories.CO, 1.0), 0.5,0.3,0.2, 24, horizon),
+            NH3: hw(ensure(histories.NH3, 1.0),0.5,0.3,0.2, 24, horizon),
+            stepMinutes
+          };
+          postMessage({ kind:"PREDICTIONS", data: out, ts: Date.now() });
+        }
+      };
+    `;
+    const worker = new Worker(URL.createObjectURL(new Blob([workerCode], {type:'application/javascript'})));
+
+    // Receive predictions from worker
+    let latestPredictions = null;
+    worker.onmessage = (e) => {
+      if (e.data?.kind === "PREDICTIONS") {
+        latestPredictions = e.data.data;
+        updatePredictedUHIForBuildings();
+        paintPollutionPanelNow(); // show "now" prediction
+      }
+    };
+
+    // ==========================
+    // Weather + UHI (realtime)
+    // ==========================
+    async function fetchUHIAndUpdate(){
+      // Urban & "rural" samples near Codogno
       const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
       const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
-      const [urbanRes, ruralRes] = await Promise.all([fetch(urbanURL), fetch(ruralURL)]);
-      const urbanTemp = (await urbanRes.json()).main.temp;
-      const ruralTemp = (await ruralRes.json()).main.temp;
 
-      buildings.forEach(building => {
-        const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
-        const simTemp = urbanTemp + height * 0.03;
-        building.properties.addProperty("sim_uhi", simTemp);
+      try {
+        const [uRes, rRes] = await Promise.all([resilientFetch(urbanURL), resilientFetch(ruralURL)]);
+        const uJson = await uRes.json();
+        const rJson = await rRes.json();
+
+        const urbanTemp = uJson.main?.temp ?? 28;
+        const ruralTemp = rJson.main?.temp ?? 26;
+
+        lastWeather = {
+          temp: urbanTemp,
+          wind: uJson.wind?.speed ?? 1.5,
+          clouds: uJson.clouds?.all ?? 20,
+          humidity: uJson.main?.humidity ?? 50,
+          pressure: uJson.main?.pressure ?? 1013
+        };
+
+        // Push to history (cap length to 96 samples ~ last 16 hours @10min, although we update 60s)
+        histories.urbanTemp.push(urbanTemp);
+        if (histories.urbanTemp.length > 200) histories.urbanTemp.shift();
+
+        // Simple simulated pollutant "now" using weather (keeps things moving without a server)
+        const nowPoll = simulatePollutionFromWeather(lastWeather);
+        for (const k of ["O3","NO2","NO","CO","NH3"]) {
+          histories[k].push(nowPoll[k]);
+          if (histories[k].length > 200) histories[k].shift();
+        }
+
+        // Update current (simulated) UHI on buildings
+        for (const building of buildings) {
+          const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
+          const simTemp = computeUHI(urbanTemp, height, lastWeather.wind, lastWeather.clouds);
+          building.properties.addProperty("sim_uhi", simTemp);
+        }
+
+        requestForecast();     // ask the worker to forecast next hour
+        updateStyles();        // repaint colors
+        paintPollutionPanelNow();
+
+      } catch (err) {
+        console.error("Weather/UHI fetch error:", err);
+      }
+    }
+
+    function computeUHI(urbanTemp, height, wind, clouds){
+      // heuristic: taller = hotter; wind & clouds cool it a bit
+      return urbanTemp + 0.03*height - 0.2*wind - 0.02*clouds;
+    }
+
+    function simulatePollutionFromWeather(w){
+      // purely illustrative, keeps values plausible and reactive
+      const { temp, wind, humidity, pressure, clouds } = w;
+      const base = (x,min,max)=>Math.max(min, Math.min(max, x));
+      return {
+        O3:  base(60 + (temp-20)*2 - clouds*0.3 + wind*-2, 20, 140),
+        NO2: base(20 + clouds*0.2 + (30 - wind*3), 5, 80),
+        NO:  base(10 + (humidity-50)*0.1 + (30 - wind*4), 2, 70),
+        CO:  base(0.6 + (30 - wind*5)*0.02, 0.2, 3),
+        NH3: base(0.8 + (humidity-50)*0.01, 0.3, 4)
+      };
+    }
+
+    // Ask worker to forecast next hour based on histories
+    function requestForecast(){
+      worker.postMessage({
+        kind: "FORECAST",
+        payload: { histories, horizon: HORIZON_STEPS, stepMinutes: STEP_MINUTES }
       });
     }
 
-    async function startCesiumApp() {
-      Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
+    // Build predicted UHI per building as a time series property (next hour)
+    function updatePredictedUHIForBuildings(){
+      if (!latestPredictions) return;
+      const predUrban = latestPredictions.urbanTemp || [];
+      const wind = lastWeather.wind, clouds = lastWeather.clouds;
+      const now = Date.now();
 
-      const viewer = new Cesium.Viewer("cesiumContainer", {
-        baseLayerPicker: true,
-        timeline: false,
-        animation: false,
-        shadows: true
+      for (const b of buildings) {
+        const height = parseFloat(b.properties?.height?.getValue?.() ?? b.properties?.height) || 10;
+
+        // Build a Cesium SampledProperty with time-tagged predicted temps
+        const prop = new Cesium.SampledProperty(Number);
+        for (let i=0; i<predUrban.length; i++){
+          const t = new Date(now + i * STEP_MINUTES * 60 * 1000);
+          const uhi = computeUHI(predUrban[i], height, wind, clouds);
+          prop.addSample(Cesium.JulianDate.fromDate(t), uhi);
+        }
+        b.properties.addProperty("pred_uhi", prop);
+      }
+      viewer.scene.requestRender();
+    }
+
+    // ==========================
+    // Cesium App
+    // ==========================
+    async function startCesiumApp(){
+      viewer = new Cesium.Viewer("cesiumContainer", {
+        baseLayerPicker: true, timeline: false, animation: false, shadows: true
       });
 
+      // performance: render only on demand
+      viewer.scene.requestRenderMode = true;
+      viewer.scene.maximumRenderTimeChange = 1/30;
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
 
-      // Expose viewer
-      window.viewer = viewer;
-
+      // Load buildings
       const buildingSelector = document.getElementById("buildingSelector");
-      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround: false });
+      const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround:false });
       viewer.dataSources.add(dataSource);
       buildings = dataSource.entities.values;
 
       buildings.forEach((building, i) => {
-        const name = `Building ${i + 1}`;
+        const name = `Building ${i+1}`;
         building.name = name;
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
 
@@ -183,265 +328,220 @@
         }
 
         const option = document.createElement("option");
-        option.value = name;
-        option.textContent = name;
+        option.value = name; option.textContent = name;
         buildingSelector.appendChild(option);
       });
 
-      await fetchUHI();
-      updateStyles();
-      fetchPollutionPrediction();
+      // First data pull + set interval
+      await fetchUHIAndUpdate();
+      setInterval(fetchUHIAndUpdate, 60_000); // realtime: every minute
 
+      // Camera
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
-        orientation: {
-          heading: Cesium.Math.toRadians(0),
-          pitch: Cesium.Math.toRadians(-45),
-          roll: 0.0
-        }
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 }
       });
 
-      function updateStyles() {
-        const selected = buildingSelector.value;
+      // === UI & Styling ===
+      function getTempForEntity(ent){
+        const usePred = document.getElementById("predictionToggle").checked;
+        const props = ent.properties;
+        if (usePred && props?.pred_uhi?.getValue) return props.pred_uhi.getValue(viewer.clock.currentTime);
+        const sim = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi;
+        return typeof sim === "number" ? sim : undefined;
+      }
+
+      function updateStyles(){
+        const selected = document.getElementById("buildingSelector").value;
         const colorHex = document.getElementById("colorPicker").value;
         const alpha = 1.0;
         const showHeat = document.getElementById("heatToggle").checked;
+        document.getElementById("legendMode").textContent =
+          "Mode: " + (document.getElementById("predictionToggle").checked ? "Predicted" : "Measured");
 
         for (const building of buildings) {
           if (!building.polygon) continue;
           let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
 
           if (showHeat) {
-            const t = parseFloat(building.properties?.sim_uhi?.getValue?.() ?? building.properties?.sim_uhi);
-            if (!isNaN(t)) {
-              const normalized = Math.min(Math.max((t - 25) / 15, 0), 1);
-              const hue = 60 + normalized * (330 - 60);
-              color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.6, alpha);
+            const t = getTempForEntity(building);
+            if (typeof t === "number") {
+              const normalized = clamp01((t - 25) / 15); // 25–40 °C ramp
+              const hue = 60 + normalized * (330 - 60);  // yellow -> magenta
+              color = hueColor(hue, alpha);
             }
           }
 
-          if (!selected || building.name === selected) {
-            building.polygon.material = color;
-          }
+          if (!selected || building.name === selected) building.polygon.material = color;
         }
         viewer.scene.requestRender();
       }
 
+      // Tooltip on hover
       const tooltip = document.getElementById("tooltip");
       viewer.screenSpaceEventHandler.setInputAction((movement) => {
         const picked = viewer.scene.pick(movement.endPosition);
         if (picked && picked.id && picked.id.properties) {
           const props = picked.id.properties;
-          const t = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi ?? "N/A";
+          const usePred = document.getElementById("predictionToggle").checked;
+          const t = usePred && props?.pred_uhi?.getValue ? props.pred_uhi.getValue(viewer.clock.currentTime)
+                    : (props?.sim_uhi?.getValue?.() ?? props?.sim_uhi ?? "N/A");
           const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
           const name = picked.id.name ?? "Unknown";
-
-          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>Temp: ${parseFloat(t).toFixed(1)} °C`;
+          const label = usePred ? "Pred" : "Temp";
+          const tNum = parseFloat(t);
+          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>${label}: ${isFinite(tNum)?tNum.toFixed(1):"N/A"} °C`;
           tooltip.style.left = (movement.endPosition.x + 15) + "px";
-          tooltip.style.top = (movement.endPosition.y + 15) + "px";
+          tooltip.style.top  = (movement.endPosition.y + 15) + "px";
           tooltip.style.display = "block";
         } else {
           tooltip.style.display = "none";
         }
       }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
+      // Inputs
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
       document.getElementById("heatToggle").addEventListener("change", updateStyles);
+      document.getElementById("predictionToggle").addEventListener("change", updateStyles);
+
       document.getElementById("shadowToggle").addEventListener("change", (e) => {
         const enabled = e.target.checked;
         viewer.shadows = enabled;
         viewer.scene.shadowMap.enabled = enabled;
+        viewer.scene.requestRender();
       });
 
+      // Time slider controls the Cesium clock (date is arbitrary)
       const timeSlider = document.getElementById("timeSlider");
-      const timeLabel = document.getElementById("timeLabel");
-      timeSlider.addEventListener("input", () => {
-        const hour = parseInt(timeSlider.value);
-        timeLabel.textContent = `${hour}:00`;
-        viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, hour));
+      const timeLabel  = document.getElementById("timeLabel");
+      function setClockHour(h){
+        timeSlider.value = h;
+        timeLabel.textContent = `${h}:00`;
+        viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, h));
         updateStyles();
-      });
-
-      async function loadHeatmap(timeOfDay) {
-        for (const entity of heatmapEntities) viewer.entities.remove(entity);
-        heatmapEntities = [];
-
-        const file = `${timeOfDay}_heatpoints.json`;
-        const response = await fetch(file);
-        const data = await response.json();
-
-        for (const [lat, lon, speed] of data) {
-          const normalized = Math.min(speed / 60, 1);
-          const hue = (1 - normalized) * 240;
-          const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
-
-          const entity = viewer.entities.add({
-            position: Cesium.Cartesian3.fromDegrees(lon, lat),
-            point: {
-              pixelSize: 10,
-              color: color,
-              outlineColor: Cesium.Color.WHITE,
-              outlineWidth: 1
-            }
-          });
-          heatmapEntities.push(entity);
-        }
       }
-
-      loadHeatmap("morning");
-      document.getElementById("heatmapTimeSelector").addEventListener("change", (e) => {
-        loadHeatmap(e.target.value);
+      timeSlider.addEventListener("input", ()=>setClockHour(parseInt(timeSlider.value)));
+      document.querySelectorAll(".snapBtn").forEach(btn => {
+        btn.addEventListener("click", ()=>{
+          const mins = parseInt(btn.dataset.mins);
+          const now = new Date();
+          const snap = new Date(now.getTime() + mins*60*1000);
+          setClockHour(snap.getHours());
+        });
       });
 
-      // === Live Traffic (TomTom) with status + auto-refresh ===
+      // Heatmap (static points from files)
+      async function loadHeatmap(timeOfDay){
+        for (const e of heatmapEntities) viewer.entities.remove(e);
+        heatmapEntities = [];
+        try {
+          const file = `${timeOfDay}_heatpoints.json`;
+          const response = await resilientFetch(file);
+          const data = await response.json();
+          for (const [lat, lon, speed] of data) {
+            const normalized = clamp01(speed / 60);
+            const hue = (1 - normalized) * 240;
+            const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
+            const entity = viewer.entities.add({
+              position: Cesium.Cartesian3.fromDegrees(lon, lat),
+              point: { pixelSize: 10, color, outlineColor: Cesium.Color.WHITE, outlineWidth: 1 }
+            });
+            heatmapEntities.push(entity);
+          }
+        } catch (e) { console.warn("Heatmap load failed", e); }
+        viewer.scene.requestRender();
+      }
+      loadHeatmap("morning");
+      document.getElementById("heatmapTimeSelector").addEventListener("change", (e)=>loadHeatmap(e.target.value));
+
+      // === Live Traffic with crossfade ===
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
       const trafficRefresh = document.getElementById("trafficRefresh");
 
-      // status badge
       const trafficStatus = document.createElement("div");
-      trafficStatus.style.position = "absolute";
-      trafficStatus.style.right = "1rem";
-      trafficStatus.style.top = "1rem";
-      trafficStatus.style.zIndex = "20";
-      trafficStatus.style.background = "rgba(255,255,255,0.9)";
-      trafficStatus.style.padding = "6px 10px";
-      trafficStatus.style.borderRadius = "10px";
-      trafficStatus.style.fontFamily = "system-ui, sans-serif";
-      trafficStatus.style.fontSize = "12px";
-      trafficStatus.style.boxShadow = "0 2px 6px rgba(0,0,0,.15)";
+      Object.assign(trafficStatus.style, {
+        position:"absolute", right:"1rem", top:"1rem", zIndex:20,
+        background:"rgba(255,255,255,0.9)", padding:"6px 10px", borderRadius:"10px",
+        fontFamily:"system-ui, sans-serif", fontSize:"12px", boxShadow:"0 2px 6px rgba(0,0,0,.15)"
+      });
       trafficStatus.textContent = "Traffic: starting…";
       document.body.appendChild(trafficStatus);
+      const setTrafficStatus = (msg)=>trafficStatus.textContent = `Traffic: ${msg}`;
 
-      function setTrafficStatus(msg) {
-        trafficStatus.textContent = `Traffic: ${msg}`;
-      }
-
-      function addOrUpdateTrafficLayer() {
-        const ts = Date.now(); // cache-bust to force fresh tiles
-
+      function addOrUpdateTrafficLayer(){
+        const ts = Date.now();
         const provider = new Cesium.UrlTemplateImageryProvider({
-          // TomTom Traffic Flow (relative) — green→red by congestion
           url: `https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key=${tomtomKey}&ts=${ts}`,
-          maximumLevel: 20,
-          tilingScheme: new Cesium.WebMercatorTilingScheme(),
-          credit: "TomTom Traffic"
+          maximumLevel: 20, tilingScheme: new Cesium.WebMercatorTilingScheme(), credit: "TomTom Traffic"
         });
+        provider.errorEvent.addEventListener((e)=>{ console.error("Traffic tile error:", e); setTrafficStatus(`error`); });
 
-        provider.errorEvent.addEventListener((e) => {
-          console.error("Traffic tile error:", e);
-          setTrafficStatus(`error (${e?.message || "tile load"})`);
-        });
+        const newLayer = viewer.imageryLayers.addImageryProvider(provider);
+        newLayer.alpha = 0.0;
 
-        if (trafficLayer) {
-          viewer.imageryLayers.remove(trafficLayer, /*destroy=*/false);
-          trafficLayer = null;
-        }
-
-        trafficLayer = viewer.imageryLayers.addImageryProvider(provider);
-        trafficLayer.alpha = 0.7;
+        const old = trafficLayer; trafficLayer = newLayer;
+        const start = performance.now();
+        (function fade(){
+          const t = Math.min(1, (performance.now()-start)/600);
+          newLayer.alpha = t * 0.7;
+          if (old) old.alpha = (1-t)*0.7;
+          viewer.scene.requestRender();
+          if (t<1) requestAnimationFrame(fade);
+          else if (old) viewer.imageryLayers.remove(old, false);
+        })();
 
         const started = performance.now();
-        const waitReady = () => {
+        (function waitReady(){
           if (provider.ready) {
-            const dt = ((performance.now() - started) / 1000).toFixed(1);
+            const dt = ((performance.now()-started)/1000).toFixed(1);
             setTrafficStatus(`updated @ ${new Date().toLocaleTimeString()} (+${dt}s)`);
             viewer.scene.requestRender();
-          } else {
-            requestAnimationFrame(waitReady);
-          }
-        };
-        waitReady();
+          } else requestAnimationFrame(waitReady);
+        })();
       }
 
-      function beginTrafficUpdates() {
+      function beginTrafficUpdates(){
         addOrUpdateTrafficLayer();
-        const everyMs = Math.max(15000, parseInt(trafficRefresh.value, 10) * 1000);
+        const everyMs = Math.max(15000, parseInt(trafficRefresh.value,10)*1000);
         if (trafficTimer) clearInterval(trafficTimer);
         trafficTimer = setInterval(addOrUpdateTrafficLayer, everyMs);
       }
-
-      function stopTrafficUpdates() {
-        if (trafficTimer) {
-          clearInterval(trafficTimer);
-          trafficTimer = null;
-        }
-        if (trafficLayer) {
-          viewer.imageryLayers.remove(trafficLayer, /*destroy=*/false);
-          trafficLayer = null;
-        }
+      function stopTrafficUpdates(){
+        if (trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
+        if (trafficLayer) { viewer.imageryLayers.remove(trafficLayer, false); trafficLayer = null; }
         setTrafficStatus("off");
         viewer.scene.requestRender();
       }
-
-      liveTrafficToggle.addEventListener("change", (e) => {
-        if (e.target.checked) beginTrafficUpdates();
-        else stopTrafficUpdates();
-      });
-
-      trafficRefresh.addEventListener("change", () => {
-        if (liveTrafficToggle.checked) beginTrafficUpdates();
-      });
-
-      // turn on by default
-      beginTrafficUpdates();
-      // =========================================================
+      liveTrafficToggle.addEventListener("change", (e)=> e.target.checked ? beginTrafficUpdates() : stopTrafficUpdates());
+      trafficRefresh.addEventListener("change", ()=> { if (liveTrafficToggle.checked) beginTrafficUpdates(); });
+      beginTrafficUpdates(); // default on
     }
 
-    // Pollution Prediction (your FastAPI endpoint must allow CORS)
-    async function fetchPollutionPrediction() {
-      const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=Codogno&appid=${weatherApiKey}&units=metric`;
-
-      try {
-        const res = await fetch(weatherUrl);
-        const weatherJson = await res.json();
-
-        const weatherData = {
-          Temperature: weatherJson.main.temp,
-          Humidity: weatherJson.main.humidity,
-          Precipitation: weatherJson.main.pressure,
-          WindSpeed_m_s: weatherJson.wind.speed
-        };
-
-        const apiRes = await fetch("https://28da2d9c1ba7.ngrok-free.app/predict", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(weatherData)
-        });
-
-        if (!apiRes.ok) {
-          document.getElementById("pollutionOutput").textContent = "Failed to fetch prediction.";
-          return;
-        }
-
-        const prediction = await apiRes.json();
-
-        function getColorByPollutant(p, value) {
-          const thresholds = { "O3": 100, "NO2": 40, "NO": 50, "CO": 10, "NH3": 2 };
-          const t = thresholds[p] || 9999;
-          if (value < t * 0.6) return "bg-green-100 text-green-800";
-          else if (value < t) return "bg-yellow-100 text-yellow-800";
-          else return "bg-red-100 text-red-800";
-        }
-
-        let html = "<div class='space-y-2'>";
-        for (const [key, value] of Object.entries(prediction)) {
-          const classes = getColorByPollutant(key, value);
-          html += `
-            <div class="p-2 rounded-lg ${classes} flex justify-between items-center">
-              <span class="font-medium">${key}</span>
-              <span class="font-semibold">${value}</span>
-            </div>`;
-        }
-        html += "</div>";
-        document.getElementById("pollutionOutput").innerHTML = html;
-
-      } catch (error) {
-        console.error("Pollution prediction error:", error);
-        document.getElementById("pollutionOutput").textContent = "Error loading pollution data.";
-      }
+    // ==========================
+    // Pollution panel (uses latestPredictions or simulated "now")
+    // ==========================
+    function paintPollutionPanelNow(){
+      const out = latestPredictions
+        ? { O3: latestPredictions.O3[0], NO2: latestPredictions.NO2[0], NO: latestPredictions.NO[0], CO: latestPredictions.CO[0], NH3: latestPredictions.NH3[0] }
+        : histories; // fallback (first elements)
+      const thresholds = { O3:100, NO2:40, NO:50, CO:10, NH3:2 };
+      const level = (p, v)=> v < thresholds[p]*0.6 ? "bg-green-100 text-green-800"
+                             : v < thresholds[p]     ? "bg-yellow-100 text-yellow-800"
+                                                     : "bg-red-100 text-red-800";
+      const entries = ["O3","NO2","NO","CO","NH3"].map(k=>{
+        const v = (out && typeof out[k]==="number") ? out[k] : (out?.[k]?.slice(-1)[0] ?? 0);
+        return `<div class="p-2 rounded-lg ${level(k, v)} flex justify-between items-center">
+                  <span class="font-medium">${k}</span><span class="font-semibold">${(v||0).toFixed(2)}</span>
+                </div>`;
+      }).join("");
+      document.getElementById("pollutionOutput").innerHTML = `<div class="space-y-2">${entries}</div>`;
+      document.getElementById("pollutionStamp").textContent = "Updated: " + new Date().toLocaleTimeString();
     }
 
+    // ==========================
+    // Kickoff
+    // ==========================
     startCesiumApp();
   </script>
 </body>
