@@ -12,6 +12,7 @@
       position:absolute; bottom:1rem; left:1rem; background:white; padding:.5rem; border-radius:.5rem;
       font-family:sans-serif; font-size:12px; z-index:10; width:180px; box-shadow:0 2px 4px rgba(0,0,0,.2);
     }
+    /* blue→red ramp visual for legend bar */
     #legendGradient { height:16px; background:linear-gradient(to right,#313695,#4575b4,#74add1,#fee090,#d73027); margin-top:.25rem; }
     #tooltip {
       position:absolute; background:white; border:1px solid #ccc; padding:6px 8px; font-size:13px; pointer-events:none;
@@ -136,7 +137,6 @@
       throw new Error("fetch failed: " + url);
     }
     const clamp01 = (x)=>Math.max(0,Math.min(1,x));
-    const hueColor = (h, a=1)=>Cesium.Color.fromHsl(h/360,1,.6,a); // kept for UI base color
 
     // ==========================
     // UHI color ramp & autoscale (blue → red)
@@ -179,11 +179,26 @@
       const c = interpolateColor(UHI_STOPS, t);
       return new Cesium.Color(c.red, c.green, c.blue, alpha);
     }
+
+    // 🔧 GLOBAL helper so all scopes can read building temp (fixes N/A)
+    function getEntityTemp(ent){
+      const usePred = document.getElementById("predictionToggle")?.checked;
+      const props = ent.properties;
+      if (usePred && props?.pred_uhi?.getValue) {
+        // use viewer clock if available, else "now"
+        const when = (viewer && viewer.clock) ? viewer.clock.currentTime : Cesium.JulianDate.now();
+        const val = props.pred_uhi.getValue(when);
+        return (typeof val === "number") ? val : undefined;
+      }
+      const sim = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi;
+      return (typeof sim === "number") ? sim : undefined;
+    }
+
     function computeCurrentUHIBounds(){
       if (!UHI_AUTOSCALE) { setLegendText(UHI_MIN, UHI_MAX); return; }
       let min=1e9, max=-1e9, count=0;
       for (const b of buildings){
-        const v = getTempForEntity(b);
+        const v = getEntityTemp(b);
         if (typeof v === "number" && isFinite(v)){
           min = Math.min(min, v);
           max = Math.max(max, v);
@@ -205,7 +220,7 @@
       self.onmessage = (e) => {
         const { kind, payload } = e.data || {};
         if (kind === "FORECAST") {
-          const { histories, horizon, stepMinutes } = payload;
+          const { histories, horizon } = payload;
 
           function hw(series, a=0.5,b=0.3,g=0.2, m=24, h=6){
             if (!series || series.length < 3) return Array(h).fill(series && series[series.length-1] || 0);
@@ -232,8 +247,7 @@
             NO2: hw(ensure(histories.NO2, 30), 0.5,0.3,0.2, 24, horizon),
             NO:  hw(ensure(histories.NO, 20),  0.5,0.3,0.2, 24, horizon),
             CO:  hw(ensure(histories.CO, 1.0), 0.5,0.3,0.2, 24, horizon),
-            NH3: hw(ensure(histories.NH3, 1.0),0.5,0.3,0.2, 24, horizon),
-            stepMinutes
+            NH3: hw(ensure(histories.NH3, 1.0),0.5,0.3,0.2, 24, horizon)
           };
           postMessage({ kind:"PREDICTIONS", data: out, ts: Date.now() });
         }
@@ -372,31 +386,14 @@
     // Cesium App
     // ==========================
     async function startCesiumApp(){
-      viewer = new Cesium.Viewer("cesiumContainer", {
-        baseLayerPicker: true, timeline: false, animation: false, shadows: true
-      });
+      const viewerOpts = { baseLayerPicker:true, timeline:false, animation:false, shadows:true };
+      viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
 
-      // render on demand
+      // original simple settings
       viewer.scene.requestRenderMode = true;
       viewer.scene.maximumRenderTimeChange = 1/30;
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
-
-      // --- Shadows like the reference ---
-      viewer.shadows = true;
-      viewer.scene.light = new Cesium.SunLight(); // directional sunlight
-      const sm = viewer.scene.shadowMap;
-      sm.enabled = true;
-      sm.softShadows = true;
-      sm.size = 2048;
-      sm.maximumDistance = 3000;
-      sm.darkness = 0.4;
-      viewer.scene.globe.shadows = Cesium.ShadowMode.ENABLED;
-
-      // keep the sun updated with time slider
-      viewer.clock.onTick.addEventListener(() => {
-        viewer.scene.light = new Cesium.SunLight();
-      });
 
       // Load buildings
       const buildingSelector = document.getElementById("buildingSelector");
@@ -416,7 +413,6 @@
           building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
           building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0);
           building.polygon.outline = false;
-          building.polygon.shadows = Cesium.ShadowMode.ENABLED; // enable shadows per-entity
         }
 
         const option = document.createElement("option");
@@ -425,20 +421,12 @@
       });
 
       await fetchUHIAndUpdate();
-      setInterval(fetchUHIAndUpdate, 60_000); // realtime: every minute
+      setInterval(fetchUHIAndUpdate, 60_000); // every minute
 
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 500),
         orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 }
       });
-
-      function getTempForEntity(ent){
-        const usePred = document.getElementById("predictionToggle").checked;
-        const props = ent.properties;
-        if (usePred && props?.pred_uhi?.getValue) return props.pred_uhi.getValue(viewer.clock.currentTime);
-        const sim = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi;
-        return typeof sim === "number" ? sim : undefined;
-      }
 
       function updateStyles(){
         const selected = document.getElementById("buildingSelector").value;
@@ -459,7 +447,7 @@
           let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
 
           if (showHeat) {
-            const t = getTempForEntity(building);
+            const t = getEntityTemp(building);
             if (typeof t === "number" && isFinite(t)) color = uhiToColor(t, alpha);
           }
 
@@ -475,12 +463,11 @@
         if (picked && picked.id && picked.id.properties) {
           const props = picked.id.properties;
           const usePred = document.getElementById("predictionToggle").checked;
-          const t = usePred && props?.pred_uhi?.getValue ? props.pred_uhi.getValue(viewer.clock.currentTime)
-                    : (props?.sim_uhi?.getValue?.() ?? props?.sim_uhi ?? "N/A");
+          const tempVal = getEntityTemp(picked.id);
           const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
           const name = picked.id.name ?? "Unknown";
           const label = usePred ? "Pred" : "Temp";
-          const tNum = parseFloat(t);
+          const tNum = Number(tempVal);
           tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>${label}: ${isFinite(tNum)?tNum.toFixed(1):"N/A"} °C`;
           tooltip.style.left = (movement.endPosition.x + 15) + "px";
           tooltip.style.top  = (movement.endPosition.y + 15) + "px";
@@ -490,6 +477,7 @@
         }
       }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
+      // Inputs
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
       document.getElementById("heatToggle").addEventListener("change", updateStyles);
@@ -509,7 +497,6 @@
         timeSlider.value = h;
         timeLabel.textContent = `${h}:00`;
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, h));
-        viewer.scene.requestRender();
         updateStyles();
       }
       timeSlider.addEventListener("input", ()=>setClockHour(parseInt(timeSlider.value)));
@@ -522,7 +509,7 @@
         });
       });
 
-      // Static traffic heat map
+      // Static heatmap
       async function loadHeatmap(timeOfDay){
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities = [];
