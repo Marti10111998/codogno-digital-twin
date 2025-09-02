@@ -389,6 +389,9 @@
       const viewerOpts = { baseLayerPicker:true, timeline:false, animation:false, shadows:true };
       viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
 
+      // ✅ Make terrain occlude markers so they don't float
+      viewer.scene.globe.depthTestAgainstTerrain = true;
+
       // original simple settings
       viewer.scene.requestRenderMode = true;
       viewer.scene.maximumRenderTimeChange = 1/30;
@@ -509,7 +512,9 @@
         });
       });
 
+      // ==========================
       // Static heatmap
+      // ==========================
       async function loadHeatmap(timeOfDay){
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities = [];
@@ -517,23 +522,37 @@
           const file = `${timeOfDay}_heatpoints.json`;
           const response = await resilientFetch(file);
           const data = await response.json();
+
+          // simple HSL color ramp based on "speed"
           for (const [lat, lon, speed] of data) {
             const normalized = clamp01(speed / 60);
-            const hue = (1 - normalized) * 240;
+            const hue = (1 - normalized) * 240; // 240=blue → 0=red
             const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
+
+            // ✅ Clamp markers to the ground to avoid floating look
             const entity = viewer.entities.add({
               position: Cesium.Cartesian3.fromDegrees(lon, lat),
-              point: { pixelSize: 10, color, outlineColor: Cesium.Color.WHITE, outlineWidth: 1 }
+              point: {
+                pixelSize: 10,
+                color,
+                outlineColor: Cesium.Color.WHITE,
+                outlineWidth: 1,
+                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+              }
             });
             heatmapEntities.push(entity);
           }
-        } catch (e) { console.warn("Heatmap load failed", e); }
+        } catch (e) {
+          console.warn("Heatmap load failed", e);
+        }
         viewer.scene.requestRender();
       }
       loadHeatmap("morning");
       document.getElementById("heatmapTimeSelector").addEventListener("change", (e)=>loadHeatmap(e.target.value));
 
-      // Live Traffic
+      // ==========================
+      // Live Traffic (TomTom tiles)
+      // ==========================
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
       const trafficRefresh = document.getElementById("trafficRefresh");
 
@@ -551,9 +570,14 @@
         const ts = Date.now();
         const provider = new Cesium.UrlTemplateImageryProvider({
           url: `https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key=${tomtomKey}&ts=${ts}`,
-          maximumLevel: 20, tilingScheme: new Cesium.WebMercatorTilingScheme(), credit: "TomTom Traffic"
+          maximumLevel: 20,
+          tilingScheme: new Cesium.WebMercatorTilingScheme(),
+          credit: "TomTom Traffic"
         });
-        provider.errorEvent.addEventListener((e)=>{ console.error("Traffic tile error:", e); setTrafficStatus(`error`); });
+        provider.errorEvent.addEventListener((e)=>{
+          console.error("Traffic tile error:", e);
+          setTrafficStatus(`error`);
+        });
 
         const newLayer = viewer.imageryLayers.addImageryProvider(provider);
         newLayer.alpha = 0.7;
@@ -567,7 +591,9 @@
             const dt = ((performance.now()-started)/1000).toFixed(1);
             setTrafficStatus(`updated @ ${new Date().toLocaleTimeString()} (+${dt}s)`);
             viewer.scene.requestRender();
-          } else requestAnimationFrame(waitReady);
+          } else {
+            requestAnimationFrame(waitReady);
+          }
         })();
       }
 
