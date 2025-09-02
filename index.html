@@ -180,12 +180,11 @@
       return new Cesium.Color(c.red, c.green, c.blue, alpha);
     }
 
-    // 🔧 GLOBAL helper so all scopes can read building temp (fixes N/A)
+    // 🔧 GLOBAL helper so all scopes can read building temp
     function getEntityTemp(ent){
       const usePred = document.getElementById("predictionToggle")?.checked;
       const props = ent.properties;
       if (usePred && props?.pred_uhi?.getValue) {
-        // use viewer clock if available, else "now"
         const when = (viewer && viewer.clock) ? viewer.clock.currentTime : Cesium.JulianDate.now();
         const val = props.pred_uhi.getValue(when);
         return (typeof val === "number") ? val : undefined;
@@ -214,14 +213,13 @@
     }
 
     // ==========================
-    // Inline Web Worker (Forecast engine)
+    // Forecast worker
     // ==========================
     const workerCode = `
       self.onmessage = (e) => {
         const { kind, payload } = e.data || {};
         if (kind === "FORECAST") {
           const { histories, horizon } = payload;
-
           function hw(series, a=0.5,b=0.3,g=0.2, m=24, h=6){
             if (!series || series.length < 3) return Array(h).fill(series && series[series.length-1] || 0);
             const L=[series[0]], T=[series[1]-series[0]], S = new Array(m).fill(0);
@@ -235,12 +233,10 @@
             const last=series.length-1;
             return Array.from({length:h},(_,i)=>(L[last]+(i+1)*T[last])+S[(last+1+i)%m]);
           }
-
           function ensure(series, seed=20){
             if (!series || series.length===0) return [seed, seed*1.02, seed*1.01, seed*1.03];
             return series;
           }
-
           const out = {
             urbanTemp: hw(ensure(histories.urbanTemp, 28), 0.5,0.3,0.2, 24, horizon),
             O3:  hw(ensure(histories.O3, 80),  0.5,0.3,0.2, 24, horizon),
@@ -265,7 +261,7 @@
     };
 
     // ==========================
-    // RF API helper (uses RAIN in mm)
+    // RF API helper
     // ==========================
     async function predictWithAPI(weather) {
       const features = {
@@ -281,7 +277,7 @@
           body: JSON.stringify(features)
         });
         if (!r.ok) throw new Error("API error");
-        return await r.json(); // {O3, NO2, NO, CO, NH3}
+        return await r.json();
       } catch (e) {
         console.warn("Model API failed, using heuristic", e);
         return null;
@@ -314,7 +310,6 @@
         histories.urbanTemp.push(urbanTemp);
         if (histories.urbanTemp.length > 200) histories.urbanTemp.shift();
 
-        // use RF API; fallback to heuristic
         let nowPoll = await predictWithAPI(lastWeather);
         if (!nowPoll) nowPoll = simulatePollutionFromWeather(lastWeather);
 
@@ -331,7 +326,7 @@
         }
 
         requestForecast();
-        updateStyles();
+        updateStyles();          // <- now defined at top level
         paintPollutionPanelNow();
 
       } catch (err) {
@@ -345,7 +340,7 @@
 
     // backup heuristic (only if API down)
     function simulatePollutionFromWeather(w){
-      const { temp, wind, humidity, pressure, clouds } = w;
+      const { temp, wind, humidity, clouds } = w;
       const base = (x,min,max)=>Math.max(min, Math.min(max, x));
       return {
         O3:  base(60 + (temp-20)*2 - clouds*0.3 + wind*-2, 20, 140),
@@ -383,16 +378,48 @@
     }
 
     // ==========================
+    // 🔧 Moved to TOP LEVEL so others can call it
+    // ==========================
+    function updateStyles(){
+      if (!viewer || !buildings?.length) return;
+
+      const selected = document.getElementById("buildingSelector")?.value || "";
+      const colorHex = document.getElementById("colorPicker")?.value || "#cccccc";
+      const alpha = 1.0;
+      const showHeat = document.getElementById("heatToggle")?.checked ?? true;
+
+      const lm = document.getElementById("legendMode");
+      if (lm) lm.textContent = "Mode: " + ((document.getElementById("predictionToggle")?.checked) ? "Predicted" : "Measured");
+
+      // autoscale before painting
+      computeCurrentUHIBounds();
+
+      for (const building of buildings) {
+        if (!building.polygon) continue;
+
+        // base color if no heat or no temp
+        let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
+
+        if (showHeat) {
+          const t = getEntityTemp(building);
+          if (typeof t === "number" && isFinite(t)) color = uhiToColor(t, alpha);
+        }
+
+        if (!selected || building.name === selected) building.polygon.material = color;
+      }
+      viewer.scene.requestRender();
+    }
+
+    // ==========================
     // Cesium App
     // ==========================
     async function startCesiumApp(){
       const viewerOpts = { baseLayerPicker:true, timeline:false, animation:false, shadows:true };
       viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
 
-      // ✅ Make terrain occlude markers so they don't float
+      // Proper occlusion vs terrain
       viewer.scene.globe.depthTestAgainstTerrain = true;
 
-      // original simple settings
       viewer.scene.requestRenderMode = true;
       viewer.scene.maximumRenderTimeChange = 1/30;
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
@@ -431,34 +458,6 @@
         orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 }
       });
 
-      function updateStyles(){
-        const selected = document.getElementById("buildingSelector").value;
-        const colorHex = document.getElementById("colorPicker").value;
-        const alpha = 1.0;
-        const showHeat = document.getElementById("heatToggle").checked;
-
-        document.getElementById("legendMode").textContent =
-          "Mode: " + (document.getElementById("predictionToggle").checked ? "Predicted" : "Measured");
-
-        // autoscale before painting
-        computeCurrentUHIBounds();
-
-        for (const building of buildings) {
-          if (!building.polygon) continue;
-
-          // base color if no heat or no temp
-          let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
-
-          if (showHeat) {
-            const t = getEntityTemp(building);
-            if (typeof t === "number" && isFinite(t)) color = uhiToColor(t, alpha);
-          }
-
-          if (!selected || building.name === selected) building.polygon.material = color;
-        }
-        viewer.scene.requestRender();
-      }
-
       // Tooltip on hover
       const tooltip = document.getElementById("tooltip");
       viewer.screenSpaceEventHandler.setInputAction((movement) => {
@@ -480,7 +479,7 @@
         }
       }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
-      // Inputs
+      // Inputs -> use global updateStyles
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
       document.getElementById("heatToggle").addEventListener("change", updateStyles);
@@ -512,48 +511,43 @@
         });
       });
 
-// ==========================
-// Static heatmap
-// ==========================
-async function loadHeatmap(timeOfDay){
-  for (const e of heatmapEntities) viewer.entities.remove(e);
-  heatmapEntities = [];
-  try {
-    const file = `${timeOfDay}_heatpoints.json`;
-    const response = await resilientFetch(file);
-    const data = await response.json();
+      // ==========================
+      // Static heatmap
+      // ==========================
+      async function loadHeatmap(timeOfDay){
+        for (const e of heatmapEntities) viewer.entities.remove(e);
+        heatmapEntities = [];
+        try {
+          const file = `${timeOfDay}_heatpoints.json`;
+          const response = await resilientFetch(file);
+          const data = await response.json();
 
-    // simple HSL color ramp based on "speed"
-    for (const [lat, lon, speed] of data) {
-      const normalized = clamp01(speed / 60);
-      const hue = (1 - normalized) * 240; // 240=blue → 0=red
-      const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
+          for (const [lat, lon, speed] of data) {
+            const normalized = clamp01(speed / 60);
+            const hue = (1 - normalized) * 240; // 240=blue → 0=red
+            const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
 
-      // ✅ Slightly lift markers above terrain to avoid "stabbed" look
-      const LIFT_M = 2.0;
-
-      const entity = viewer.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(lon, lat, LIFT_M),
-        point: {
-          pixelSize: 10,
-          color,
-          outlineColor: Cesium.Color.WHITE,
-          outlineWidth: 1,
-          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
+            // Slight lift to avoid "stabbed" look
+            const LIFT_M = 2.0;
+            const entity = viewer.entities.add({
+              position: Cesium.Cartesian3.fromDegrees(lon, lat, LIFT_M),
+              point: {
+                pixelSize: 10,
+                color,
+                outlineColor: Cesium.Color.WHITE,
+                outlineWidth: 1,
+                heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
+              }
+            });
+            heatmapEntities.push(entity);
+          }
+        } catch (e) {
+          console.warn("Heatmap load failed", e);
         }
-      });
-      heatmapEntities.push(entity);
-    }
-  } catch (e) {
-    console.warn("Heatmap load failed", e);
-  }
-  viewer.scene.requestRender();
-}
-
-loadHeatmap("morning");
-document.getElementById("heatmapTimeSelector")
-  .addEventListener("change", (e)=>loadHeatmap(e.target.value));
-
+        viewer.scene.requestRender();
+      }
+      loadHeatmap("morning");
+      document.getElementById("heatmapTimeSelector").addEventListener("change", (e)=>loadHeatmap(e.target.value));
 
       // ==========================
       // Live Traffic (TomTom tiles)
