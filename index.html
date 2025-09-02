@@ -512,43 +512,48 @@
         });
       });
 
-      // ==========================
-      // Static heatmap
-      // ==========================
-      async function loadHeatmap(timeOfDay){
-        for (const e of heatmapEntities) viewer.entities.remove(e);
-        heatmapEntities = [];
-        try {
-          const file = `${timeOfDay}_heatpoints.json`;
-          const response = await resilientFetch(file);
-          const data = await response.json();
+// ==========================
+// Static heatmap
+// ==========================
+async function loadHeatmap(timeOfDay){
+  for (const e of heatmapEntities) viewer.entities.remove(e);
+  heatmapEntities = [];
+  try {
+    const file = `${timeOfDay}_heatpoints.json`;
+    const response = await resilientFetch(file);
+    const data = await response.json();
 
-          // simple HSL color ramp based on "speed"
-          for (const [lat, lon, speed] of data) {
-            const normalized = clamp01(speed / 60);
-            const hue = (1 - normalized) * 240; // 240=blue → 0=red
-            const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
+    // simple HSL color ramp based on "speed"
+    for (const [lat, lon, speed] of data) {
+      const normalized = clamp01(speed / 60);
+      const hue = (1 - normalized) * 240; // 240=blue → 0=red
+      const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
 
-            // ✅ Clamp markers to the ground to avoid floating look
-            const entity = viewer.entities.add({
-              position: Cesium.Cartesian3.fromDegrees(lon, lat),
-              point: {
-                pixelSize: 10,
-                color,
-                outlineColor: Cesium.Color.WHITE,
-                outlineWidth: 1,
-                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
-              }
-            });
-            heatmapEntities.push(entity);
-          }
-        } catch (e) {
-          console.warn("Heatmap load failed", e);
+      // ✅ Slightly lift markers above terrain to avoid "stabbed" look
+      const LIFT_M = 2.0;
+
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, LIFT_M),
+        point: {
+          pixelSize: 10,
+          color,
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 1,
+          heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
         }
-        viewer.scene.requestRender();
-      }
-      loadHeatmap("morning");
-      document.getElementById("heatmapTimeSelector").addEventListener("change", (e)=>loadHeatmap(e.target.value));
+      });
+      heatmapEntities.push(entity);
+    }
+  } catch (e) {
+    console.warn("Heatmap load failed", e);
+  }
+  viewer.scene.requestRender();
+}
+
+loadHeatmap("morning");
+document.getElementById("heatmapTimeSelector")
+  .addEventListener("change", (e)=>loadHeatmap(e.target.value));
+
 
       // ==========================
       // Live Traffic (TomTom tiles)
