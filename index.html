@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Codogno Digital Twin — Realtime + Predictive</title>
+  <title>Codogno Digital Twin — Realtime + Predictive (Pro)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/cesium@1.116/Build/Cesium/Cesium.js"></script>
   <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
@@ -10,35 +11,45 @@
     html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
     #legend {
       position:absolute; bottom:1rem; left:1rem; background:white; padding:.5rem; border-radius:.5rem;
-      font-family:sans-serif; font-size:12px; z-index:10; width:180px; box-shadow:0 2px 4px rgba(0,0,0,.2);
+      font-family:sans-serif; font-size:12px; z-index:10; width:210px; box-shadow:0 2px 4px rgba(0,0,0,.2);
     }
-    /* blue→red ramp visual for legend bar */
-    #legendGradient { height:16px; background:linear-gradient(to right,#313695,#4575b4,#74add1,#fee090,#d73027); margin-top:.25rem; }
+    #legendGradient { height:16px; margin-top:.25rem; border-radius:4px; }
     #tooltip {
       position:absolute; background:white; border:1px solid #ccc; padding:6px 8px; font-size:13px; pointer-events:none;
-      border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:240px; display:none;
+      border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:260px; display:none;
     }
+    canvas.spark { width:100%; height:40px; }
   </style>
 </head>
 
-<body>
+<body class="bg-gray-50">
   <div id="cesiumContainer"></div>
 
   <!-- Control Panel -->
-  <div class="absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-80 space-y-4 z-10 font-sans">
-    <div class="text-lg font-semibold">Codogno Digital Twin</div>
+  <div class="absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-96 space-y-4 z-10 font-sans">
+    <div class="flex items-center justify-between">
+      <div class="text-lg font-semibold">Codogno Digital Twin</div>
+      <span id="modelBadge" class="text-[11px] text-gray-600">Forecast: Ensemble Holt-Winters + Kalman</span>
+    </div>
 
     <div class="grid grid-cols-2 gap-3">
       <div class="col-span-2">
         <label class="block font-medium">Select Building</label>
         <select id="buildingSelector" class="w-full border rounded px-2 py-1">
-          <option value="">-- All Buildings --</option>
+          <option value="">— All Buildings —</option>
         </select>
       </div>
 
       <div>
         <label class="block font-medium">Base Color</label>
         <input type="color" id="colorPicker" class="w-full" value="#cccccc" />
+      </div>
+      <div>
+        <label class="block font-medium">Palette</label>
+        <select id="paletteSelector" class="w-full border rounded px-2 py-1">
+          <option value="turbo" selected>Turbo (Blue→Red)</option>
+          <option value="viridis">Viridis (CB-safe)</option>
+        </select>
       </div>
 
       <div class="col-span-2">
@@ -61,9 +72,10 @@
       <div>
         <label class="inline-flex items-center"><input type="checkbox" id="shadowToggle" checked class="mr-2" /> Enable Shadows</label>
       </div>
-      <div class="col-span-2">
-        <label class="inline-flex items-center"><input type="checkbox" id="predictionToggle" checked class="mr-2" /> Show Predicted Heat (next hour)</label>
-        <div id="modelBadge" class="text-[11px] text-gray-600 mt-1">Forecast: Holt-Winters (Web Worker)</div>
+
+      <div class="col-span-2 grid grid-cols-2 gap-2">
+        <label class="inline-flex items-center"><input type="checkbox" id="predictionToggle" checked class="mr-2" /> Predicted Heat (next hour)</label>
+        <label class="inline-flex items-center justify-end text-right"><input type="checkbox" id="autoscaleToggle" checked class="mr-2" /> Autoscale Legend</label>
       </div>
 
       <div class="col-span-2">
@@ -84,35 +96,63 @@
           <option value="60">Refresh: 60s</option>
         </select>
       </div>
+
+      <div class="col-span-2 border-t pt-2">
+        <div class="font-medium">What-if Scenario</div>
+        <div class="text-xs text-gray-600">Apply a wind override to see cooling impact on UHI projections.</div>
+        <div class="flex items-center gap-2 mt-1">
+          <input type="range" id="windOverride" min="-2" max="5" step="0.5" value="0" class="w-full" />
+          <span id="windLabel" class="text-sm w-14 text-right">+0.0 m/s</span>
+        </div>
+        <button id="resetScenario" class="mt-1 text-xs px-2 py-1 rounded bg-gray-100">Reset scenario</button>
+      </div>
+
+      <div class="col-span-2">
+        <button id="shareView" class="w-full text-xs px-2 py-1 rounded bg-blue-600 text-white">Copy sharable view URL</button>
+      </div>
     </div>
+    <div id="legendMode" class="text-[11px] text-gray-600">Mode: Predicted (P50 color, P10–P90 opacity)</div>
   </div>
 
   <div id="legend">
     <div class="font-semibold">UHI Temperature (°C)</div>
     <div id="legendGradient"></div>
-    <div class="flex justify-between"><span>25</span><span>40</span></div>
-    <div id="legendMode" class="text-[11px] text-gray-600 mt-1">Mode: Predicted</div>
+    <div class="flex justify-between"><span id="legendMin">25</span><span id="legendMax">40</span></div>
+    <div class="text-[11px] text-gray-600 mt-1">
+      <span>Uncertainty → lower opacity</span>
+    </div>
   </div>
 
   <div id="tooltip"></div>
 
   <!-- Pollution Panel -->
-  <div id="pollutionPanel" class="absolute bottom-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg w-72 space-y-2 z-10 font-sans text-sm">
-    <div class="font-semibold text-gray-700">Predicted Pollution (now)</div>
-    <div id="pollutionOutput">Loading...</div>
-    <div id="pollutionStamp" class="text-[11px] text-gray-600">—</div>
+  <div id="pollutionPanel" class="absolute bottom-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg w-[22rem] space-y-3 z-10 font-sans text-sm">
+    <div class="flex items-center justify-between">
+      <div class="font-semibold text-gray-700">Air & Comfort (now + 60m)</div>
+      <div id="pollutionStamp" class="text-[11px] text-gray-500">—</div>
+    </div>
+    <div id="pollutionOutput" class="grid grid-cols-2 gap-2"></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div><canvas id="sparkNO2" class="spark"></canvas></div>
+      <div><canvas id="sparkO3"  class="spark"></canvas></div>
+      <div><canvas id="sparkCO"  class="spark"></canvas></div>
+      <div><canvas id="sparkNH3" class="spark"></canvas></div>
+    </div>
+    <div id="metrics" class="text-[11px] text-gray-600">—</div>
   </div>
 
   <script type="module">
     // ==========================
-    // 🔑 KEYS
+    // 🔐 KEYS (Use a proxy in production)
     // ==========================
-    const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
-    const tomtomKey     = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";
-    Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
+    // TODO: Replace with your backend proxy endpoints; do NOT expose secrets in client.
+    // e.g., const WEATHER_PROXY = "/.netlify/functions/weather?lat=..&lon=..";
+    const weatherApiKey = "YOUR_OPENWEATHER_KEY"; // TODO: remove after proxying
+    const tomtomKey     = "YOUR_TOMTOM_KEY";      // TODO: remove after proxying
+    Cesium.Ion.defaultAccessToken = "YOUR_CESIUM_ION_TOKEN"; // TODO: keep server-side if possible
 
-    // 👉 Your RF API (switch to your deployed HTTPS URL later)
-    const POLLUTION_API = "http://localhost:8000";
+    // 👉 External endpoints (fallback to direct calls if no proxy configured)
+    const POLLUTION_API = "http://localhost:8000"; // TODO: set to your HTTPS model API
 
     // ==========================
     // App-wide state
@@ -120,18 +160,84 @@
     let viewer, buildings = [], heatmapEntities = [];
     let trafficLayer = null, trafficTimer = null;
 
+    // Timeseries histories (keep last 200)
     const histories = { urbanTemp: [], O3: [], NO2: [], NO: [], CO: [], NH3: [] };
     let lastWeather = { temp: null, wind: 0, clouds: 0, humidity: 0, pressure: 0, rain1h: 0 };
     const HORIZON_STEPS = 6;  // 6 x 10min = 60 minutes
     const STEP_MINUTES  = 10;
+
+    // Uncertainty predictions
+    let latestPred = null; // { urbanTemp: {p10,p50,p90}, gases... }
+
+    // Legend bounds
+    let UHI_MIN = 25, UHI_MAX = 40;
+    let UHI_AUTOSCALE = true;
+
+    // Scenario override
+    let windOverride = 0; // m/s delta
+
+    // Debounce helper
+    function debounce(fn, ms=100){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+
+    // ==========================
+    // Color ramps
+    // ==========================
+    function turbo(t){ // 0..1
+      // Approx Google's Turbo; compact approximation
+      t = Math.max(0, Math.min(1, t));
+      const r = 34.61 + t*(1172.33 + t*(-10793.56 + t*(33300.12 + t*(-38394.49 + t*14825.05))));
+      const g = 23.31 + t*(557.33 + t*(1225.33 + t*(-3574.96 + t*(2194.04))));
+      const b = 27.2  + t*(3211.1 + t*(-15327.97 + t*(27814 + t*(-22569.18 + t*6838.66))));
+      return Cesium.Color.fromBytes(
+        Math.round(Math.max(0,Math.min(255,r))),
+        Math.round(Math.max(0,Math.min(255,g))),
+        Math.round(Math.max(0,Math.min(255,b))),
+        255
+      );
+    }
+    function viridis(t){
+      t = Math.max(0, Math.min(1, t));
+      // Simple piecewise approx for viridis
+      const a = [68,1,84], b=[59,82,139], c=[33,145,140], d=[94,201,98], e=[253,231,37];
+      const stops = [{p:0,c:a},{p:.25,c:b},{p:.5,c:c},{p:.75,c:d},{p:1,c:e}];
+      for(let i=1;i<stops.length;i++){
+        if(t<=stops[i].p){
+          const aC=stops[i-1], bC=stops[i];
+          const w=(t-aC.p)/(bC.p-aC.p);
+          const R=Math.round(aC.c[0]+(bC.c[0]-aC.c[0])*w);
+          const G=Math.round(aC.c[1]+(bC.c[1]-aC.c[1])*w);
+          const B=Math.round(aC.c[2]+(bC.c[2]-aC.c[2])*w);
+          return Cesium.Color.fromBytes(R,G,B,255);
+        }
+      }
+      return Cesium.Color.fromBytes(253,231,37,255);
+    }
+    function paletteFunc(){
+      const sel = document.getElementById("paletteSelector")?.value||"turbo";
+      return sel === "viridis" ? viridis : turbo;
+    }
+    function setLegendGradient(){
+      const el = document.getElementById("legendGradient");
+      const pal = document.getElementById("paletteSelector")?.value||"turbo";
+      // CSS gradients approximations
+      const turboStops = "linear-gradient(to right,#30123b,#4145ab,#2eb3da,#a5f27a,#fee84a,#f76b1c,#a80000)";
+      const viridisStops = "linear-gradient(to right,#440154,#46337f,#365c8d,#277f8e,#1fa187,#4ac16d,#a0da39,#fde725)";
+      el.style.background = pal==="viridis" ? viridisStops : turboStops;
+    }
+    function setLegendText(min, max) {
+      document.getElementById("legendMin").textContent = Math.round(min);
+      document.getElementById("legendMax").textContent = Math.round(max);
+    }
 
     // ==========================
     // Utility
     // ==========================
     async function resilientFetch(url, tries=3, base=500){
       for (let i=0;i<tries;i++){
-        const r = await fetch(url, { cache: "no-store" });
-        if (r.ok) return r;
+        try {
+          const r = await fetch(url, { cache: "no-store" });
+          if (r.ok) return r;
+        } catch(e){}
         await new Promise(res => setTimeout(res, base * 2**i + Math.random()*200));
       }
       throw new Error("fetch failed: " + url);
@@ -139,129 +245,116 @@
     const clamp01 = (x)=>Math.max(0,Math.min(1,x));
 
     // ==========================
-    // UHI color ramp & autoscale (blue → red)
+    // URL State (shareable)
     // ==========================
-    let UHI_MIN = 25, UHI_MAX = 40;
-    let UHI_AUTOSCALE = true;  // set false to keep 25–40 fixed
-
-    function setLegendText(min, max) {
-      const legend = document.querySelector("#legend .flex");
-      if (!legend) return;
-      legend.children[0].textContent = Math.round(min);
-      legend.children[1].textContent = Math.round(max);
+    function encodeStateToURL(){
+      const params = new URLSearchParams({
+        b: document.getElementById("buildingSelector").value || "",
+        c: document.getElementById("colorPicker").value || "#cccccc",
+        p: document.getElementById("paletteSelector").value || "turbo",
+        h: document.getElementById("heatToggle").checked ? "1":"0",
+        s: document.getElementById("shadowToggle").checked ? "1":"0",
+        pr: document.getElementById("predictionToggle").checked ? "1":"0",
+        a: UHI_AUTOSCALE ? "1":"0",
+        t: document.getElementById("timeSlider").value,
+        w: String(windOverride)
+      });
+      history.replaceState(null, "", "?" + params.toString());
     }
-
-    const UHI_STOPS = [
-      { p: 0.00, c: Cesium.Color.fromBytes(49, 54,149,255) },
-      { p: 0.25, c: Cesium.Color.fromBytes(69,117,180,255) },
-      { p: 0.50, c: Cesium.Color.fromBytes(116,173,209,255) },
-      { p: 0.75, c: Cesium.Color.fromBytes(254,224,144,255) },
-      { p: 1.00, c: Cesium.Color.fromBytes(215, 48, 39,255) }
-    ];
-    function lerp(a,b,t){ return a + (b-a)*t; }
-    function interpolateColor(stops,t){
-      t = clamp01(t);
-      for (let i=1;i<stops.length;i++){
-        if (t <= stops[i].p){
-          const a=stops[i-1], b=stops[i], w=(t-a.p)/(b.p-a.p);
-          return new Cesium.Color(
-            lerp(a.c.red,b.c.red,w),
-            lerp(a.c.green,b.c.green,w),
-            lerp(a.c.blue,b.c.blue,w),
-            lerp(a.c.alpha,b.c.alpha,w)
-          );
-        }
-      }
-      return stops[stops.length-1].c.clone();
-    }
-    function uhiToColor(temp, alpha=1){
-      const t = (temp - UHI_MIN) / (UHI_MAX - UHI_MIN);
-      const c = interpolateColor(UHI_STOPS, t);
-      return new Cesium.Color(c.red, c.green, c.blue, alpha);
-    }
-
-    // 🔧 GLOBAL helper so all scopes can read building temp
-    function getEntityTemp(ent){
-      const usePred = document.getElementById("predictionToggle")?.checked;
-      const props = ent.properties;
-      if (usePred && props?.pred_uhi?.getValue) {
-        const when = (viewer && viewer.clock) ? viewer.clock.currentTime : Cesium.JulianDate.now();
-        const val = props.pred_uhi.getValue(when);
-        return (typeof val === "number") ? val : undefined;
-      }
-      const sim = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi;
-      return (typeof sim === "number") ? sim : undefined;
-    }
-
-    function computeCurrentUHIBounds(){
-      if (!UHI_AUTOSCALE) { setLegendText(UHI_MIN, UHI_MAX); return; }
-      let min=1e9, max=-1e9, count=0;
-      for (const b of buildings){
-        const v = getEntityTemp(b);
-        if (typeof v === "number" && isFinite(v)){
-          min = Math.min(min, v);
-          max = Math.max(max, v);
-          count++;
-        }
-      }
-      if (count>0){
-        UHI_MIN = Math.floor(min);
-        UHI_MAX = Math.ceil(max);
-        if (UHI_MAX - UHI_MIN < 5) UHI_MAX = UHI_MIN + 5;
-        setLegendText(UHI_MIN, UHI_MAX);
-      }
+    function loadStateFromURL(){
+      const q = new URLSearchParams(location.search);
+      const set = (id, v)=>{ const el=document.getElementById(id); if(!el) return;
+        if(el.tagName==="INPUT" && el.type==="checkbox") el.checked = v==="1";
+        else el.value = v;
+      };
+      q.get("b") && set("buildingSelector", q.get("b"));
+      q.get("c") && set("colorPicker", q.get("c"));
+      q.get("p") && set("paletteSelector", q.get("p"));
+      q.get("h") && set("heatToggle", q.get("h"));
+      q.get("s") && set("shadowToggle", q.get("s"));
+      q.get("pr") && set("predictionToggle", q.get("pr"));
+      q.get("a") && (UHI_AUTOSCALE = q.get("a")==="1");
+      if(q.get("t")) setClockHour(parseInt(q.get("t"),10));
+      if(q.get("w")) { windOverride = parseFloat(q.get("w")); updateScenarioLabel(); }
     }
 
     // ==========================
-    // Forecast worker
+    // Forecast worker (Ensemble Holt-Winters + Quantiles)
     // ==========================
     const workerCode = `
+      function hw(series, a=0.5,b=0.3,g=0.2, m=24, h=6){
+        if (!series || series.length < 3) return Array(h).fill(series?.[series.length-1] ?? 0);
+        const L=[series[0]], T=[series[1]-series[0]], S = new Array(m).fill(0);
+        for(let t=1;t<series.length;t++){
+          const s=S[(t-1)%m];
+          const l=a*(series[t]-s)+(1-a)*(L[t-1]+T[t-1]);
+          const tt=b*(l-L[t-1])+(1-b)*T[t-1];
+          S[t%m]=g*(series[t]-l)+(1-g)*s;
+          L[t]=l; T[t]=tt;
+        }
+        const last=series.length-1;
+        return Array.from({length:h},(_,i)=>(L[last]+(i+1)*T[last])+S[(last+1+i)%m]);
+      }
+      function quantiles(samples, ps){
+        const q = {};
+        const T = samples[0].length;
+        for(const p of ps) q[p]=Array(T);
+        for(let t=0;t<T;t++){
+          const arr = samples.map(s=>s[t]).sort((a,b)=>a-b);
+          for(const p of ps){
+            const idx = Math.floor(p*(arr.length-1));
+            q[p][t] = arr[idx];
+          }
+        }
+        return q;
+      }
       self.onmessage = (e) => {
         const { kind, payload } = e.data || {};
-        if (kind === "FORECAST") {
-          const { histories, horizon } = payload;
-          function hw(series, a=0.5,b=0.3,g=0.2, m=24, h=6){
-            if (!series || series.length < 3) return Array(h).fill(series && series[series.length-1] || 0);
-            const L=[series[0]], T=[series[1]-series[0]], S = new Array(m).fill(0);
-            for(let t=1;t<series.length;t++){
-              const s=S[(t-1)%m];
-              const l=a*(series[t]-s)+(1-a)*(L[t-1]+T[t-1]);
-              const tt=b*(l-L[t-1])+(1-b)*T[t-1];
-              S[t%m]=g*(series[t]-l)+(1-g)*s;
-              L[t]=l; T[t]=tt;
-            }
-            const last=series.length-1;
-            return Array.from({length:h},(_,i)=>(L[last]+(i+1)*T[last])+S[(last+1+i)%m]);
-          }
-          function ensure(series, seed=20){
-            if (!series || series.length===0) return [seed, seed*1.02, seed*1.01, seed*1.03];
-            return series;
-          }
-          const out = {
-            urbanTemp: hw(ensure(histories.urbanTemp, 28), 0.5,0.3,0.2, 24, horizon),
-            O3:  hw(ensure(histories.O3, 80),  0.5,0.3,0.2, 24, horizon),
-            NO2: hw(ensure(histories.NO2, 30), 0.5,0.3,0.2, 24, horizon),
-            NO:  hw(ensure(histories.NO, 20),  0.5,0.3,0.2, 24, horizon),
-            CO:  hw(ensure(histories.CO, 1.0), 0.5,0.3,0.2, 24, horizon),
-            NH3: hw(ensure(histories.NH3, 1.0),0.5,0.3,0.2, 24, horizon)
-          };
-          postMessage({ kind:"PREDICTIONS", data: out, ts: Date.now() });
+        if (kind !== "FORECAST") return;
+        const { histories, horizon } = payload;
+        function ensure(series, seed=20){
+          if (!series || series.length===0) return [seed, seed*1.02, seed*1.01, seed*1.03];
+          return series;
         }
+        const fields = Object.keys(histories);
+        const out = {};
+        for(const f of fields){
+          const series = ensure(histories[f], f==="urbanTemp"?28:10);
+          const draws=[];
+          for(let i=0;i<24;i++){
+            const a=0.25+Math.random()*0.5, b=0.05+Math.random()*0.3, g=0.05+Math.random()*0.4;
+            draws.push(hw(series, a,b,g, 24, horizon));
+          }
+          const q = quantiles(draws, [0.1,0.5,0.9]);
+          out[f] = { p10: q[0.1], p50: q[0.5], p90: q[0.9] };
+        }
+        postMessage({ kind:"PREDICTIONS", data: out, ts: Date.now() });
       };
     `;
     const worker = new Worker(URL.createObjectURL(new Blob([workerCode], {type:'application/javascript'})));
-
-    let latestPredictions = null;
     worker.onmessage = (e) => {
       if (e.data?.kind === "PREDICTIONS") {
-        latestPredictions = e.data.data;
+        latestPred = e.data.data;
         updatePredictedUHIForBuildings();
         paintPollutionPanelNow();
       }
     };
 
     // ==========================
-    // RF API helper
+    // Simple Kalman Smoother for measurements
+    // ==========================
+    function kf(prev, obs, R=0.8, Q=0.2){
+      if (prev==null) return { x: obs, P: 1 };
+      const x_pred = prev.x, P_pred = prev.P + Q;
+      const K = P_pred / (P_pred + R);
+      const x = x_pred + K*(obs - x_pred);
+      const P = (1 - K)*P_pred;
+      return { x, P };
+    }
+    const kstate = { urbanTemp: null, O3: null, NO2: null, NO: null, CO: null, NH3: null };
+
+    // ==========================
+    // RF API helper (with graceful fallback)
     // ==========================
     async function predictWithAPI(weather) {
       const features = {
@@ -288,6 +381,7 @@
     // Weather + UHI (realtime)
     // ==========================
     async function fetchUHIAndUpdate(){
+      // NOTE: replace with proxy endpoints in production
       const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
       const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
 
@@ -296,46 +390,53 @@
         const uJson = await uRes.json();
         const rJson = await rRes.json();
 
-        const urbanTemp = uJson.main?.temp ?? 28;
+        const urbanTempRaw = uJson.main?.temp ?? 28;
+        const urbanTempSm = (kstate.urbanTemp = kf(kstate.urbanTemp, urbanTempRaw)).x;
 
         lastWeather = {
-          temp: urbanTemp,
-          wind: uJson.wind?.speed ?? 1.5,
+          temp: urbanTempSm,
+          wind: (uJson.wind?.speed ?? 1.5),
           clouds: uJson.clouds?.all ?? 20,
           humidity: uJson.main?.humidity ?? 50,
           pressure: uJson.main?.pressure ?? 1013,
           rain1h: (uJson.rain && (uJson.rain["1h"] ?? uJson.rain["h1"])) || 0
         };
 
-        histories.urbanTemp.push(urbanTemp);
-        if (histories.urbanTemp.length > 200) histories.urbanTemp.shift();
+        // histories
+        pushHistory("urbanTemp", urbanTempSm);
 
+        // pollution from API or heuristic
         let nowPoll = await predictWithAPI(lastWeather);
         if (!nowPoll) nowPoll = simulatePollutionFromWeather(lastWeather);
 
         for (const k of ["O3","NO2","NO","CO","NH3"]) {
-          histories[k].push(Number(nowPoll[k]) || 0);
-          if (histories[k].length > 200) histories[k].shift();
+          const sm = (kstate[k] = kf(kstate[k], Number(nowPoll[k]) || 0, 1.2, 0.3)).x;
+          pushHistory(k, sm);
         }
 
         // update current UHI on buildings
         for (const building of buildings) {
-          const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
-          const simTemp = computeUHI(urbanTemp, height, lastWeather.wind, lastWeather.clouds);
-          building.properties.addProperty("sim_uhi", simTemp);
+          const height = parseFloat(getProp(building, "height")) || 10;
+          const simTemp = computeUHI(urbanTempSm, height, lastWeather.wind, lastWeather.clouds);
+          setProp(building, "sim_uhi", simTemp);
         }
 
         requestForecast();
-        updateStyles();          // <- now defined at top level
+        scheduleStyleUpdate();
         paintPollutionPanelNow();
+        computeBacktestMetrics();
 
       } catch (err) {
         console.error("Weather/UHI fetch error:", err);
       }
     }
 
+    function pushHistory(name, val){
+      const arr = histories[name]; arr.push(val); if (arr.length > 200) arr.shift();
+    }
+
     function computeUHI(urbanTemp, height, wind, clouds){
-      return urbanTemp + 0.03*height - 0.2*wind - 0.02*clouds;
+      return urbanTemp + 0.03*height - 0.2*(wind + windOverride) - 0.02*clouds;
     }
 
     // backup heuristic (only if API down)
@@ -359,55 +460,171 @@
     }
 
     function updatePredictedUHIForBuildings(){
-      if (!latestPredictions) return;
-      const predUrban = latestPredictions.urbanTemp || [];
-      const wind = lastWeather.wind, clouds = lastWeather.clouds;
+      if (!latestPred) return;
+      const predUrban = latestPred.urbanTemp || {};
+      const wind = lastWeather.wind + windOverride, clouds = lastWeather.clouds;
       const now = Date.now();
 
       for (const b of buildings) {
-        const height = parseFloat(b.properties?.height?.getValue?.() ?? b.properties?.height) || 10;
-        const prop = new Cesium.SampledProperty(Number);
-        for (let i=0; i<predUrban.length; i++){
+        const height = parseFloat(getProp(b, "height")) || 10;
+
+        const p10 = new Cesium.SampledProperty(Number);
+        const p50 = new Cesium.SampledProperty(Number);
+        const p90 = new Cesium.SampledProperty(Number);
+
+        for (let i=0; i<(predUrban.p50?.length||0); i++){
           const t = new Date(now + i * STEP_MINUTES * 60 * 1000);
-          const uhi = computeUHI(predUrban[i], height, wind, clouds);
-          prop.addSample(Cesium.JulianDate.fromDate(t), uhi);
+          const u10 = computeUHI(predUrban.p10[i], height, wind, clouds);
+          const u50 = computeUHI(predUrban.p50[i], height, wind, clouds);
+          const u90 = computeUHI(predUrban.p90[i], height, wind, clouds);
+          const jd  = Cesium.JulianDate.fromDate(t);
+          p10.addSample(jd, u10); p50.addSample(jd, u50); p90.addSample(jd, u90);
         }
-        b.properties.addProperty("pred_uhi", prop);
+        setProp(b, "pred_uhi_p10", p10);
+        setProp(b, "pred_uhi_p50", p50);
+        setProp(b, "pred_uhi_p90", p90);
       }
       viewer.scene.requestRender();
     }
 
     // ==========================
-    // 🔧 Moved to TOP LEVEL so others can call it
+    // Entity property helpers
     // ==========================
-    function updateStyles(){
+    function getProp(ent, key){
+      const props = ent.properties;
+      return props?.[key]?.getValue?.() ?? props?.[key];
+    }
+    function setProp(ent, key, value){
+      if (!ent.properties) ent.properties = new Cesium.PropertyBag();
+      ent.properties.addProperty(key, value);
+    }
+
+    // ==========================
+    // Styling & legend
+    // ==========================
+    function getEntityTemp(ent){
+      const usePred = document.getElementById("predictionToggle")?.checked;
+      if (usePred && ent.properties?.pred_uhi_p50?.getValue) {
+        const when = viewer?.clock ? viewer.clock.currentTime : Cesium.JulianDate.now();
+        const mid = ent.properties.pred_uhi_p50.getValue(when);
+        const lo  = ent.properties.pred_uhi_p10?.getValue?.(when);
+        const hi  = ent.properties.pred_uhi_p90?.getValue?.(when);
+        return { value: mid, lo, hi };
+      }
+      const sim = getProp(ent,"sim_uhi");
+      return { value: (typeof sim === "number") ? sim : undefined };
+    }
+
+    function computeUHIBounds(){
+      if (!UHI_AUTOSCALE) { setLegendText(UHI_MIN, UHI_MAX); return; }
+      let min=1e9, max=-1e9, count=0;
+      for (const b of buildings){
+        const t = getEntityTemp(b)?.value;
+        if (typeof t === "number" && isFinite(t)){
+          min = Math.min(min, t);
+          max = Math.max(max, t);
+          count++;
+        }
+      }
+      if (count>0){
+        UHI_MIN = Math.floor(min);
+        UHI_MAX = Math.ceil(max);
+        if (UHI_MAX - UHI_MIN < 5) UHI_MAX = UHI_MIN + 5;
+        setLegendText(UHI_MIN, UHI_MAX);
+      }
+    }
+
+    function uhiToColor(temp, spread=0){
+      const t = (temp - UHI_MIN) / (UHI_MAX - UHI_MIN);
+      const color = paletteFunc()(t);
+      const alpha = 1.0 - clamp01(spread / 5.0); // larger spread => more transparent
+      return new Cesium.Color(color.red, color.green, color.blue, alpha);
+    }
+
+    const updateStyles = ()=>{
       if (!viewer || !buildings?.length) return;
 
+      computeUHIBounds();
+      setLegendGradient();
+
       const selected = document.getElementById("buildingSelector")?.value || "";
-      const colorHex = document.getElementById("colorPicker")?.value || "#cccccc";
-      const alpha = 1.0;
+      const baseHex  = document.getElementById("colorPicker")?.value || "#cccccc";
       const showHeat = document.getElementById("heatToggle")?.checked ?? true;
-
       const lm = document.getElementById("legendMode");
-      if (lm) lm.textContent = "Mode: " + ((document.getElementById("predictionToggle")?.checked) ? "Predicted" : "Measured");
-
-      // autoscale before painting
-      computeCurrentUHIBounds();
+      const usePred = document.getElementById("predictionToggle")?.checked;
+      lm.textContent = usePred ? "Mode: Predicted (P50 color, P10–P90 opacity)" : "Mode: Measured";
 
       for (const building of buildings) {
         if (!building.polygon) continue;
-
-        // base color if no heat or no temp
-        let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
+        let color = Cesium.Color.fromCssColorString(baseHex).withAlpha(1.0);
 
         if (showHeat) {
           const t = getEntityTemp(building);
-          if (typeof t === "number" && isFinite(t)) color = uhiToColor(t, alpha);
+          if (typeof t?.value === "number" && isFinite(t.value)){
+            const spread = (typeof t.lo==="number" && typeof t.hi==="number") ? (t.hi - t.lo) : 0;
+            color = uhiToColor(t.value, spread);
+          }
         }
-
         if (!selected || building.name === selected) building.polygon.material = color;
       }
       viewer.scene.requestRender();
+      encodeStateToURL();
+    };
+    const scheduleStyleUpdate = debounce(updateStyles, 100);
+
+    // ==========================
+    // Sparklines
+    // ==========================
+    function drawSpark(canvasId, hist, pred){
+      const cv = document.getElementById(canvasId); if (!cv) return;
+      const ctx = cv.getContext("2d");
+      const W = cv.width = cv.clientWidth, H = cv.height = cv.clientHeight;
+
+      const nHist = Math.min(hist.length, 60); // last 60
+      const series = hist.slice(-nHist);
+      const min = Math.min(...series, ...(pred?.p10||series)), max = Math.max(...series, ...(pred?.p90||series));
+      const x = (i, total)=> (i/(total-1))*W;
+      const y = v => H - ((v - min)/(max - min + 1e-6))*H;
+
+      // predicted band
+      if (pred?.p10 && pred?.p90){
+        ctx.globalAlpha = 0.25;
+        ctx.beginPath();
+        for(let i=0;i<pred.p10.length;i++){
+          const xi = x(nHist-1+i, nHist + pred.p10.length);
+          const yi = y(pred.p90[i]);
+          if(i===0) ctx.moveTo(xi, yi); else ctx.lineTo(xi, yi);
+        }
+        for(let i=pred.p10.length-1;i>=0;i--){
+          const xi = x(nHist-1+i, nHist + pred.p10.length);
+          const yi = y(pred.p10[i]);
+          ctx.lineTo(xi, yi);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // history line
+      ctx.beginPath();
+      for(let i=0;i<series.length;i++){
+        const xi = x(i, nHist + (pred?.p50?.length||0));
+        const yi = y(series[i]);
+        if(i===0) ctx.moveTo(xi, yi); else ctx.lineTo(xi, yi);
+      }
+      ctx.lineWidth = 1.2; ctx.stroke();
+
+      // prediction median
+      if (pred?.p50){
+        ctx.setLineDash([3,2]);
+        ctx.beginPath();
+        for(let i=0;i<pred.p50.length;i++){
+          const xi = x(nHist-1+i, nHist + pred.p50.length);
+          const yi = y(pred.p50[i]);
+          if(i===0) ctx.moveTo(xi, yi); else ctx.lineTo(xi, yi);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
     // ==========================
@@ -416,10 +633,7 @@
     async function startCesiumApp(){
       const viewerOpts = { baseLayerPicker:true, timeline:false, animation:false, shadows:true };
       viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
-
-      // Proper occlusion vs terrain
       viewer.scene.globe.depthTestAgainstTerrain = true;
-
       viewer.scene.requestRenderMode = true;
       viewer.scene.maximumRenderTimeChange = 1/30;
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
@@ -434,7 +648,7 @@
       buildings.forEach((building, i) => {
         const name = `Building ${i+1}`;
         building.name = name;
-        const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
+        const height = parseFloat(getProp(building,"height")) || 10;
 
         if (building.polygon) {
           building.polygon.extrudedHeight = height;
@@ -465,12 +679,13 @@
         if (picked && picked.id && picked.id.properties) {
           const props = picked.id.properties;
           const usePred = document.getElementById("predictionToggle").checked;
-          const tempVal = getEntityTemp(picked.id);
-          const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
+          const t = getEntityTemp(picked.id);
+          const h = getProp(picked.id,"height") ?? "N/A";
           const name = picked.id.name ?? "Unknown";
           const label = usePred ? "Pred" : "Temp";
-          const tNum = Number(tempVal);
-          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>${label}: ${isFinite(tNum)?tNum.toFixed(1):"N/A"} °C`;
+          const v = Number(t?.value);
+          const spread = (typeof t?.lo==="number" && typeof t?.hi==="number") ? ` (±${((t.hi - t.lo)/2).toFixed(1)})` : "";
+          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>${label}: ${isFinite(v)?v.toFixed(1):"N/A"} °C${spread}`;
           tooltip.style.left = (movement.endPosition.x + 15) + "px";
           tooltip.style.top  = (movement.endPosition.y + 15) + "px";
           tooltip.style.display = "block";
@@ -479,17 +694,21 @@
         }
       }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
-      // Inputs -> use global updateStyles
-      document.getElementById("colorPicker").addEventListener("input", updateStyles);
-      document.getElementById("buildingSelector").addEventListener("change", updateStyles);
-      document.getElementById("heatToggle").addEventListener("change", updateStyles);
-      document.getElementById("predictionToggle").addEventListener("change", updateStyles);
+      // Inputs
+      const scheduleUpdateAndShare = ()=>{ scheduleStyleUpdate(); encodeStateToURL(); };
+      document.getElementById("colorPicker").addEventListener("input", scheduleUpdateAndShare);
+      document.getElementById("buildingSelector").addEventListener("change", scheduleUpdateAndShare);
+      document.getElementById("heatToggle").addEventListener("change", scheduleUpdateAndShare);
+      document.getElementById("predictionToggle").addEventListener("change", scheduleUpdateAndShare);
+      document.getElementById("paletteSelector").addEventListener("change", ()=>{ setLegendGradient(); scheduleUpdateAndShare(); });
+      document.getElementById("autoscaleToggle").addEventListener("change", (e)=>{ UHI_AUTOSCALE = e.target.checked; scheduleUpdateAndShare(); });
 
       document.getElementById("shadowToggle").addEventListener("change", (e) => {
         const enabled = e.target.checked;
         viewer.shadows = enabled;
         viewer.scene.shadowMap.enabled = enabled;
         viewer.scene.requestRender();
+        encodeStateToURL();
       });
 
       // Time slider controls the Cesium clock (date is arbitrary)
@@ -499,8 +718,10 @@
         timeSlider.value = h;
         timeLabel.textContent = `${h}:00`;
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, h));
-        updateStyles();
+        scheduleStyleUpdate();
+        encodeStateToURL();
       }
+      window.setClockHour = setClockHour; // for URL loader
       timeSlider.addEventListener("input", ()=>setClockHour(parseInt(timeSlider.value)));
       document.querySelectorAll(".snapBtn").forEach(btn => {
         btn.addEventListener("click", ()=>{
@@ -526,8 +747,6 @@
             const normalized = clamp01(speed / 60);
             const hue = (1 - normalized) * 240; // 240=blue → 0=red
             const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
-
-            // Slight lift to avoid "stabbed" look
             const LIFT_M = 2.0;
             const entity = viewer.entities.add({
               position: Cesium.Cartesian3.fromDegrees(lon, lat, LIFT_M),
@@ -611,33 +830,130 @@
       liveTrafficToggle.addEventListener("change", (e)=> e.target.checked ? beginTrafficUpdates() : stopTrafficUpdates());
       trafficRefresh.addEventListener("change", ()=> { if (liveTrafficToggle.checked) beginTrafficUpdates(); });
       beginTrafficUpdates();
+
+      // Load URL state last
+      loadStateFromURL();
+      updateStyles();
     }
 
     // ==========================
-    // Pollution panel
+    // Pollution panel + metrics
     // ==========================
     function paintPollutionPanelNow(){
-      const out = latestPredictions
-        ? { O3: latestPredictions.O3[0], NO2: latestPredictions.NO2[0], NO: latestPredictions.NO[0], CO: latestPredictions.CO[0], NH3: latestPredictions.NH3[0] }
-        : histories;
       const thresholds = { O3:100, NO2:40, NO:50, CO:10, NH3:2 };
+      const latest = k => histories[k][histories[k].length-1] ?? 0;
+      const preds = k => latestPred?.[k];
+
       const level = (p, v)=> v < thresholds[p]*0.6 ? "bg-green-100 text-green-800"
                              : v < thresholds[p]     ? "bg-yellow-100 text-yellow-800"
                                                      : "bg-red-100 text-red-800";
+
       const entries = ["O3","NO2","NO","CO","NH3"].map(k=>{
-        const v = (out && typeof out[k]==="number") ? out[k] : (out?.[k]?.slice(-1)[0] ?? 0);
+        const v = latest(k);
         return `<div class="p-2 rounded-lg ${level(k, v)} flex justify-between items-center">
                   <span class="font-medium">${k}</span><span class="font-semibold">${(v||0).toFixed(2)}</span>
                 </div>`;
       }).join("");
-      document.getElementById("pollutionOutput").innerHTML = `<div class="space-y-2">${entries}</div>`;
+      document.getElementById("pollutionOutput").innerHTML = `<div class="grid grid-cols-2 gap-2">${entries}</div>`;
       document.getElementById("pollutionStamp").textContent = "Updated: " + new Date().toLocaleTimeString();
+
+      // Sparklines
+      drawSpark("sparkNO2", histories.NO2, preds("NO2"));
+      drawSpark("sparkO3",  histories.O3,  preds("O3"));
+      drawSpark("sparkCO",  histories.CO,  preds("CO"));
+      drawSpark("sparkNH3", histories.NH3, preds("NH3"));
+    }
+
+    function computeBacktestMetrics(){
+      // simple 1-step MAE on urbanTemp where we can: compare last obs to previous prediction median step 1
+      const h = histories.urbanTemp;
+      const p = latestPred?.urbanTemp?.p50;
+      if (!p || h.length < 2) { document.getElementById("metrics").textContent = "—"; return; }
+      // store simple rolling absolute error (approx): compare most recent measured to previous predicted[0]
+      // For brevity, show last measured vs current P50
+      const lastObs = h[h.length-1];
+      const nextP50 = p[0];
+      const absErr = Math.abs(lastObs - nextP50);
+      document.getElementById("metrics").textContent = `UHI P50 error (now vs pred): ${absErr.toFixed(2)} °C`;
+    }
+
+    // ==========================
+    // Scenario controls
+    // ==========================
+    function updateScenarioLabel(){
+      const lab = document.getElementById("windLabel");
+      lab.textContent = (windOverride>=0?"+":"") + windOverride.toFixed(1) + " m/s";
+    }
+    document.getElementById("windOverride").addEventListener("input", (e)=>{
+      windOverride = parseFloat(e.target.value);
+      updateScenarioLabel();
+      updatePredictedUHIForBuildings();
+      scheduleStyleUpdate();
+    });
+    document.getElementById("resetScenario").addEventListener("click", ()=>{
+      windOverride = 0; document.getElementById("windOverride").value = 0; updateScenarioLabel();
+      updatePredictedUHIForBuildings(); scheduleStyleUpdate();
+    });
+
+    // Share view
+    document.getElementById("shareView").addEventListener("click", ()=>{
+      encodeStateToURL();
+      navigator.clipboard.writeText(location.href).then(()=>{
+        const btn = document.getElementById("shareView");
+        const old = btn.textContent; btn.textContent = "Copied!";
+        setTimeout(()=>btn.textContent=old, 1200);
+      });
+    });
+
+    // ==========================
+    // Time helper (needs global scope for URL restore)
+    // ==========================
+    function setClockHour(h){
+      const timeSlider = document.getElementById("timeSlider");
+      const timeLabel  = document.getElementById("timeLabel");
+      timeSlider.value = h;
+      timeLabel.textContent = `${h}:00`;
+      viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, h));
+      scheduleStyleUpdate();
+    }
+
+    // ==========================
+    // Service Worker (inline) — caches static assets
+    // ==========================
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        const CACHE = 'cdt-cache-v1';
+        const toCache = [
+          './',
+          'codogno_buildings_with_heights.geojson',
+          'morning_heatpoints.json','lunch_heatpoints.json','evening_heatpoints.json','night_heatpoints.json'
+        ];
+        self.addEventListener('install', (e)=>{
+          e.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(toCache)));
+        });
+        self.addEventListener('fetch', (e)=>{
+          const url = new URL(e.request.url);
+          if (toCache.some(p=>url.pathname.endsWith(p))) {
+            e.respondWith(
+              caches.match(e.request).then(res=> res || fetch(e.request).then(r=>{
+                const copy = r.clone(); caches.open(CACHE).then(c=>c.put(e.request, copy)); return r;
+              }))
+            );
+          }
+        });
+      `;
+      const blob = new Blob([swCode], {type:'text/javascript'});
+      const swUrl = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swUrl).catch(()=>{});
     }
 
     // ==========================
     // Kickoff
     // ==========================
     startCesiumApp();
+
+    // Expose for URL loader
+    window.setClockHour = setClockHour;
   </script>
 </body>
 </html>
