@@ -8,16 +8,31 @@
   <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
   <style>
     html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
+
+    /* Bottom-left continuous legend */
     #legend {
       position:absolute; bottom:1rem; left:1rem; background:white; padding:.5rem; border-radius:.5rem;
       font-family:sans-serif; font-size:12px; z-index:10; width:220px; box-shadow:0 2px 4px rgba(0,0,0,.2);
     }
-    /* blue→red ramp visual for legend bar (continuous mode) */
     #legendGradient { height:16px; background:linear-gradient(to right,#313695,#4575b4,#74add1,#fee090,#d73027); margin-top:.25rem; }
+
+    /* Tooltip */
     #tooltip {
       position:absolute; background:white; border:1px solid #ccc; padding:6px 8px; font-size:13px; pointer-events:none;
       border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:240px; display:none;
     }
+
+    /* Vertical discrete legend (Quantile mode) */
+    #uhiLegendPanel{
+      position:absolute; right:1rem; top:6rem; z-index:12;
+      background:rgba(0,0,0,0.6); color:white; border-radius:12px; padding:10px 12px;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:12px; width:170px;
+      box-shadow:0 6px 14px rgba(0,0,0,.25); backdrop-filter: blur(2px);
+    }
+    #uhiLegendPanel .title{ font-weight:700; margin-bottom:6px; }
+    #uhiLegendPanel .row{ display:flex; align-items:center; margin:3px 0; }
+    #uhiLegendPanel .sw{ width:16px; height:16px; border-radius:3px; margin-right:8px; border:1px solid rgba(255,255,255,.4); }
+    .hidden{ display:none; }
   </style>
 </head>
 
@@ -41,16 +56,14 @@
         <input type="color" id="colorPicker" class="w-full" value="#cccccc" />
       </div>
 
-      <!-- Color Mode -->
       <div>
         <label class="block font-medium">Color Mode</label>
         <select id="colorMode" class="w-full border rounded px-2 py-1">
           <option value="continuous" selected>Continuous</option>
-          <option value="quantile">Quantile (7 bins)</option>
+          <option value="quantile">Quantile (discrete)</option>
         </select>
       </div>
 
-      <!-- Palette -->
       <div class="col-span-2">
         <label class="block font-medium">Palette</label>
         <select id="palette" class="w-full border rounded px-2 py-1">
@@ -58,6 +71,13 @@
           <option value="spectral">Spectral</option>
           <option value="viridis">Viridis</option>
         </select>
+      </div>
+
+      <!-- NEW: Diversity control -->
+      <div class="col-span-2">
+        <label class="block font-medium">Color Bins (diversity)</label>
+        <input type="range" id="binCount" min="5" max="24" step="1" value="18" class="w-full" />
+        <div class="text-xs text-gray-600 mt-1">Bins: <span id="binCountLabel">18</span></div>
       </div>
 
       <div class="col-span-2">
@@ -106,11 +126,18 @@
     </div>
   </div>
 
+  <!-- Continuous legend (shown only in continuous mode) -->
   <div id="legend">
     <div class="font-semibold">UHI Temperature (°C)</div>
     <div id="legendGradient"></div>
     <div id="legendRange" class="flex justify-between"><span>25.00</span><span>40.00</span></div>
     <div id="legendMode" class="text-[11px] text-gray-600 mt-1">Mode: Predicted</div>
+  </div>
+
+  <!-- NEW: Vertical discrete legend (shown only in quantile mode) -->
+  <div id="uhiLegendPanel" class="hidden">
+    <div class="title">Colors by UHI</div>
+    <div id="uhiLegendRows"></div>
   </div>
 
   <div id="tooltip"></div>
@@ -144,8 +171,8 @@
     const HORIZON_STEPS = 6;  // 6 x 10min = 60 minutes
     const STEP_MINUTES  = 10;
 
-    // Tiny visual-only jitter (°C) to avoid ties in discrete bins (0 to disable)
-    const JITTER_STRENGTH = 0.0;
+    // Visual-only jitter (°C) to avoid ties in discrete bins
+    const JITTER_STRENGTH = 0.05; // ±0.05°C; set 0 to disable
 
     // ==========================
     // Utility
@@ -162,18 +189,18 @@
     function lerp(a,b,t){ return a + (b-a)*t; }
 
     // ==========================
-    // UHI color ramp (continuous) & autoscale (blue → red)
+    // UHI color ramp (continuous) & autoscale
     // ==========================
     let UHI_MIN = 25, UHI_MAX = 40;
-    let UHI_AUTOSCALE = true;  // set false to keep 25–40 fixed
+    let UHI_AUTOSCALE = true;
 
-    // — decimals + formatter for legend —
-    const DECIMALS = 2;
+    // decimals for legend
+    let DECIMALS = 2;
+    const POW = 100; // 10^2
     const fmt = (x) => (Number.isFinite(x) ? x.toFixed(DECIMALS) : "—");
-    const POW = Math.pow(10, DECIMALS);
 
-    // — tighter autoscale using percentiles —
-    const MIN_SPAN = 2.0;   // aim for ≈2°C span (e.g., 21–23)
+    // tighter autoscale using percentiles (for continuous mode)
+    const MIN_SPAN = 2.0;   // ≈2°C span
     const LOWER_P = 0.05;   // 5th percentile
     const UPPER_P = 0.95;   // 95th percentile
     function quantile(sorted, p){
@@ -214,19 +241,18 @@
       return stops[stops.length-1].c.clone();
     }
     function uhiToColor(temp, alpha=1){
-      const span = Math.max(1e-6, (UHI_MAX - UHI_MIN)); // avoid /0
+      const span = Math.max(1e-6, (UHI_MAX - UHI_MIN));
       const t = (temp - UHI_MIN) / span;
       const c = interpolateColor(UHI_STOPS, t);
       return new Cesium.Color(c.red, c.green, c.blue, alpha);
     }
 
-    // 🔧 GLOBAL helper so all scopes can read building temp
+    // GLOBAL helper so all scopes can read building temp
     function getEntityTemp(ent){
       const usePred = document.getElementById("predictionToggle")?.checked;
       const props = ent.properties;
       if (usePred && props?.pred_uhi?.getValue) {
-        // predictions are anchored to "now"
-        const when = Cesium.JulianDate.now();
+        const when = Cesium.JulianDate.now(); // predictions anchored to "now"
         const val = props.pred_uhi.getValue(when);
         if (typeof val === "number") return val;
       }
@@ -254,7 +280,6 @@
         max = mid + MIN_SPAN/2;
       }
 
-      // round to "DECIMALS" places
       UHI_MIN = Math.floor(min * POW) / POW;
       UHI_MAX = Math.ceil (max * POW) / POW;
 
@@ -262,19 +287,18 @@
     }
 
     // ==========================
-    // Discrete palettes (7-class) & helpers
+    // Discrete palettes & helpers
     // ==========================
     const PALETTES = {
-      bluered:  ['#313695','#4575b4','#74add1','#fee090','#fdae61','#f46d43','#d73027'], // cold→hot
-      spectral: ['#5E4FA2','#3288BD','#99D594','#E6F598','#FEE08B','#FC8D59','#D53E4F'], // cold→hot
-      viridis:  ['#440154','#472D7B','#3B528B','#2C728E','#21918C','#5EC962','#FDE725']  // cold→hot
+      bluered:  ['#313695','#4575b4','#74add1','#fee090','#fdae61','#f46d43','#d73027'],
+      spectral: ['#5E4FA2','#3288BD','#99D594','#E6F598','#FEE08B','#FC8D59','#D53E4F'],
+      viridis:  ['#440154','#472D7B','#3B528B','#2C728E','#21918C','#5EC962','#FDE725']
     };
     function hexToCesium(hex, a=1){
       const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
       if(!m) return Cesium.Color.WHITE.withAlpha(a);
       return new Cesium.Color(parseInt(m[1],16)/255, parseInt(m[2],16)/255, parseInt(m[3],16)/255, a);
     }
-    // inclusive upper breaks for k bins, quantile-based
     function quantileBreaks(values, k=7){
       const v = values.filter(Number.isFinite).slice().sort((a,b)=>a-b);
       if(!v.length) return [];
@@ -288,9 +312,7 @@
       return br;
     }
     function colorFromBins(x, breaks, colors, alpha=1){
-      for(let i=0;i<breaks.length;i++){
-        if(x <= breaks[i]) return hexToCesium(colors[i], alpha);
-      }
+      for(let i=0;i<breaks.length;i++){ if(x <= breaks[i]) return hexToCesium(colors[i], alpha); }
       return hexToCesium(colors[colors.length-1], alpha);
     }
     function stableJitterFromName(name){
@@ -298,7 +320,7 @@
       return (h % 1000)/1000; // 0..0.999
     }
 
-    // Legend renderers
+    // Legends
     function renderContinuousLegend(){
       const grad = document.getElementById("legendGradient");
       if(grad){
@@ -308,27 +330,24 @@
       }
       setLegendText(UHI_MIN, UHI_MAX);
     }
-    function setDiscreteLegend(breaks, colors){
-      const grad = document.getElementById("legendGradient");
-      if(grad){
-        const sw = breaks.map((br, i)=>{
-          const c = colors[i];
-          const lo = (i===0) ? null : breaks[i-1];
-          const lbl = (lo===null) ? `≤ ${fmt(br)}` : `${fmt(lo)}–${fmt(br)}`;
-          return `<div class="flex items-center space-x-2">
-                    <div style="width:14px;height:14px;border-radius:3px;background:${c};border:1px solid #999"></div>
-                    <span>${lbl} °C</span>
-                  </div>`;
-        }).join("");
-        grad.innerHTML = `<div class="space-y-1 mt-1">${sw}</div>`;
-        grad.style.height = "auto";
-        grad.style.background = "transparent";
+    function showVerticalLegend(breaksAsc, colors, minVal){
+      // Hide bottom gradient; show panel
+      document.getElementById("legend").classList.add("hidden");
+      const panel = document.getElementById("uhiLegendPanel");
+      const rows = document.getElementById("uhiLegendRows");
+      panel.classList.remove("hidden");
+
+      // Build "≥ lowerBound" rows, top = hottest
+      const lowers = [minVal].concat(breaksAsc.slice(0, -1)); // size == colors.length
+      let html = "";
+      for (let i = lowers.length - 1; i >= 0; i--){
+        html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`;
       }
-      const legend = document.getElementById("legendRange");
-      if (legend && breaks?.length){
-        legend.children[0].textContent = fmt(breaks[0]);
-        legend.children[1].textContent = fmt(breaks[breaks.length-1]);
-      }
+      rows.innerHTML = html;
+    }
+    function hideVerticalLegend(){
+      document.getElementById("uhiLegendPanel").classList.add("hidden");
+      document.getElementById("legend").classList.remove("hidden");
     }
 
     // ==========================
@@ -487,7 +506,7 @@
         const height = parseFloat(b.properties?.height?.getValue?.() ?? b.properties?.height) || 10;
         const prop = new Cesium.SampledProperty(Number);
 
-        // hold last/first values a bit outside range to avoid undefined
+        // Hold outside sample window to avoid undefined
         prop.setBackwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
         prop.setForwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
         prop.backwardExtrapolationDuration = 3600;
@@ -516,12 +535,14 @@
       const usePred    = document.getElementById("predictionToggle")?.checked ?? true;
       const colorMode  = document.getElementById("colorMode")?.value || "continuous";
       const paletteKey = document.getElementById("palette")?.value || "bluered";
+      const bins       = parseInt(document.getElementById("binCount")?.value || "18", 10);
       const lm = document.getElementById("legendMode");
 
+      document.getElementById("binCountLabel").textContent = String(bins);
       if (lm) lm.textContent = "Mode: " + (usePred ? "Predicted" : "Measured");
 
       // Prepare legend / bins
-      let breaks = null, colors = null;
+      let breaks = null, colors = null, minVal = null;
       if (showHeat && colorMode === "quantile") {
         const vals = [];
         for (const b of buildings){
@@ -531,13 +552,19 @@
           }
           if (typeof v === "number" && isFinite(v)) vals.push(v);
         }
-        const k = 7;
-        breaks = quantileBreaks(vals, k);
-        const pal = PALETTES[paletteKey] || PALETTES.bluered;
-        colors = (pal.length === k) ? pal : Array.from({length:k}, (_,i)=>pal[Math.round(i*(pal.length-1)/(k-1))]);
-        if (breaks?.length) setDiscreteLegend(breaks, colors); else renderContinuousLegend();
+        if (vals.length){
+          vals.sort((a,b)=>a-b);
+          minVal = vals[0];
+          breaks = quantileBreaks(vals, bins);
+          const pal = PALETTES[paletteKey] || PALETTES.bluered;
+          // resample palette to N bins if needed
+          colors = Array.from({length:bins}, (_,i)=>pal[Math.round(i*(pal.length-1)/(bins-1))]);
+          showVerticalLegend(breaks, colors, minVal);
+        } else {
+          hideVerticalLegend();
+        }
       } else {
-        // continuous legend (percentile autoscale keeps spread tight)
+        hideVerticalLegend();
         computeCurrentUHIBounds(); // also calls renderContinuousLegend()
       }
 
@@ -572,10 +599,7 @@
     async function startCesiumApp(){
       const viewerOpts = { baseLayerPicker:true, timeline:false, animation:false, shadows:true };
       viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
-
-      // Proper occlusion vs terrain
       viewer.scene.globe.depthTestAgainstTerrain = true;
-
       viewer.scene.requestRenderMode = true;
       viewer.scene.maximumRenderTimeChange = 1/30;
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
@@ -642,6 +666,7 @@
       document.getElementById("predictionToggle").addEventListener("change", updateStyles);
       document.getElementById("colorMode").addEventListener("change", updateStyles);
       document.getElementById("palette").addEventListener("change", updateStyles);
+      document.getElementById("binCount").addEventListener("input", updateStyles);
 
       document.getElementById("shadowToggle").addEventListener("change", (e) => {
         const enabled = e.target.checked;
@@ -671,9 +696,7 @@
         });
       });
 
-      // ==========================
-      // Static heatmap (lift points above ground)
-      // ==========================
+      // Static heatmap points
       async function loadHeatmap(timeOfDay) {
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities.length = 0;
@@ -683,11 +706,10 @@
           const response = await resilientFetch(file);
           const data = await response.json();
 
-          const LIFT_M = 6.0; // raise points a bit above the ground
-
+          const LIFT_M = 6.0;
           for (const [lat, lon, speed] of data) {
             const normalized = clamp01(speed / 60);
-            const hue = (1 - normalized) * 240; // 240=blue → 0=red
+            const hue = (1 - normalized) * 240; // blue→red
             const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
 
             const entity = viewer.entities.add({
@@ -713,9 +735,7 @@
       loadHeatmap("morning");
       document.getElementById("heatmapTimeSelector").addEventListener("change", (e)=>loadHeatmap(e.target.value));
 
-      // ==========================
       // Live Traffic (TomTom tiles)
-      // ==========================
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
       const trafficRefresh = document.getElementById("trafficRefresh");
 
