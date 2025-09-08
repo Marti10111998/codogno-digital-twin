@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+v<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -512,23 +512,24 @@
       });
 
       // ==========================
-      // Static heatmap
+      // Static heatmap (lift points above ground)
       // ==========================
-      async function loadHeatmap(timeOfDay){
+      async function loadHeatmap(timeOfDay) {
         for (const e of heatmapEntities) viewer.entities.remove(e);
-        heatmapEntities = [];
+        heatmapEntities.length = 0;
+
         try {
           const file = `${timeOfDay}_heatpoints.json`;
           const response = await resilientFetch(file);
           const data = await response.json();
+
+          const LIFT_M = 6.0; // raise points a bit above the ground
 
           for (const [lat, lon, speed] of data) {
             const normalized = clamp01(speed / 60);
             const hue = (1 - normalized) * 240; // 240=blue → 0=red
             const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
 
-            // Slight lift to avoid "stabbed" look
-            const LIFT_M = 2.0;
             const entity = viewer.entities.add({
               position: Cesium.Cartesian3.fromDegrees(lon, lat, LIFT_M),
               point: {
@@ -536,7 +537,8 @@
                 color,
                 outlineColor: Cesium.Color.WHITE,
                 outlineWidth: 1,
-                heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND
+                heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY // remove if you prefer strict occlusion
               }
             });
             heatmapEntities.push(entity);
@@ -544,8 +546,10 @@
         } catch (e) {
           console.warn("Heatmap load failed", e);
         }
+
         viewer.scene.requestRender();
       }
+
       loadHeatmap("morning");
       document.getElementById("heatmapTimeSelector").addEventListener("change", (e)=>loadHeatmap(e.target.value));
 
