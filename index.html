@@ -2,8 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Codogno Digital Twin — Realtime + Predictive (with safe fallbacks)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Codogno Digital Twin — Realtime + Predictive</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/cesium@1.116/Build/Cesium/Cesium.js"></script>
   <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
@@ -11,14 +10,13 @@
     html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
     #legend {
       position:absolute; bottom:1rem; left:1rem; background:white; padding:.5rem; border-radius:.5rem;
-      font-family:sans-serif; font-size:12px; z-index:10; width:210px; box-shadow:0 2px 4px rgba(0,0,0,.2);
+      font-family:sans-serif; font-size:12px; z-index:10; width:180px; box-shadow:0 2px 4px rgba(0,0,0,.2);
     }
-    #legendGradient { height:16px; margin-top:.25rem; border-radius:4px; background:linear-gradient(to right,#313695,#4575b4,#74add1,#fee090,#d73027); }
+    #legendGradient { height:16px; background:linear-gradient(to right,#313695,#4575b4,#74add1,#fee090,#d73027); margin-top:.25rem; }
     #tooltip {
       position:absolute; background:white; border:1px solid #ccc; padding:6px 8px; font-size:13px; pointer-events:none;
       border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:240px; display:none;
     }
-    canvas.spark { width:100%; height:40px; }
   </style>
 </head>
 
@@ -91,7 +89,7 @@
   <div id="legend">
     <div class="font-semibold">UHI Temperature (°C)</div>
     <div id="legendGradient"></div>
-    <div class="flex justify-between"><span id="legendMin">25</span><span id="legendMax">40</span></div>
+    <div class="flex justify-between"><span>25</span><span>40</span></div>
     <div id="legendMode" class="text-[11px] text-gray-600 mt-1">Mode: Predicted</div>
   </div>
 
@@ -106,17 +104,18 @@
 
   <script type="module">
     // ==========================
-    // 🔑 KEYS (KEEPING YOUR APIS)
+    // 🔑 KEEPING YOUR APIS
     // ==========================
-    const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c"; // OpenWeather
-    const tomtomKey     = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5"; // TomTom
-    Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw"; // Cesium Ion
+    const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
+    const tomtomKey     = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";
+    Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
 
-    // 👉 Your RF API (use HTTPS in prod)
-    const POLLUTION_API = "http://localhost:8000";
+    // 👉 ML API: use localhost only in dev; disable call on Netlify to avoid ERR_CONNECTION_REFUSED
+    const IS_LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+    const POLLUTION_API = IS_LOCAL ? "http://localhost:8000" : null; // set to your hosted API when you have one
 
     // ==========================
-    // App-wide state
+    // App state
     // ==========================
     let viewer, buildings = [], heatmapEntities = [];
     let trafficLayer = null, trafficTimer = null;
@@ -126,28 +125,27 @@
     const HORIZON_STEPS = 6;  // 6 x 10min = 60 minutes
     const STEP_MINUTES  = 10;
 
-    // Legend state
+    // Legend autoscale
     let UHI_MIN = 25, UHI_MAX = 40;
     let UHI_AUTOSCALE = true;
 
     // ==========================
-    // Helpers
+    // Utilities
     // ==========================
     async function resilientFetch(url, tries=3, base=500){
       for (let i=0;i<tries;i++){
-        try{
-          const r = await fetch(url, { cache:"no-store" });
+        try {
+          const r = await fetch(url, { cache: "no-store" });
           if (r.ok) return r;
-        }catch{}
-        await new Promise(res=>setTimeout(res, base*2**i + Math.random()*200));
+        } catch(_) {}
+        await new Promise(res => setTimeout(res, base * 2**i + Math.random()*200));
       }
       throw new Error("fetch failed: " + url);
     }
     const clamp01 = (x)=>Math.max(0,Math.min(1,x));
-    const setLegendText = (min,max)=>{ document.getElementById("legendMin").textContent=Math.round(min); document.getElementById("legendMax").textContent=Math.round(max); };
 
     // ==========================
-    // Color ramp & autoscale (blue→red)
+    // Color ramp
     // ==========================
     const UHI_STOPS = [
       { p: 0.00, c: Cesium.Color.fromBytes(49, 54,149,255) },
@@ -172,13 +170,17 @@
       }
       return stops[stops.length-1].c.clone();
     }
+    const setLegendText = (min,max)=>{
+      const legend = document.querySelector("#legend .flex");
+      legend.children[0].textContent = Math.round(min);
+      legend.children[1].textContent = Math.round(max);
+    };
     function uhiToColor(temp, alpha=1){
       const t = (temp - UHI_MIN) / (UHI_MAX - UHI_MIN);
       const c = interpolateColor(UHI_STOPS, t);
       return new Cesium.Color(c.red, c.green, c.blue, alpha);
     }
 
-    // 🔧 GLOBAL helper so all scopes can read building temp
     function getEntityTemp(ent){
       const usePred = document.getElementById("predictionToggle")?.checked;
       const props = ent.properties;
@@ -211,7 +213,7 @@
     }
 
     // ==========================
-    // Forecast worker (unchanged)
+    // Worker Forecast (your original)
     // ==========================
     const workerCode = `
       self.onmessage = (e) => {
@@ -248,7 +250,6 @@
       };
     `;
     const worker = new Worker(URL.createObjectURL(new Blob([workerCode], {type:'application/javascript'})));
-
     let latestPredictions = null;
     worker.onmessage = (e) => {
       if (e.data?.kind === "PREDICTIONS") {
@@ -259,9 +260,16 @@
     };
 
     // ==========================
-    // RF API helper (same as yours)
+    // RF API call (fixed to avoid localhost error in prod)
     // ==========================
     async function predictWithAPI(weather) {
+      // If not on localhost AND you haven't set a hosted API, skip network call to avoid console errors
+      if (!POLLUTION_API) return null;
+
+      // Add a short timeout so we fall back quickly on dev server not running
+      const controller = new AbortController();
+      const t = setTimeout(()=>controller.abort(), 1500);
+
       const features = {
         Temperature: weather.temp,
         Humidity: weather.humidity,
@@ -272,18 +280,20 @@
         const r = await fetch(`${POLLUTION_API}/predict`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(features)
+          body: JSON.stringify(features),
+          signal: controller.signal
         });
-        if (!r.ok) throw new Error("API error");
+        clearTimeout(t);
+        if (!r.ok) throw new Error("API error " + r.status);
         return await r.json();
       } catch (e) {
-        console.warn("Model API failed, using heuristic", e);
+        // Don’t spam the console; just return null so we use the heuristic
         return null;
       }
     }
 
     // ==========================
-    // Weather + UHI (now with safe fallback)
+    // Weather + UHI
     // ==========================
     async function fetchUHIAndUpdate(){
       const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
@@ -306,9 +316,8 @@
         };
 
       } catch (err) {
-        console.warn("OpenWeather failed, using heuristic", err);
-        // Simple “keep going” heuristic so UI stays responsive
-        const t = new Date(); const hr = t.getHours() + t.getMinutes()/60;
+        // keep UI alive with a gentle heuristic if OpenWeather hiccups
+        const now = new Date(); const hr = now.getHours() + now.getMinutes()/60;
         const temp = 26 + 6*Math.sin((hr-6)/24*Math.PI*2) + (Math.random()*0.6-0.3);
         lastWeather = { temp, wind: 1.2 + Math.random()*1.2, clouds: 30 + Math.random()*40, humidity: 45+Math.random()*20, pressure:1013, rain1h:0 };
       }
@@ -340,7 +349,6 @@
       return urbanTemp + 0.03*height - 0.2*wind - 0.02*clouds;
     }
 
-    // backup heuristic (only if API down)
     function simulatePollutionFromWeather(w){
       const { temp, wind, humidity, clouds } = w;
       const base = (x,min,max)=>Math.max(min, Math.min(max, x));
@@ -381,58 +389,46 @@
 
     function updateStyles(){
       if (!viewer || !buildings?.length) return;
-
       const selected = document.getElementById("buildingSelector")?.value || "";
       const colorHex = document.getElementById("colorPicker")?.value || "#cccccc";
-      const alpha = 1.0;
       const showHeat = document.getElementById("heatToggle")?.checked ?? true;
 
       const lm = document.getElementById("legendMode");
       if (lm) lm.textContent = "Mode: " + ((document.getElementById("predictionToggle")?.checked) ? "Predicted" : "Measured");
 
-      // autoscale before painting
       computeCurrentUHIBounds();
 
       for (const building of buildings) {
         if (!building.polygon) continue;
-
-        // base color if no heat or no temp
-        let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
-
+        let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(1.0);
         if (showHeat) {
           const t = getEntityTemp(building);
-          if (typeof t === "number" && isFinite(t)) color = uhiToColor(t, alpha);
+          if (typeof t === "number" && isFinite(t)) color = uhiToColor(t, 1.0);
         }
-
         if (!selected || building.name === selected) building.polygon.material = color;
       }
       viewer.scene.requestRender();
     }
 
     // ==========================
-    // Cesium App (Ion with fallback)
+    // Cesium init (Ion with fallback to ellipsoid if needed)
     // ==========================
     async function startCesiumApp(){
-      // Use keyless OSM imagery to avoid Ion imagery 401s
-      const imagery = new Cesium.OpenStreetMapImageryProvider({ url: 'https://a.tile.openstreetmap.org/' });
-
-      const viewerOpts = { baseLayerPicker:false, timeline:false, animation:false, shadows:true, imageryProvider: imagery };
+      const viewerOpts = { baseLayerPicker:true, timeline:false, animation:false, shadows:true };
       viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
-
-      // Try Ion terrain; fall back to ellipsoid if 401/failed
-      try {
-        const terrain = await Cesium.createWorldTerrainAsync();
-        viewer.terrainProvider = terrain;
-        viewer.scene.globe.enableLighting = true;
-      } catch (e) {
-        console.warn("Cesium Ion terrain failed, using ellipsoid. Reason:", e?.message||e);
-        viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
-        viewer.scene.globe.enableLighting = false;
-      }
 
       viewer.scene.globe.depthTestAgainstTerrain = true;
       viewer.scene.requestRenderMode = true;
       viewer.scene.maximumRenderTimeChange = 1/30;
+
+      try {
+        viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
+        viewer.scene.globe.enableLighting = true;
+      } catch (e) {
+        console.warn("Cesium Ion terrain failed, falling back to ellipsoid:", e?.message||e);
+        viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+        viewer.scene.globe.enableLighting = false;
+      }
 
       // Load buildings
       const buildingSelector = document.getElementById("buildingSelector");
@@ -467,7 +463,7 @@
         orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 }
       });
 
-      // Tooltip on hover
+      // Tooltip
       const tooltip = document.getElementById("tooltip");
       viewer.screenSpaceEventHandler.setInputAction((movement) => {
         const picked = viewer.scene.pick(movement.endPosition);
@@ -501,7 +497,7 @@
         viewer.scene.requestRender();
       });
 
-      // Time slider controls the Cesium clock (date is arbitrary)
+      // Time slider
       const timeSlider = document.getElementById("timeSlider");
       const timeLabel  = document.getElementById("timeLabel");
       function setClockHour(h){
@@ -520,9 +516,7 @@
         });
       });
 
-      // ==========================
-      // Static heatmap
-      // ==========================
+      // Heatmap
       async function loadHeatmap(timeOfDay){
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities = [];
@@ -533,7 +527,7 @@
 
           for (const [lat, lon, speed] of data) {
             const normalized = clamp01(speed / 60);
-            const hue = (1 - normalized) * 240; // 240=blue → 0=red
+            const hue = (1 - normalized) * 240;
             const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
 
             const LIFT_M = 2.0;
@@ -557,9 +551,7 @@
       loadHeatmap("morning");
       document.getElementById("heatmapTimeSelector").addEventListener("change", (e)=>loadHeatmap(e.target.value));
 
-      // ==========================
-      // Live Traffic (TomTom) with safe error handling
-      // ==========================
+      // TomTom live traffic (kept; with status + errors handled)
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
       const trafficRefresh = document.getElementById("trafficRefresh");
 
@@ -581,9 +573,7 @@
           tilingScheme: new Cesium.WebMercatorTilingScheme(),
           credit: "TomTom Traffic"
         });
-        provider.errorEvent.addEventListener(()=>{
-          setTrafficStatus("error (check TomTom key)");
-        });
+        provider.errorEvent.addEventListener(()=> setTrafficStatus("error (check TomTom key)"));
 
         const newLayer = viewer.imageryLayers.addImageryProvider(provider);
         newLayer.alpha = 0.7;
@@ -597,17 +587,15 @@
             const dt = ((performance.now()-started)/1000).toFixed(1);
             setTrafficStatus(`updated @ ${new Date().toLocaleTimeString()} (+${dt}s)`);
             viewer.scene.requestRender();
-          } else {
-            requestAnimationFrame(waitReady);
-          }
+          } else requestAnimationFrame(waitReady);
         })();
       }
 
       function beginTrafficUpdates(){
-        try{ addOrUpdateTrafficLayer(); }catch(e){ setTrafficStatus("init failed"); }
+        try { addOrUpdateTrafficLayer(); } catch(e){ setTrafficStatus("init failed"); }
         const everyMs = Math.max(15000, parseInt(trafficRefresh.value,10)*1000);
         if (trafficTimer) clearInterval(trafficTimer);
-        trafficTimer = setInterval(()=>{ try{ addOrUpdateTrafficLayer(); }catch{} }, everyMs);
+        trafficTimer = setInterval(()=>{ try { addOrUpdateTrafficLayer(); } catch(_){} }, everyMs);
       }
       function stopTrafficUpdates(){
         if (trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
@@ -642,7 +630,7 @@
     }
 
     // ==========================
-    // Kickoff
+    // Boot
     // ==========================
     startCesiumApp();
   </script>
