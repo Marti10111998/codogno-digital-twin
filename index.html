@@ -207,9 +207,9 @@
       const usePred = document.getElementById("predictionToggle")?.checked;
       const props = ent.properties;
       if (usePred && props?.pred_uhi?.getValue) {
-        const when = (viewer && viewer.clock) ? viewer.clock.currentTime : Cesium.JulianDate.now();
+        const when = Cesium.JulianDate.now();
         const val = props.pred_uhi.getValue(when);
-        return (typeof val === "number") ? val : undefined;
+        if (typeof val === "number") return val;
       }
       const sim = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi;
       return (typeof sim === "number") ? sim : undefined;
