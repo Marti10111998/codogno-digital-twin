@@ -148,16 +148,12 @@
     // ==========================
     // 🔐 KEYS / ENDPOINTS
     // ==========================
-    // Provide keys via a tiny inline script before this module:
-    //   <script>window.OWM_KEY="..."; window.TOMTOM_KEY="..."; window.CESIUM_ION="...";</script>
-    // Or leave blank to use graceful fallbacks (no hard crashes).
-    const weatherApiKey = (window.OWM_KEY ?? "");
-    const tomtomKey     = (window.TOMTOM_KEY ?? "");
-    Cesium.Ion.defaultAccessToken = (window.CESIUM_ION ?? "");
+    // (You provided these — they are inlined here.)
+    const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
+    const tomtomKey     = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";
+    Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
 
-    // HTTPS-safe predict endpoint:
-    // In production on Netlify, create a function at /.netlify/functions/predict
-    // that proxies to your model. In local dev (http://localhost), we can hit the model directly.
+    // HTTPS-safe predict endpoint (use Netlify Function named "predict")
     const PREDICT_ENDPOINT =
       location.protocol === "https:"
         ? "/.netlify/functions/predict"
@@ -774,7 +770,7 @@
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities = [];
         try {
-          // Ensure files exist at site root. If they live under /data/, prefix accordingly and update SW list below.
+          // Files must exist at site root; change to `data/${timeOfDay}_heatpoints.json` if stored in /data.
           const file = `${timeOfDay}_heatpoints.json`;
           const response = await resilientFetch(file);
           const data = await response.json();
