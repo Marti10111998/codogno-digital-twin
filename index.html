@@ -41,7 +41,7 @@
         <input type="color" id="colorPicker" class="w-full" value="#cccccc" />
       </div>
 
-      <!-- NEW: Color Mode -->
+      <!-- Color Mode -->
       <div>
         <label class="block font-medium">Color Mode</label>
         <select id="colorMode" class="w-full border rounded px-2 py-1">
@@ -50,7 +50,7 @@
         </select>
       </div>
 
-      <!-- NEW: Palette -->
+      <!-- Palette -->
       <div class="col-span-2">
         <label class="block font-medium">Palette</label>
         <select id="palette" class="w-full border rounded px-2 py-1">
@@ -109,7 +109,7 @@
   <div id="legend">
     <div class="font-semibold">UHI Temperature (°C)</div>
     <div id="legendGradient"></div>
-    <div class="flex justify-between"><span>25</span><span>40</span></div>
+    <div id="legendRange" class="flex justify-between"><span>25.00</span><span>40.00</span></div>
     <div id="legendMode" class="text-[11px] text-gray-600 mt-1">Mode: Predicted</div>
   </div>
 
@@ -167,11 +167,28 @@
     let UHI_MIN = 25, UHI_MAX = 40;
     let UHI_AUTOSCALE = true;  // set false to keep 25–40 fixed
 
+    // — decimals + formatter for legend —
+    const DECIMALS = 2;
+    const fmt = (x) => (Number.isFinite(x) ? x.toFixed(DECIMALS) : "—");
+    const POW = Math.pow(10, DECIMALS);
+
+    // — tighter autoscale using percentiles —
+    const MIN_SPAN = 2.0;   // aim for ≈2°C span (e.g., 21–23)
+    const LOWER_P = 0.05;   // 5th percentile
+    const UPPER_P = 0.95;   // 95th percentile
+    function quantile(sorted, p){
+      if (!sorted.length) return NaN;
+      const i = (sorted.length - 1) * p;
+      const lo = Math.floor(i), hi = Math.ceil(i);
+      if (lo === hi) return sorted[lo];
+      return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+    }
+
     function setLegendText(min, max) {
-      const legend = document.querySelector("#legend .flex");
+      const legend = document.getElementById("legendRange");
       if (!legend) return;
-      legend.children[0].textContent = Math.round(min);
-      legend.children[1].textContent = Math.round(max);
+      legend.children[0].textContent = fmt(min);
+      legend.children[1].textContent = fmt(max);
     }
 
     const UHI_STOPS = [
@@ -197,7 +214,8 @@
       return stops[stops.length-1].c.clone();
     }
     function uhiToColor(temp, alpha=1){
-      const t = (temp - UHI_MIN) / (UHI_MAX - UHI_MIN);
+      const span = Math.max(1e-6, (UHI_MAX - UHI_MIN)); // avoid /0
+      const t = (temp - UHI_MIN) / span;
       const c = interpolateColor(UHI_STOPS, t);
       return new Cesium.Color(c.red, c.green, c.blue, alpha);
     }
@@ -207,6 +225,7 @@
       const usePred = document.getElementById("predictionToggle")?.checked;
       const props = ent.properties;
       if (usePred && props?.pred_uhi?.getValue) {
+        // predictions are anchored to "now"
         const when = Cesium.JulianDate.now();
         const val = props.pred_uhi.getValue(when);
         if (typeof val === "number") return val;
@@ -217,25 +236,33 @@
 
     function computeCurrentUHIBounds(){
       if (!UHI_AUTOSCALE) { renderContinuousLegend(); return; }
-      let min=1e9, max=-1e9, count=0;
+
+      const vals = [];
       for (const b of buildings){
         const v = getEntityTemp(b);
-        if (typeof v === "number" && isFinite(v)){
-          min = Math.min(min, v);
-          max = Math.max(max, v);
-          count++;
-        }
+        if (typeof v === "number" && isFinite(v)) vals.push(v);
       }
-      if (count>0){
-        UHI_MIN = Math.floor(min);
-        UHI_MAX = Math.ceil(max);
-        if (UHI_MAX - UHI_MIN < 2) UHI_MAX = UHI_MIN + 2; // was 5
+      if (!vals.length){ renderContinuousLegend(); return; }
+
+      vals.sort((a,b)=>a-b);
+      let min = quantile(vals, LOWER_P);
+      let max = quantile(vals, UPPER_P);
+
+      if ((max - min) < MIN_SPAN){
+        const mid = (min + max)/2;
+        min = mid - MIN_SPAN/2;
+        max = mid + MIN_SPAN/2;
       }
+
+      // round to "DECIMALS" places
+      UHI_MIN = Math.floor(min * POW) / POW;
+      UHI_MAX = Math.ceil (max * POW) / POW;
+
       renderContinuousLegend();
     }
 
     // ==========================
-    // NEW: Discrete palettes (7-class) & helpers
+    // Discrete palettes (7-class) & helpers
     // ==========================
     const PALETTES = {
       bluered:  ['#313695','#4575b4','#74add1','#fee090','#fdae61','#f46d43','#d73027'], // cold→hot
@@ -282,15 +309,12 @@
       setLegendText(UHI_MIN, UHI_MAX);
     }
     function setDiscreteLegend(breaks, colors){
-      const box = document.getElementById("legend");
-      if(!box) return;
       const grad = document.getElementById("legendGradient");
       if(grad){
         const sw = breaks.map((br, i)=>{
           const c = colors[i];
           const lo = (i===0) ? null : breaks[i-1];
-          const lbl = (lo===null) ? `≤ ${br.toFixed(1)}`
-                                  : `${lo.toFixed(1)}–${br.toFixed(1)}`;
+          const lbl = (lo===null) ? `≤ ${fmt(br)}` : `${fmt(lo)}–${fmt(br)}`;
           return `<div class="flex items-center space-x-2">
                     <div style="width:14px;height:14px;border-radius:3px;background:${c};border:1px solid #999"></div>
                     <span>${lbl} °C</span>
@@ -300,11 +324,10 @@
         grad.style.height = "auto";
         grad.style.background = "transparent";
       }
-      // Put min/max labels to ends of range
-      const legend = document.querySelector("#legend .flex");
+      const legend = document.getElementById("legendRange");
       if (legend && breaks?.length){
-        legend.children[0].textContent = breaks[0].toFixed(0);
-        legend.children[1].textContent = breaks[breaks.length-1].toFixed(0);
+        legend.children[0].textContent = fmt(breaks[0]);
+        legend.children[1].textContent = fmt(breaks[breaks.length-1]);
       }
     }
 
@@ -463,6 +486,13 @@
       for (const b of buildings) {
         const height = parseFloat(b.properties?.height?.getValue?.() ?? b.properties?.height) || 10;
         const prop = new Cesium.SampledProperty(Number);
+
+        // hold last/first values a bit outside range to avoid undefined
+        prop.setBackwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
+        prop.setForwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
+        prop.backwardExtrapolationDuration = 3600;
+        prop.forwardExtrapolationDuration  = 3600;
+
         for (let i=0; i<predUrban.length; i++){
           const t = new Date(now + i * STEP_MINUTES * 60 * 1000);
           const uhi = computeUHI(predUrban[i], height, wind, clouds);
@@ -496,11 +526,10 @@
         const vals = [];
         for (const b of buildings){
           let v = getEntityTemp(b);
-          // optional tiny jitter for stable binning without ties
           if (JITTER_STRENGTH && typeof v === "number") {
             v += (stableJitterFromName(b.name)-0.5) * (2*JITTER_STRENGTH);
           }
-        if (typeof v === "number" && isFinite(v)) vals.push(v);
+          if (typeof v === "number" && isFinite(v)) vals.push(v);
         }
         const k = 7;
         breaks = quantileBreaks(vals, k);
@@ -508,7 +537,7 @@
         colors = (pal.length === k) ? pal : Array.from({length:k}, (_,i)=>pal[Math.round(i*(pal.length-1)/(k-1))]);
         if (breaks?.length) setDiscreteLegend(breaks, colors); else renderContinuousLegend();
       } else {
-        // continuous legend (autoscale keeps nice spread)
+        // continuous legend (percentile autoscale keeps spread tight)
         computeCurrentUHIBounds(); // also calls renderContinuousLegend()
       }
 
@@ -521,7 +550,6 @@
           let t = getEntityTemp(building);
           if (typeof t === "number" && isFinite(t)) {
             if (colorMode === "quantile" && breaks && colors && breaks.length) {
-              // apply same jitter used for breaks
               if (JITTER_STRENGTH) t += (stableJitterFromName(building.name)-0.5) * (2*JITTER_STRENGTH);
               color = colorFromBins(t, breaks, colors, alpha);
             } else {
@@ -598,7 +626,7 @@
           const name = picked.id.name ?? "Unknown";
           const label = usePred ? "Pred" : "Temp";
           const tNum = Number(tempVal);
-          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>${label}: ${isFinite(tNum)?tNum.toFixed(1):"N/A"} °C`;
+          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>${label}: ${isFinite(tNum)?tNum.toFixed(2):"N/A"} °C`;
           tooltip.style.left = (movement.endPosition.x + 15) + "px";
           tooltip.style.top  = (movement.endPosition.y + 15) + "px";
           tooltip.style.display = "block";
@@ -622,13 +650,15 @@
         viewer.scene.requestRender();
       });
 
-      // Time slider controls the Cesium clock (date is arbitrary)
+      // Time slider controls the Cesium clock (use today's date)
       const timeSlider = document.getElementById("timeSlider");
       const timeLabel  = document.getElementById("timeLabel");
       function setClockHour(h){
         timeSlider.value = h;
         timeLabel.textContent = `${h}:00`;
-        viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, h));
+        const base = new Date(); // today
+        base.setHours(h, 0, 0, 0);
+        viewer.clock.currentTime = Cesium.JulianDate.fromDate(base);
         updateStyles();
       }
       timeSlider.addEventListener("input", ()=>setClockHour(parseInt(timeSlider.value)));
@@ -668,7 +698,7 @@
                 outlineColor: Cesium.Color.WHITE,
                 outlineWidth: 1,
                 heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
-                disableDepthTestDistance: Number.POSITIVE_INFINITY // remove if you prefer strict occlusion
+                disableDepthTestDistance: Number.POSITIVE_INFINITY
               }
             });
             heatmapEntities.push(entity);
