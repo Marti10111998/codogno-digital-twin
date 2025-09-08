@@ -4,9 +4,12 @@
   <meta charset="UTF-8" />
   <title>Codogno Digital Twin — Realtime + Predictive (Pro)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind (ok for prototyping; use CLI in production) -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Cesium -->
   <script src="https://unpkg.com/cesium@1.116/Build/Cesium/Cesium.js"></script>
   <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+
   <style>
     html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
     #legend {
@@ -143,16 +146,22 @@
 
   <script type="module">
     // ==========================
-    // 🔐 KEYS (Use a proxy in production)
+    // 🔐 KEYS / ENDPOINTS
     // ==========================
-    // TODO: Replace with your backend proxy endpoints; do NOT expose secrets in client.
-    // e.g., const WEATHER_PROXY = "/.netlify/functions/weather?lat=..&lon=..";
-    const weatherApiKey = "YOUR_OPENWEATHER_KEY"; // TODO: remove after proxying
-    const tomtomKey     = "YOUR_TOMTOM_KEY";      // TODO: remove after proxying
-    Cesium.Ion.defaultAccessToken = "YOUR_CESIUM_ION_TOKEN"; // TODO: keep server-side if possible
+    // Provide keys via a tiny inline script before this module:
+    //   <script>window.OWM_KEY="..."; window.TOMTOM_KEY="..."; window.CESIUM_ION="...";</script>
+    // Or leave blank to use graceful fallbacks (no hard crashes).
+    const weatherApiKey = (window.OWM_KEY ?? "");
+    const tomtomKey     = (window.TOMTOM_KEY ?? "");
+    Cesium.Ion.defaultAccessToken = (window.CESIUM_ION ?? "");
 
-    // 👉 External endpoints (fallback to direct calls if no proxy configured)
-    const POLLUTION_API = "http://localhost:8000"; // TODO: set to your HTTPS model API
+    // HTTPS-safe predict endpoint:
+    // In production on Netlify, create a function at /.netlify/functions/predict
+    // that proxies to your model. In local dev (http://localhost), we can hit the model directly.
+    const PREDICT_ENDPOINT =
+      location.protocol === "https:"
+        ? "/.netlify/functions/predict"
+        : "http://localhost:8000/predict";
 
     // ==========================
     // App-wide state
@@ -183,7 +192,6 @@
     // Color ramps
     // ==========================
     function turbo(t){ // 0..1
-      // Approx Google's Turbo; compact approximation
       t = Math.max(0, Math.min(1, t));
       const r = 34.61 + t*(1172.33 + t*(-10793.56 + t*(33300.12 + t*(-38394.49 + t*14825.05))));
       const g = 23.31 + t*(557.33 + t*(1225.33 + t*(-3574.96 + t*(2194.04))));
@@ -197,7 +205,6 @@
     }
     function viridis(t){
       t = Math.max(0, Math.min(1, t));
-      // Simple piecewise approx for viridis
       const a = [68,1,84], b=[59,82,139], c=[33,145,140], d=[94,201,98], e=[253,231,37];
       const stops = [{p:0,c:a},{p:.25,c:b},{p:.5,c:c},{p:.75,c:d},{p:1,c:e}];
       for(let i=1;i<stops.length;i++){
@@ -219,7 +226,6 @@
     function setLegendGradient(){
       const el = document.getElementById("legendGradient");
       const pal = document.getElementById("paletteSelector")?.value||"turbo";
-      // CSS gradients approximations
       const turboStops = "linear-gradient(to right,#30123b,#4145ab,#2eb3da,#a5f27a,#fee84a,#f76b1c,#a80000)";
       const viridisStops = "linear-gradient(to right,#440154,#46337f,#365c8d,#277f8e,#1fa187,#4ac16d,#a0da39,#fde725)";
       el.style.background = pal==="viridis" ? viridisStops : turboStops;
@@ -241,6 +247,13 @@
         await new Promise(res => setTimeout(res, base * 2**i + Math.random()*200));
       }
       throw new Error("fetch failed: " + url);
+    }
+    async function tryFetchJSON(url){
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        if (!r.ok) return null;
+        return await r.json();
+      } catch { return null; }
     }
     const clamp01 = (x)=>Math.max(0,Math.min(1,x));
 
@@ -354,7 +367,7 @@
     const kstate = { urbanTemp: null, O3: null, NO2: null, NO: null, CO: null, NH3: null };
 
     // ==========================
-    // RF API helper (with graceful fallback)
+    // Model API helper (proxy-friendly)
     // ==========================
     async function predictWithAPI(weather) {
       const features = {
@@ -364,7 +377,8 @@
         WindSpeed_m_s: weather.wind
       };
       try {
-        const r = await fetch(`${POLLUTION_API}/predict`, {
+        const url = PREDICT_ENDPOINT;
+        const r = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(features)
@@ -381,25 +395,33 @@
     // Weather + UHI (realtime)
     // ==========================
     async function fetchUHIAndUpdate(){
-      // NOTE: replace with proxy endpoints in production
-      const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
-      const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
+      const useOWM = Boolean(weatherApiKey);
+      const urbanURL = useOWM
+        ? `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`
+        : null;
+      const ruralURL = useOWM
+        ? `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`
+        : null;
 
       try {
-        const [uRes, rRes] = await Promise.all([resilientFetch(urbanURL), resilientFetch(ruralURL)]);
-        const uJson = await uRes.json();
-        const rJson = await rRes.json();
+        let uJson = null, rJson = null;
+        if (useOWM) {
+          uJson = await tryFetchJSON(urbanURL);
+          rJson = await tryFetchJSON(ruralURL);
+        }
 
-        const urbanTempRaw = uJson.main?.temp ?? 28;
+        const urbanTempRaw =
+          uJson?.main?.temp ??
+          (histories.urbanTemp.at(-1) ?? 28);
         const urbanTempSm = (kstate.urbanTemp = kf(kstate.urbanTemp, urbanTempRaw)).x;
 
         lastWeather = {
           temp: urbanTempSm,
-          wind: (uJson.wind?.speed ?? 1.5),
-          clouds: uJson.clouds?.all ?? 20,
-          humidity: uJson.main?.humidity ?? 50,
-          pressure: uJson.main?.pressure ?? 1013,
-          rain1h: (uJson.rain && (uJson.rain["1h"] ?? uJson.rain["h1"])) || 0
+          wind: (uJson?.wind?.speed ?? 1.5),
+          clouds: uJson?.clouds?.all ?? 20,
+          humidity: uJson?.main?.humidity ?? 50,
+          pressure: uJson?.main?.pressure ?? 1013,
+          rain1h: (uJson?.rain && (uJson.rain["1h"] ?? uJson.rain["h1"])) || 0
         };
 
         // histories
@@ -526,10 +548,12 @@
           count++;
         }
       }
-      if (count>0){
+      if (count>0 && isFinite(min) && isFinite(max)){
         UHI_MIN = Math.floor(min);
         UHI_MAX = Math.ceil(max);
         if (UHI_MAX - UHI_MIN < 5) UHI_MAX = UHI_MIN + 5;
+        setLegendText(UHI_MIN, UHI_MAX);
+      } else {
         setLegendText(UHI_MIN, UHI_MAX);
       }
     }
@@ -636,8 +660,20 @@
       viewer.scene.globe.depthTestAgainstTerrain = true;
       viewer.scene.requestRenderMode = true;
       viewer.scene.maximumRenderTimeChange = 1/30;
-      viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
-      viewer.scene.globe.enableLighting = true;
+
+      // Terrain fallback if no Ion token
+      if (Cesium.Ion.defaultAccessToken) {
+        try {
+          viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
+          viewer.scene.globe.enableLighting = true;
+        } catch (e) {
+          console.warn("WorldTerrain failed, using ellipsoid:", e);
+          viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+        }
+      } else {
+        console.warn("No Cesium Ion token set – using ellipsoid terrain.");
+        viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+      }
 
       // Load buildings
       const buildingSelector = document.getElementById("buildingSelector");
@@ -677,11 +713,10 @@
       viewer.screenSpaceEventHandler.setInputAction((movement) => {
         const picked = viewer.scene.pick(movement.endPosition);
         if (picked && picked.id && picked.id.properties) {
-          const props = picked.id.properties;
-          const usePred = document.getElementById("predictionToggle").checked;
           const t = getEntityTemp(picked.id);
           const h = getProp(picked.id,"height") ?? "N/A";
           const name = picked.id.name ?? "Unknown";
+          const usePred = document.getElementById("predictionToggle").checked;
           const label = usePred ? "Pred" : "Temp";
           const v = Number(t?.value);
           const spread = (typeof t?.lo==="number" && typeof t?.hi==="number") ? ` (±${((t.hi - t.lo)/2).toFixed(1)})` : "";
@@ -714,21 +749,21 @@
       // Time slider controls the Cesium clock (date is arbitrary)
       const timeSlider = document.getElementById("timeSlider");
       const timeLabel  = document.getElementById("timeLabel");
-      function setClockHour(h){
+      function setClockHourLocal(h){
         timeSlider.value = h;
         timeLabel.textContent = `${h}:00`;
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, h));
         scheduleStyleUpdate();
         encodeStateToURL();
       }
-      window.setClockHour = setClockHour; // for URL loader
-      timeSlider.addEventListener("input", ()=>setClockHour(parseInt(timeSlider.value)));
+      window.setClockHour = setClockHourLocal; // for URL loader
+      timeSlider.addEventListener("input", ()=>setClockHourLocal(parseInt(timeSlider.value)));
       document.querySelectorAll(".snapBtn").forEach(btn => {
         btn.addEventListener("click", ()=>{
           const mins = parseInt(btn.dataset.mins);
           const now = new Date();
           const snap = new Date(now.getTime() + mins*60*1000);
-          setClockHour(snap.getHours());
+          setClockHourLocal(snap.getHours());
         });
       });
 
@@ -739,6 +774,7 @@
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities = [];
         try {
+          // Ensure files exist at site root. If they live under /data/, prefix accordingly and update SW list below.
           const file = `${timeOfDay}_heatpoints.json`;
           const response = await resilientFetch(file);
           const data = await response.json();
@@ -829,7 +865,12 @@
       }
       liveTrafficToggle.addEventListener("change", (e)=> e.target.checked ? beginTrafficUpdates() : stopTrafficUpdates());
       trafficRefresh.addEventListener("change", ()=> { if (liveTrafficToggle.checked) beginTrafficUpdates(); });
-      beginTrafficUpdates();
+
+      if (tomtomKey) {
+        beginTrafficUpdates();
+      } else {
+        setTrafficStatus("off (no TomTom key)");
+      }
 
       // Load URL state last
       loadStateFromURL();
@@ -865,12 +906,9 @@
     }
 
     function computeBacktestMetrics(){
-      // simple 1-step MAE on urbanTemp where we can: compare last obs to previous prediction median step 1
       const h = histories.urbanTemp;
       const p = latestPred?.urbanTemp?.p50;
       if (!p || h.length < 2) { document.getElementById("metrics").textContent = "—"; return; }
-      // store simple rolling absolute error (approx): compare most recent measured to previous predicted[0]
-      // For brevity, show last measured vs current P50
       const lastObs = h[h.length-1];
       const nextP50 = p[0];
       const absErr = Math.abs(lastObs - nextP50);
@@ -906,7 +944,7 @@
     });
 
     // ==========================
-    // Time helper (needs global scope for URL restore)
+    // Time helper (global for URL restore)
     // ==========================
     function setClockHour(h){
       const timeSlider = document.getElementById("timeSlider");
@@ -916,6 +954,7 @@
       viewer.clock.currentTime = Cesium.JulianDate.fromDate(new Date(2025, 5, 21, h));
       scheduleStyleUpdate();
     }
+    window.setClockHour = setClockHour;
 
     // ==========================
     // Service Worker (inline) — caches static assets
@@ -951,9 +990,6 @@
     // Kickoff
     // ==========================
     startCesiumApp();
-
-    // Expose for URL loader
-    window.setClockHour = setClockHour;
   </script>
 </body>
 </html>
