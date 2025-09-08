@@ -229,7 +229,7 @@
       if (count>0){
         UHI_MIN = Math.floor(min);
         UHI_MAX = Math.ceil(max);
-        if (UHI_MAX - UHI_MIN < 5) UHI_MAX = UHI_MIN + 5;
+        if (UHI_MAX - UHI_MIN < 2) UHI_MAX = UHI_MIN + 2; // was 5
       }
       renderContinuousLegend();
     }
