@@ -2,32 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Codogno Digital Twin — Realtime + Predictive</title>
+  <title>Codogno Digital Twin — Realtime + Predictive (7-day)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/cesium@1.116/Build/Cesium/Cesium.js"></script>
   <link href="https://unpkg.com/cesium@1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
-
   <!-- Charts (time scale) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
 
   <style>
     html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
-
-    /* Bottom-left continuous legend */
     #legend {
       position:absolute; bottom:1rem; left:1rem; background:white; padding:.5rem; border-radius:.5rem;
       font-family:sans-serif; font-size:12px; z-index:10; width:220px; box-shadow:0 2px 4px rgba(0,0,0,.2);
     }
     #legendGradient { height:16px; background:linear-gradient(to right,#313695,#4575b4,#74add1,#fee090,#d73027); margin-top:.25rem; }
-
-    /* Tooltip */
     #tooltip {
       position:absolute; background:white; border:1px solid #ccc; padding:6px 8px; font-size:13px; pointer-events:none;
       border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:240px; display:none;
     }
-
-    /* Vertical discrete legend (Quantile mode) */
     #uhiLegendPanel{
       position:absolute; right:1rem; top:6rem; z-index:12;
       background:rgba(0,0,0,0.6); color:white; border-radius:12px; padding:10px 12px;
@@ -78,7 +71,6 @@
         </select>
       </div>
 
-      <!-- Diversity control -->
       <div class="col-span-2">
         <label class="block font-medium">Color Bins (diversity)</label>
         <input type="range" id="binCount" min="5" max="24" step="1" value="18" class="w-full" />
@@ -106,7 +98,7 @@
         <label class="inline-flex items-center"><input type="checkbox" id="shadowToggle" checked class="mr-2" /> Enable Shadows</label>
       </div>
       <div class="col-span-2">
-        <label class="inline-flex items-center"><input type="checkbox" id="predictionToggle" checked class="mr-2" /> Show Predicted Heat (next hour)</label>
+        <label class="inline-flex items-center"><input type="checkbox" id="predictionToggle" checked class="mr-2" /> Show Predicted Heat</label>
         <div id="modelBadge" class="text-[11px] text-gray-600 mt-1">Forecast: Holt-Winters (Web Worker)</div>
       </div>
 
@@ -139,7 +131,7 @@
     <div id="legendMode" class="text-[11px] text-gray-600 mt-1">Mode: Predicted</div>
   </div>
 
-  <!-- Discrete legend (Quantile mode) -->
+  <!-- Discrete legend -->
   <div id="uhiLegendPanel" class="hidden">
     <div class="title">Colors by UHI</div>
     <div id="uhiLegendRows"></div>
@@ -147,22 +139,22 @@
 
   <div id="tooltip"></div>
 
-  <!-- Pollution Panel (small tiles) -->
+  <!-- Small tiles -->
   <div id="pollutionPanel" class="absolute bottom-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg w-72 space-y-2 z-10 font-sans text-sm">
     <div class="font-semibold text-gray-700">Predicted Pollution (now)</div>
     <div id="pollutionOutput">Loading...</div>
     <div id="pollutionStamp" class="text-[11px] text-gray-600">—</div>
   </div>
 
-  <!-- Pollution Graphs (time-series) -->
+  <!-- Time-series chart -->
   <div id="pollutionChartPanel"
-       class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 p-4 rounded-xl shadow-lg w-[780px] z-10 font-sans">
+       class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 p-4 rounded-xl shadow-lg w-[880px] z-10 font-sans">
     <div class="flex items-center justify-between">
       <div class="text-lg font-semibold">Pollution — Trends & Peaks</div>
       <div class="text-xs text-gray-600" id="pollutionChartStatus">—</div>
     </div>
 
-    <div class="grid grid-cols-6 gap-3 mt-3">
+    <div class="grid grid-cols-7 gap-3 mt-3">
       <div class="col-span-2">
         <label class="block text-sm font-medium">Pollutant</label>
         <select id="chartPollutant" class="w-full border rounded px-2 py-1">
@@ -176,17 +168,25 @@
       <div class="col-span-2">
         <label class="block text-sm font-medium">Granularity</label>
         <select id="chartGranularity" class="w-full border rounded px-2 py-1">
-          <option value="10m" selected>10 minutes</option>
-          <option value="hour">Hourly</option>
+          <option value="10m">10 minutes</option>
+          <option value="hour" selected>Hourly</option>
           <option value="day">Daily</option>
         </select>
       </div>
       <div>
         <label class="block text-sm font-medium">Days back</label>
         <select id="chartDaysBack" class="w-full border rounded px-2 py-1">
-          <option value="1" selected>1 day</option>
+          <option value="1">1 day</option>
           <option value="3">3 days</option>
-          <option value="7">7 days</option>
+          <option value="7" selected>7 days</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium">Forecast</label>
+        <select id="chartHorizon" class="w-full border rounded px-2 py-1">
+          <option value="0">Off</option>
+          <option value="24">Next 24 hours</option>
+          <option value="168" selected>Next 7 days</option>
         </select>
       </div>
       <div class="flex items-end">
@@ -195,7 +195,7 @@
     </div>
 
     <div class="mt-3">
-      <canvas id="pollutionChart" height="120"></canvas>
+      <canvas id="pollutionChart" height="140"></canvas>
     </div>
 
     <div class="mt-2 text-[12px] text-gray-600">
@@ -215,22 +215,21 @@
     const POLLUTION_API = "http://localhost:8000";
 
     // ==========================
-    // App-wide state
+    // App state
     // ==========================
     let viewer, buildings = [], heatmapEntities = [];
     let trafficLayer = null, trafficTimer = null;
 
     const histories = { urbanTemp: [], O3: [], NO2: [], NO: [], CO: [], NH3: [] };
     let lastWeather = { temp: null, wind: 0, clouds: 0, humidity: 0, pressure: 0, rain1h: 0 };
-    const HORIZON_STEPS = 6;  // 6 x 10min = 60 minutes
-    const STEP_MINUTES  = 10;
 
-    // Visual-only jitter (°C) to avoid ties in discrete bins
-    const JITTER_STRENGTH = 0.05; // ±0.05°C; set 0 to disable
+    // === Forecast 7 days ahead at hourly cadence ===
+    const STEP_MINUTES  = 60;              // hourly steps
+    const HORIZON_STEPS = 7 * 24;          // next 7 days
 
-    // ==========================
+    const JITTER_STRENGTH = 0.05;
+
     // Utility
-    // ==========================
     async function resilientFetch(url, tries=3, base=500){
       for (let i=0;i<tries;i++){
         const r = await fetch(url, { cache: "no-store" });
@@ -242,21 +241,11 @@
     const clamp01 = (x)=>Math.max(0,Math.min(1,x));
     function lerp(a,b,t){ return a + (b-a)*t; }
 
-    // ==========================
-    // UHI color ramp (continuous) & autoscale
-    // ==========================
-    let UHI_MIN = 25, UHI_MAX = 40;
-    let UHI_AUTOSCALE = true;
-
-    // decimals for legend
-    let DECIMALS = 2;
-    const POW = 100; // 10^2
+    // UHI color ramp + autoscale
+    let UHI_MIN = 25, UHI_MAX = 40, UHI_AUTOSCALE = true;
+    let DECIMALS = 2, POW = 100;
     const fmt = (x) => (Number.isFinite(x) ? x.toFixed(DECIMALS) : "—");
-
-    // tighter autoscale using percentiles (for continuous mode)
-    const MIN_SPAN = 2.0;   // ≈2°C span
-    const LOWER_P = 0.05;   // 5th percentile
-    const UPPER_P = 0.95;   // 95th percentile
+    const MIN_SPAN = 2.0, LOWER_P = 0.05, UPPER_P = 0.95;
     function quantile(sorted, p){
       if (!sorted.length) return NaN;
       const i = (sorted.length - 1) * p;
@@ -264,20 +253,18 @@
       if (lo === hi) return sorted[lo];
       return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
     }
-
-    function setLegendText(min, max) {
+    function setLegendText(min, max){
       const legend = document.getElementById("legendRange");
       if (!legend) return;
       legend.children[0].textContent = fmt(min);
       legend.children[1].textContent = fmt(max);
     }
-
     const UHI_STOPS = [
-      { p: 0.00, c: Cesium.Color.fromBytes(49, 54,149,255) },
+      { p: 0.00, c: Cesium.Color.fromBytes(49,54,149,255) },
       { p: 0.25, c: Cesium.Color.fromBytes(69,117,180,255) },
       { p: 0.50, c: Cesium.Color.fromBytes(116,173,209,255) },
       { p: 0.75, c: Cesium.Color.fromBytes(254,224,144,255) },
-      { p: 1.00, c: Cesium.Color.fromBytes(215, 48, 39,255) }
+      { p: 1.00, c: Cesium.Color.fromBytes(215,48,39,255) }
     ];
     function interpolateColor(stops,t){
       t = clamp01(t);
@@ -300,53 +287,35 @@
       const c = interpolateColor(UHI_STOPS, t);
       return new Cesium.Color(c.red, c.green, c.blue, alpha);
     }
-
-    // GLOBAL helper so all scopes can read building temp
     function getEntityTemp(ent){
       const usePred = document.getElementById("predictionToggle")?.checked;
       const props = ent.properties;
       if (usePred && props?.pred_uhi?.getValue) {
-        const when = Cesium.JulianDate.now(); // predictions anchored to "now"
+        const when = Cesium.JulianDate.now();
         const val = props.pred_uhi.getValue(when);
         if (typeof val === "number") return val;
       }
       const sim = props?.sim_uhi?.getValue?.() ?? props?.sim_uhi;
       return (typeof sim === "number") ? sim : undefined;
     }
-
     function computeCurrentUHIBounds(){
       if (!UHI_AUTOSCALE) { renderContinuousLegend(); return; }
-
       const vals = [];
       for (const b of buildings){
         const v = getEntityTemp(b);
         if (typeof v === "number" && isFinite(v)) vals.push(v);
       }
       if (!vals.length){ renderContinuousLegend(); return; }
-
       vals.sort((a,b)=>a-b);
-      let min = quantile(vals, LOWER_P);
-      let max = quantile(vals, UPPER_P);
-
-      if ((max - min) < MIN_SPAN){
-        const mid = (min + max)/2;
-        min = mid - MIN_SPAN/2;
-        max = mid + MIN_SPAN/2;
-      }
-
-      UHI_MIN = Math.floor(min * POW) / POW;
-      UHI_MAX = Math.ceil (max * POW) / POW;
-
+      let min = quantile(vals, LOWER_P), max = quantile(vals, UPPER_P);
+      if ((max-min) < MIN_SPAN){ const mid=(min+max)/2; min=mid-MIN_SPAN/2; max=mid+MIN_SPAN/2; }
+      UHI_MIN = Math.floor(min*POW)/POW; UHI_MAX = Math.ceil(max*POW)/POW;
       renderContinuousLegend();
     }
-
-    // ==========================
-    // Discrete palettes & helpers
-    // ==========================
     const PALETTES = {
-      bluered:  ['#313695','#4575b4','#74add1','#fee090','#fdae61','#f46d43','#d73027'],
-      spectral: ['#5E4FA2','#3288BD','#99D594','#E6F598','#FEE08B','#FC8D59','#D53E4F'],
-      viridis:  ['#440154','#472D7B','#3B528B','#2C728E','#21918C','#5EC962','#FDE725']
+      bluered:['#313695','#4575b4','#74add1','#fee090','#fdae61','#f46d43','#d73027'],
+      spectral:['#5E4FA2','#3288BD','#99D594','#E6F598','#FEE08B','#FC8D59','#D53E4F'],
+      viridis:['#440154','#472D7B','#3B528B','#2C728E','#21918C','#5EC962','#FDE725']
     };
     function hexToCesium(hex, a=1){
       const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -358,8 +327,7 @@
       if(!v.length) return [];
       const br = [];
       for(let i=1;i<=k;i++){
-        const p = i/k;
-        const idx = Math.min(v.length-1, Math.max(0, Math.round(p*(v.length-1))));
+        const p=i/k, idx=Math.min(v.length-1, Math.max(0, Math.round(p*(v.length-1))));
         br.push(v[idx]);
       }
       for(let i=1;i<br.length;i++){ if(br[i] <= br[i-1]) br[i] = br[i-1] + 1e-6; }
@@ -371,30 +339,21 @@
     }
     function stableJitterFromName(name){
       let h=0; for (let i=0;i<name.length;i++) h=(h*31 + name.charCodeAt(i))|0;
-      return (h % 1000)/1000; // 0..0.999
+      return (h % 1000)/1000;
     }
-
-    // Legends
     function renderContinuousLegend(){
       const grad = document.getElementById("legendGradient");
-      if(grad){
-        grad.innerHTML = "";
-        grad.style.height = "16px";
-        grad.style.background = "linear-gradient(to right,#313695,#4575b4,#74add1,#fee090,#d73027)";
-      }
+      if(grad){ grad.innerHTML=""; grad.style.height="16px";
+        grad.style.background="linear-gradient(to right,#313695,#4575b4,#74add1,#fee090,#d73027)"; }
       setLegendText(UHI_MIN, UHI_MAX);
     }
     function showVerticalLegend(breaksAsc, colors, minVal){
       document.getElementById("legend").classList.add("hidden");
-      const panel = document.getElementById("uhiLegendPanel");
-      const rows = document.getElementById("uhiLegendRows");
+      const panel=document.getElementById("uhiLegendPanel"), rows=document.getElementById("uhiLegendRows");
       panel.classList.remove("hidden");
-      const lowers = [minVal].concat(breaksAsc.slice(0, -1));
-      let html = "";
-      for (let i = lowers.length - 1; i >= 0; i--){
-        html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`;
-      }
-      rows.innerHTML = html;
+      const lowers=[minVal].concat(breaksAsc.slice(0,-1)); let html="";
+      for(let i=lowers.length-1;i>=0;i--){ html+=`<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`; }
+      rows.innerHTML=html;
     }
     function hideVerticalLegend(){
       document.getElementById("uhiLegendPanel").classList.add("hidden");
@@ -402,14 +361,14 @@
     }
 
     // ==========================
-    // Forecast worker
+    // Forecast worker (Holt-Winters, daily seasonality m=24)
     // ==========================
     const workerCode = `
       self.onmessage = (e) => {
         const { kind, payload } = e.data || {};
         if (kind === "FORECAST") {
           const { histories, horizon } = payload;
-          function hw(series, a=0.5,b=0.3,g=0.2, m=24, h=6){
+          function hw(series, a=0.5,b=0.3,g=0.2, m=24, h=168){
             if (!series || series.length < 3) return Array(h).fill(series && series[series.length-1] || 0);
             const L=[series[0]], T=[series[1]-series[0]], S = new Array(m).fill(0);
             for(let t=1;t<series.length;t++){
@@ -439,7 +398,6 @@
       };
     `;
     const worker = new Worker(URL.createObjectURL(new Blob([workerCode], {type:'application/javascript'})));
-
     let latestPredictions = null;
     worker.onmessage = (e) => {
       if (e.data?.kind === "PREDICTIONS") {
@@ -450,9 +408,7 @@
       }
     };
 
-    // ==========================
     // RF API helper
-    // ==========================
     async function predictWithAPI(weather) {
       const features = {
         Temperature: weather.temp,
@@ -474,20 +430,15 @@
       }
     }
 
-    // ==========================
     // Weather + UHI (realtime)
-    // ==========================
     async function fetchUHIAndUpdate(){
       const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
       const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
-
       try {
         const [uRes, rRes] = await Promise.all([resilientFetch(urbanURL), resilientFetch(ruralURL)]);
-        const uJson = await uRes.json();
-        const rJson = await rRes.json();
+        const uJson = await uRes.json(); const rJson = await rRes.json();
 
         const urbanTemp = uJson.main?.temp ?? 28;
-
         lastWeather = {
           temp: urbanTemp,
           wind: uJson.wind?.speed ?? 1.5,
@@ -498,19 +449,19 @@
         };
 
         histories.urbanTemp.push(urbanTemp);
-        if (histories.urbanTemp.length > 200) histories.urbanTemp.shift();
+        if (histories.urbanTemp.length > 2000) histories.urbanTemp.shift();
 
         let nowPoll = await predictWithAPI(lastWeather);
         if (!nowPoll) nowPoll = simulatePollutionFromWeather(lastWeather);
 
         for (const k of ["O3","NO2","NO","CO","NH3"]) {
           histories[k].push(Number(nowPoll[k]) || 0);
-          if (histories[k].length > 200) histories[k].shift();
+          if (histories[k].length > 2000) histories[k].shift();
         }
 
-        syncMeasuredSeries(nowPoll); // feed chart
+        syncMeasuredSeries(nowPoll); // feed chart + persist
 
-        // update current UHI on buildings
+        // Update current UHI on buildings
         for (const building of buildings) {
           const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
           const simTemp = computeUHI(urbanTemp, height, lastWeather.wind, lastWeather.clouds);
@@ -525,12 +476,9 @@
         console.error("Weather/UHI fetch error:", err);
       }
     }
-
     function computeUHI(urbanTemp, height, wind, clouds){
       return urbanTemp + 0.03*height - 0.2*wind - 0.02*clouds;
     }
-
-    // backup heuristic (only if API down)
     function simulatePollutionFromWeather(w){
       const { temp, wind, humidity, clouds } = w;
       const base = (x,min,max)=>Math.max(min, Math.min(max, x));
@@ -542,28 +490,21 @@
         NH3: base(0.8 + (humidity-50)*0.01, 0.3, 4)
       };
     }
-
     function requestForecast(){
-      worker.postMessage({
-        kind: "FORECAST",
-        payload: { histories, horizon: HORIZON_STEPS, stepMinutes: STEP_MINUTES }
-      });
+      worker.postMessage({ kind:"FORECAST", payload: { histories, horizon: HORIZON_STEPS, stepMinutes: STEP_MINUTES } });
     }
-
     function updatePredictedUHIForBuildings(){
       if (!latestPredictions) return;
       const predUrban = latestPredictions.urbanTemp || [];
       const wind = lastWeather.wind, clouds = lastWeather.clouds;
       const now = Date.now();
-
       for (const b of buildings) {
         const height = parseFloat(b.properties?.height?.getValue?.() ?? b.properties?.height) || 10;
         const prop = new Cesium.SampledProperty(Number);
         prop.setBackwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
         prop.setForwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
-        prop.backwardExtrapolationDuration = 3600;
-        prop.forwardExtrapolationDuration  = 3600;
-
+        prop.backwardExtrapolationDuration = 24*3600; // 24h hold
+        prop.forwardExtrapolationDuration  = 7*24*3600; // 7d hold
         for (let i=0; i<predUrban.length; i++){
           const t = new Date(now + i * STEP_MINUTES * 60 * 1000);
           const uhi = computeUHI(predUrban[i], height, wind, clouds);
@@ -575,7 +516,7 @@
     }
 
     // ==========================
-    // STYLES (continuous + discrete)
+    // STYLES
     // ==========================
     function updateStyles(){
       if (!viewer || !buildings?.length) return;
@@ -584,39 +525,30 @@
       const colorHex   = document.getElementById("colorPicker")?.value || "#cccccc";
       const alpha      = 1.0;
       const showHeat   = document.getElementById("heatToggle")?.checked ?? true;
-      const usePred    = document.getElementById("predictionToggle")?.checked ?? true;
       const colorMode  = document.getElementById("colorMode")?.value || "continuous";
       const paletteKey = document.getElementById("palette")?.value || "bluered";
       const bins       = parseInt(document.getElementById("binCount")?.value || "18", 10);
       const lm = document.getElementById("legendMode");
 
       document.getElementById("binCountLabel").textContent = String(bins);
-      if (lm) lm.textContent = "Mode: " + (usePred ? "Predicted" : "Measured");
+      if (lm) lm.textContent = "Mode: " + (document.getElementById("predictionToggle")?.checked ? "Predicted" : "Measured");
 
       let breaks = null, colors = null, minVal = null;
       if (showHeat && colorMode === "quantile") {
         const vals = [];
         for (const b of buildings){
           let v = getEntityTemp(b);
-          if (JITTER_STRENGTH && typeof v === "number") {
-            v += (stableJitterFromName(b.name)-0.5) * (2*JITTER_STRENGTH);
-          }
+          if (JITTER_STRENGTH && typeof v === "number") v += (stableJitterFromName(b.name)-0.5) * (2*JITTER_STRENGTH);
           if (typeof v === "number" && isFinite(v)) vals.push(v);
         }
         if (vals.length){
-          vals.sort((a,b)=>a-b);
-          minVal = vals[0];
+          vals.sort((a,b)=>a-b); minVal = vals[0];
           breaks = quantileBreaks(vals, bins);
           const pal = PALETTES[paletteKey] || PALETTES.bluered;
           colors = Array.from({length:bins}, (_,i)=>pal[Math.round(i*(pal.length-1)/(bins-1))]);
           showVerticalLegend(breaks, colors, minVal);
-        } else {
-          hideVerticalLegend();
-        }
-      } else {
-        hideVerticalLegend();
-        computeCurrentUHIBounds(); // renders continuous legend too
-      }
+        } else { hideVerticalLegend(); }
+      } else { hideVerticalLegend(); computeCurrentUHIBounds(); }
 
       for (const building of buildings) {
         if (!building.polygon) continue;
@@ -627,9 +559,7 @@
             if (colorMode === "quantile" && breaks && colors && breaks.length) {
               if (JITTER_STRENGTH) t += (stableJitterFromName(building.name)-0.5) * (2*JITTER_STRENGTH);
               color = colorFromBins(t, breaks, colors, alpha);
-            } else {
-              color = uhiToColor(t, alpha);
-            }
+            } else { color = uhiToColor(t, alpha); }
           }
         }
         if (!selected || building.name === selected) building.polygon.material = color;
@@ -674,6 +604,9 @@
         buildingSelector.appendChild(option);
       });
 
+      // Load persisted points (if any) before first render
+      loadTsStore();
+
       await fetchUHIAndUpdate();
       setInterval(fetchUHIAndUpdate, 60_000); // every minute
 
@@ -682,7 +615,7 @@
         orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 }
       });
 
-      // Tooltip on hover
+      // Tooltip
       const tooltip = document.getElementById("tooltip");
       viewer.screenSpaceEventHandler.setInputAction((movement) => {
         const picked = viewer.scene.pick(movement.endPosition);
@@ -698,12 +631,10 @@
           tooltip.style.left = (movement.endPosition.x + 15) + "px";
           tooltip.style.top  = (movement.endPosition.y + 15) + "px";
           tooltip.style.display = "block";
-        } else {
-          tooltip.style.display = "none";
-        }
+        } else { tooltip.style.display = "none"; }
       }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
-      // Inputs -> use global updateStyles
+      // Inputs
       document.getElementById("colorPicker").addEventListener("input", updateStyles);
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
       document.getElementById("heatToggle").addEventListener("change", updateStyles);
@@ -719,14 +650,13 @@
         viewer.scene.requestRender();
       });
 
-      // Time slider controls the Cesium clock (use today's date)
+      // Time slider
       const timeSlider = document.getElementById("timeSlider");
       const timeLabel  = document.getElementById("timeLabel");
       function setClockHour(h){
         timeSlider.value = h;
         timeLabel.textContent = `${h}:00`;
-        const base = new Date(); // today
-        base.setHours(h, 0, 0, 0);
+        const base = new Date(); base.setHours(h, 0, 0, 0);
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(base);
         updateStyles();
       }
@@ -734,55 +664,42 @@
       document.querySelectorAll(".snapBtn").forEach(btn => {
         btn.addEventListener("click", ()=>{
           const mins = parseInt(btn.dataset.mins);
-          const now = new Date();
-          const snap = new Date(now.getTime() + mins*60*1000);
-          setClockHour(snap.getHours());
+          const now = new Date(); setClockHour(new Date(now.getTime() + mins*60*1000).getHours());
         });
       });
 
-      // Static heatmap points
+      // Heatmap points
       async function loadHeatmap(timeOfDay) {
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities.length = 0;
-
         try {
           const file = `${timeOfDay}_heatpoints.json`;
           const response = await resilientFetch(file);
           const data = await response.json();
-
           const LIFT_M = 6.0;
           for (const [lat, lon, speed] of data) {
             const normalized = clamp01(speed / 60);
-            const hue = (1 - normalized) * 240; // blue→red
+            const hue = (1 - normalized) * 240;
             const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
-
             const entity = viewer.entities.add({
               position: Cesium.Cartesian3.fromDegrees(lon, lat, LIFT_M),
               point: {
-                pixelSize: 10,
-                color,
-                outlineColor: Cesium.Color.WHITE,
-                outlineWidth: 1,
+                pixelSize: 10, color, outlineColor: Cesium.Color.WHITE, outlineWidth: 1,
                 heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
                 disableDepthTestDistance: Number.POSITIVE_INFINITY
               }
             });
             heatmapEntities.push(entity);
           }
-        } catch (e) {
-          console.warn("Heatmap load failed", e);
-        }
-
+        } catch (e) { console.warn("Heatmap load failed", e); }
         viewer.scene.requestRender();
       }
-
       loadHeatmap("morning");
       document.getElementById("heatmapTimeSelector").addEventListener("change", (e)=>loadHeatmap(e.target.value));
 
-      // Live Traffic (TomTom tiles)
+      // Live Traffic
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
       const trafficRefresh = document.getElementById("trafficRefresh");
-
       const trafficStatus = document.createElement("div");
       Object.assign(trafficStatus.style, {
         position:"absolute", right:"1rem", top:"1rem", zIndex:20,
@@ -792,38 +709,21 @@
       trafficStatus.textContent = "Traffic: starting…";
       document.body.appendChild(trafficStatus);
       const setTrafficStatus = (msg)=>trafficStatus.textContent = `Traffic: ${msg}`;
-
       function addOrUpdateTrafficLayer(){
         const ts = Date.now();
         const provider = new Cesium.UrlTemplateImageryProvider({
           url: `https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key=${tomtomKey}&ts=${ts}`,
-          maximumLevel: 20,
-          tilingScheme: new Cesium.WebMercatorTilingScheme(),
-          credit: "TomTom Traffic"
+          maximumLevel: 20, tilingScheme: new Cesium.WebMercatorTilingScheme(), credit: "TomTom Traffic"
         });
-        provider.errorEvent.addEventListener((e)=>{
-          console.error("Traffic tile error:", e);
-          setTrafficStatus(`error`);
-        });
-
-        const newLayer = viewer.imageryLayers.addImageryProvider(provider);
-        newLayer.alpha = 0.7;
-
-        if (trafficLayer) viewer.imageryLayers.remove(trafficLayer, false);
-        trafficLayer = newLayer;
-
+        provider.errorEvent.addEventListener((e)=>{ console.error("Traffic tile error:", e); setTrafficStatus(`error`); });
+        const newLayer = viewer.imageryLayers.addImageryProvider(provider); newLayer.alpha = 0.7;
+        if (trafficLayer) viewer.imageryLayers.remove(trafficLayer, false); trafficLayer = newLayer;
         const started = performance.now();
-        (function waitReady(){
-          if (provider.ready) {
-            const dt = ((performance.now()-started)/1000).toFixed(1);
-            setTrafficStatus(`updated @ ${new Date().toLocaleTimeString()} (+${dt}s)`);
-            viewer.scene.requestRender();
-          } else {
-            requestAnimationFrame(waitReady);
-          }
-        })();
+        (function waitReady(){ if (provider.ready) {
+          const dt = ((performance.now()-started)/1000).toFixed(1);
+          setTrafficStatus(`updated @ ${new Date().toLocaleTimeString()} (+${dt}s)`); viewer.scene.requestRender();
+        } else requestAnimationFrame(waitReady); })();
       }
-
       function beginTrafficUpdates(){
         addOrUpdateTrafficLayer();
         const everyMs = Math.max(15000, parseInt(trafficRefresh.value,10)*1000);
@@ -833,36 +733,21 @@
       function stopTrafficUpdates(){
         if (trafficTimer) { clearInterval(trafficTimer); trafficTimer = null; }
         if (trafficLayer) { viewer.imageryLayers.remove(trafficLayer, false); trafficLayer = null; }
-        setTrafficStatus("off");
-        viewer.scene.requestRender();
+        setTrafficStatus("off"); viewer.scene.requestRender();
       }
       liveTrafficToggle.addEventListener("change", (e)=> e.target.checked ? beginTrafficUpdates() : stopTrafficUpdates());
       trafficRefresh.addEventListener("change", ()=> { if (liveTrafficToggle.checked) beginTrafficUpdates(); });
       beginTrafficUpdates();
 
-      // Chart UI after everything is placed
+      // Chart UI
       initChartUI();
 
-      // Seed a small 2-hour history so the chart isn't a single point on first load
-      (function seedShortHistory(){
-        const ts0 = Date.now() - 2*60*60*1000; // 2 hours ago
-        const step = 10*60*1000;               // 10 minutes
-        const keys = ["O3","NO2","NO","CO","NH3"];
-        let baseVals = {O3:40,NO2:28,NO:18,CO:1.2,NH3:1.0};
-        for (let i=0; i<12; i++){
-          const t = ts0 + i*step;
-          for (const k of keys){
-            const last = tsStore[k].length ? tsStore[k][tsStore[k].length-1].v : baseVals[k];
-            const v = last + (Math.random()-0.5)*2; // small random walk
-            pushMeasured(k, t, Math.max(0, v));
-          }
-        }
-        renderPollutionChart();
-      })();
+      // Optional: Backfill last 7 days from server if you have the endpoint
+      await backfillHistory(7);
     }
 
     // ==========================
-    // Pollution panel (small tiles)
+    // Small tiles panel
     // ==========================
     function paintPollutionPanelNow(){
       const out = latestPredictions
@@ -883,13 +768,14 @@
     }
 
     // ==========================
-    // ======= Time-series chart wiring (with bounds + threshold)
+    // Time-series chart (7d prev/next)
     // ==========================
     const tsStore = {
       O3: [], NO2: [], NO: [], CO: [], NH3: [],
       pred: { O3: [], NO2: [], NO: [], CO: [], NH3: [] }
     };
-    const MAX_TS_POINTS = 5000;
+    const MAX_TS_POINTS = 50000;
+    const STORE_KEY = "pollution_ts_v1";
 
     function pushMeasured(pollutant, ts, val){
       const arr = tsStore[pollutant];
@@ -909,8 +795,7 @@
         const d = new Date(t);
         if (mode === "day") { d.setHours(0,0,0,0); return d.getTime(); }
         if (mode === "hour"){ d.setMinutes(0,0,0);  return d.getTime(); }
-        const m = Math.floor(d.getMinutes()/10)*10; // 10m
-        d.setMinutes(m,0,0); return d.getTime();
+        const m = Math.floor(d.getMinutes()/10)*10; d.setMinutes(m,0,0); return d.getTime();
       };
       const buckets = new Map();
       for (const p of points){
@@ -919,10 +804,7 @@
         b.sum += p.v; b.n += 1; b.max = Math.max(b.max, p.v); b.min = Math.min(b.min, p.v);
         buckets.set(key, b);
       }
-      const out = Array.from(buckets.entries()).sort((a,b)=>a[0]-b[0]).map(([t,b])=>({
-        t: Number(t), v: b.sum / b.n, max: b.max, min: b.min
-      }));
-      return out;
+      return Array.from(buckets.entries()).sort((a,b)=>a[0]-b[0]).map(([t,b])=>({ t: Number(t), v: b.sum/b.n, max:b.max, min:b.min }));
     }
     function sliceDaysBack(points, days){
       const cutoff = Date.now() - days*24*3600*1000;
@@ -930,7 +812,6 @@
     }
     const THRESHOLDS = { O3:100, NO2:40, NO:50, CO:10, NH3:2 };
 
-    // Rolling mean ± stdev
     function rollingMeanStd(seriesXY, w=6) {
       if (seriesXY.length === 0) return {mean: [], up: [], lo: []};
       const ys = seriesXY.map(p=>p.y);
@@ -948,21 +829,15 @@
       return { mean, up, lo };
     }
 
-    // Threshold line plugin (red horizontal line)
+    // Red threshold line plugin
     const thresholdPlugin = {
       id: 'thresholdLine',
       afterDatasetsDraw(chart, args, opts) {
         const {ctx, chartArea, scales} = chart;
         const y = scales.y.getPixelForValue(opts.value);
         if (!isFinite(y) || y < chartArea.top || y > chartArea.bottom) return;
-        ctx.save();
-        ctx.strokeStyle = 'red';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(chartArea.left, y);
-        ctx.lineTo(chartArea.right, y);
-        ctx.stroke();
-        ctx.restore();
+        ctx.save(); ctx.strokeStyle = 'red'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(chartArea.left, y); ctx.lineTo(chartArea.right, y); ctx.stroke(); ctx.restore();
       }
     };
     Chart.register(thresholdPlugin);
@@ -975,22 +850,12 @@
         type: "line",
         data: { datasets: [] },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          parsing: false,
-          animation: false,
+          responsive: true, maintainAspectRatio: false, parsing: false, animation: false,
           interaction: { mode: "index", intersect: false },
           plugins: {
             legend: { display: true, position: 'top' },
-            tooltip: {
-              callbacks: {
-                label: (tt)=> {
-                  const v = tt.parsed.y;
-                  return `${tt.dataset.label}: ${Number.isFinite(v)?v.toFixed(2):"—"}`;
-                }
-              }
-            },
-            thresholdLine: { value: 0 } // set per pollutant in render
+            tooltip: { callbacks: { label: (tt)=> `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}` } },
+            thresholdLine: { value: 0 }
           },
           scales: {
             x: { type: "time" },
@@ -1004,22 +869,25 @@
 
     function renderPollutionChart(){
       const chart = ensureChart();
-      const pollutant = document.getElementById("chartPollutant").value;
-      const gran = document.getElementById("chartGranularity").value;
-      const daysBack = parseInt(document.getElementById("chartDaysBack").value, 10);
-      const showPred = document.getElementById("chartShowPred").checked;
+      const pollutant  = document.getElementById("chartPollutant").value;
+      const gran       = document.getElementById("chartGranularity").value;
+      const daysBack   = parseInt(document.getElementById("chartDaysBack").value, 10);
+      const showPred   = document.getElementById("chartShowPred").checked;
+      const horizonHrs = parseInt(document.getElementById("chartHorizon").value, 10);
 
       chart.options.scales.x.time.unit = (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
 
       const measuredAgg = aggregateSeries(sliceDaysBack(tsStore[pollutant], daysBack), gran)
         .map(p=>({ x: p.t, y: p.v }));
-      const now = Date.now();
-      const predictedAgg = showPred
-        ? aggregateSeries(tsStore.pred[pollutant].filter(p=>p.ts >= now), gran).map(p=>({ x:p.t, y:p.v }))
-        : [];
+
+      let predictedAgg = [];
+      if (showPred && horizonHrs > 0) {
+        const now = Date.now(), horizonMs = horizonHrs * 3600 * 1000;
+        const future = tsStore.pred[pollutant].filter(p=>p.ts >= now && p.ts <= now + horizonMs);
+        predictedAgg = aggregateSeries(future, gran).map(p=>({ x:p.t, y:p.v }));
+      }
 
       const { mean, up, lo } = rollingMeanStd(measuredAgg, 6);
-
       const thr = THRESHOLDS[pollutant] ?? Infinity;
       const peaks = measuredAgg.filter(p=>p.y >= thr).map(p=>({ x:p.x, y:p.y }));
 
@@ -1032,19 +900,55 @@
       ];
 
       chart.options.plugins.thresholdLine.value = thr;
-
       document.getElementById("pollutionChartStatus").textContent =
-        `${pollutant} • granularity: ${gran} • window: ${daysBack}d • ${measuredAgg.length} pts`;
+        `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
 
       chart.update();
+    }
+
+    // Persistence
+    function saveTsStore(){
+      const cap = (arr, n=MAX_TS_POINTS) => arr.length>n ? arr.slice(arr.length-n) : arr;
+      const payload = {
+        O3: cap(tsStore.O3), NO2: cap(tsStore.NO2), NO: cap(tsStore.NO),
+        CO: cap(tsStore.CO), NH3: cap(tsStore.NH3)
+      };
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(payload)); } catch(e){}
+    }
+    function loadTsStore(){
+      try{
+        const raw = localStorage.getItem(STORE_KEY); if (!raw) return;
+        const obj = JSON.parse(raw);
+        for (const k of ["O3","NO2","NO","CO","NH3"]){
+          if (Array.isArray(obj[k])) tsStore[k] = obj[k].map(p=>({ ts:Number(p.ts), v:Number(p.v) }))
+            .filter(p=>Number.isFinite(p.ts)&&Number.isFinite(p.v));
+        }
+      }catch(e){ console.warn("loadTsStore failed", e); }
+    }
+
+    // Backfill previous days from server (optional)
+    async function backfillHistory(days=7){
+      try{
+        const r = await fetch(`${POLLUTION_API}/history?days=${days}`, { cache: "no-store" });
+        if (!r.ok) throw new Error("history api error");
+        const rows = await r.json();
+        for (const row of rows){
+          const ts = Number(row.ts); if (!Number.isFinite(ts)) continue;
+          for (const k of ["O3","NO2","NO","CO","NH3"]){
+            if (k in row) pushMeasured(k, ts, Number(row[k]));
+          }
+        }
+        saveTsStore();
+        renderPollutionChart();
+      }catch(e){ console.warn("History backfill failed:", e); }
     }
 
     function syncMeasuredSeries(nowPoll){
       const ts = Date.now();
       for (const k of ["O3","NO2","NO","CO","NH3"]) {
-        const val = Number(nowPoll[k]) || 0;
-        pushMeasured(k, ts, val);
+        pushMeasured(k, ts, Number(nowPoll[k]) || 0);
       }
+      saveTsStore();
       renderPollutionChart();
     }
     function syncPredictionSeries(){
@@ -1053,9 +957,8 @@
       renderPollutionChart();
     }
     function initChartUI(){
-      ["chartPollutant","chartGranularity","chartDaysBack","chartShowPred"].forEach(id=>{
-        document.getElementById(id).addEventListener("change", renderPollutionChart);
-      });
+      ["chartPollutant","chartGranularity","chartDaysBack","chartShowPred","chartHorizon"]
+        .forEach(id=> document.getElementById(id).addEventListener("change", renderPollutionChart));
       renderPollutionChart();
     }
 
