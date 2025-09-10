@@ -78,7 +78,7 @@
         </select>
       </div>
 
-      <!-- NEW: Diversity control -->
+      <!-- Diversity control -->
       <div class="col-span-2">
         <label class="block font-medium">Color Bins (diversity)</label>
         <input type="range" id="binCount" min="5" max="24" step="1" value="18" class="w-full" />
@@ -131,7 +131,7 @@
     </div>
   </div>
 
-  <!-- Continuous legend (shown only in continuous mode) -->
+  <!-- Continuous legend -->
   <div id="legend">
     <div class="font-semibold">UHI Temperature (°C)</div>
     <div id="legendGradient"></div>
@@ -139,7 +139,7 @@
     <div id="legendMode" class="text-[11px] text-gray-600 mt-1">Mode: Predicted</div>
   </div>
 
-  <!-- NEW: Vertical discrete legend (shown only in quantile mode) -->
+  <!-- Discrete legend (Quantile mode) -->
   <div id="uhiLegendPanel" class="hidden">
     <div class="title">Colors by UHI</div>
     <div id="uhiLegendRows"></div>
@@ -176,16 +176,16 @@
       <div class="col-span-2">
         <label class="block text-sm font-medium">Granularity</label>
         <select id="chartGranularity" class="w-full border rounded px-2 py-1">
-          <option value="10m">10 minutes</option>
-          <option value="hour" selected>Hourly</option>
+          <option value="10m" selected>10 minutes</option>
+          <option value="hour">Hourly</option>
           <option value="day">Daily</option>
         </select>
       </div>
       <div>
         <label class="block text-sm font-medium">Days back</label>
         <select id="chartDaysBack" class="w-full border rounded px-2 py-1">
-          <option value="1">1 day</option>
-          <option value="3" selected>3 days</option>
+          <option value="1" selected>1 day</option>
+          <option value="3">3 days</option>
           <option value="7">7 days</option>
         </select>
       </div>
@@ -385,14 +385,11 @@
       setLegendText(UHI_MIN, UHI_MAX);
     }
     function showVerticalLegend(breaksAsc, colors, minVal){
-      // Hide bottom gradient; show panel
       document.getElementById("legend").classList.add("hidden");
       const panel = document.getElementById("uhiLegendPanel");
       const rows = document.getElementById("uhiLegendRows");
       panel.classList.remove("hidden");
-
-      // Build "≥ lowerBound" rows, top = hottest
-      const lowers = [minVal].concat(breaksAsc.slice(0, -1)); // size == colors.length
+      const lowers = [minVal].concat(breaksAsc.slice(0, -1));
       let html = "";
       for (let i = lowers.length - 1; i >= 0; i--){
         html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`;
@@ -449,9 +446,7 @@
         latestPredictions = e.data.data;
         updatePredictedUHIForBuildings();
         paintPollutionPanelNow();
-
-        // NEW: sync chart overlay with latest predictions
-        syncPredictionSeries();
+        syncPredictionSeries(); // update chart overlay
       }
     };
 
@@ -513,8 +508,7 @@
           if (histories[k].length > 200) histories[k].shift();
         }
 
-        // NEW: feed the measured time-series for the chart
-        syncMeasuredSeries(nowPoll);
+        syncMeasuredSeries(nowPoll); // feed chart
 
         // update current UHI on buildings
         for (const building of buildings) {
@@ -565,8 +559,6 @@
       for (const b of buildings) {
         const height = parseFloat(b.properties?.height?.getValue?.() ?? b.properties?.height) || 10;
         const prop = new Cesium.SampledProperty(Number);
-
-        // Hold outside sample window to avoid undefined
         prop.setBackwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
         prop.setForwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
         prop.backwardExtrapolationDuration = 3600;
@@ -601,7 +593,6 @@
       document.getElementById("binCountLabel").textContent = String(bins);
       if (lm) lm.textContent = "Mode: " + (usePred ? "Predicted" : "Measured");
 
-      // Prepare legend / bins
       let breaks = null, colors = null, minVal = null;
       if (showHeat && colorMode === "quantile") {
         const vals = [];
@@ -617,7 +608,6 @@
           minVal = vals[0];
           breaks = quantileBreaks(vals, bins);
           const pal = PALETTES[paletteKey] || PALETTES.bluered;
-          // resample palette to N bins if needed
           colors = Array.from({length:bins}, (_,i)=>pal[Math.round(i*(pal.length-1)/(bins-1))]);
           showVerticalLegend(breaks, colors, minVal);
         } else {
@@ -625,13 +615,11 @@
         }
       } else {
         hideVerticalLegend();
-        computeCurrentUHIBounds(); // also calls renderContinuousLegend()
+        computeCurrentUHIBounds(); // renders continuous legend too
       }
 
-      // Paint
       for (const building of buildings) {
         if (!building.polygon) continue;
-
         let color = Cesium.Color.fromCssColorString(colorHex).withAlpha(alpha);
         if (showHeat) {
           let t = getEntityTemp(building);
@@ -640,16 +628,12 @@
               if (JITTER_STRENGTH) t += (stableJitterFromName(building.name)-0.5) * (2*JITTER_STRENGTH);
               color = colorFromBins(t, breaks, colors, alpha);
             } else {
-              color = uhiToColor(t, alpha); // continuous
+              color = uhiToColor(t, alpha);
             }
           }
         }
-
-        if (!selected || building.name === selected) {
-          building.polygon.material = color;
-        }
+        if (!selected || building.name === selected) building.polygon.material = color;
       }
-
       viewer.scene.requestRender();
     }
 
@@ -856,8 +840,25 @@
       trafficRefresh.addEventListener("change", ()=> { if (liveTrafficToggle.checked) beginTrafficUpdates(); });
       beginTrafficUpdates();
 
-      // NEW: init chart UI once everything is placed
+      // Chart UI after everything is placed
       initChartUI();
+
+      // Seed a small 2-hour history so the chart isn't a single point on first load
+      (function seedShortHistory(){
+        const ts0 = Date.now() - 2*60*60*1000; // 2 hours ago
+        const step = 10*60*1000;               // 10 minutes
+        const keys = ["O3","NO2","NO","CO","NH3"];
+        let baseVals = {O3:40,NO2:28,NO:18,CO:1.2,NH3:1.0};
+        for (let i=0; i<12; i++){
+          const t = ts0 + i*step;
+          for (const k of keys){
+            const last = tsStore[k].length ? tsStore[k][tsStore[k].length-1].v : baseVals[k];
+            const v = last + (Math.random()-0.5)*2; // small random walk
+            pushMeasured(k, t, Math.max(0, v));
+          }
+        }
+        renderPollutionChart();
+      })();
     }
 
     // ==========================
@@ -882,7 +883,7 @@
     }
 
     // ==========================
-    // ======= NEW: Time-series chart wiring
+    // ======= Time-series chart wiring (with bounds + threshold)
     // ==========================
     const tsStore = {
       O3: [], NO2: [], NO: [], CO: [], NH3: [],
@@ -902,7 +903,6 @@
         tsStore.pred[k] = pred;
       }
     }
-
     function aggregateSeries(points, mode){
       if (!points.length) return [];
       const bucketStart = (t)=> {
@@ -930,6 +930,43 @@
     }
     const THRESHOLDS = { O3:100, NO2:40, NO:50, CO:10, NH3:2 };
 
+    // Rolling mean ± stdev
+    function rollingMeanStd(seriesXY, w=6) {
+      if (seriesXY.length === 0) return {mean: [], up: [], lo: []};
+      const ys = seriesXY.map(p=>p.y);
+      const mean = [], up = [], lo = [];
+      for (let i=0; i<ys.length; i++){
+        const a = Math.max(0, i - w + 1), b = i + 1;
+        const slice = ys.slice(a, b);
+        const m = slice.reduce((s,v)=>s+v,0)/slice.length;
+        const v = slice.reduce((s,v)=>s+(v-m)*(v-m),0)/slice.length;
+        const sd = Math.sqrt(v || 0);
+        mean.push({ x: seriesXY[i].x, y: m });
+        up.push({ x: seriesXY[i].x, y: m + sd });
+        lo.push({ x: seriesXY[i].x, y: Math.max(0, m - sd) });
+      }
+      return { mean, up, lo };
+    }
+
+    // Threshold line plugin (red horizontal line)
+    const thresholdPlugin = {
+      id: 'thresholdLine',
+      afterDatasetsDraw(chart, args, opts) {
+        const {ctx, chartArea, scales} = chart;
+        const y = scales.y.getPixelForValue(opts.value);
+        if (!isFinite(y) || y < chartArea.top || y > chartArea.bottom) return;
+        ctx.save();
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, y);
+        ctx.lineTo(chartArea.right, y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    };
+    Chart.register(thresholdPlugin);
+
     let pollutionChart = null;
     function ensureChart(){
       const ctx = document.getElementById("pollutionChart").getContext("2d");
@@ -944,7 +981,7 @@
           animation: false,
           interaction: { mode: "index", intersect: false },
           plugins: {
-            legend: { display: true },
+            legend: { display: true, position: 'top' },
             tooltip: {
               callbacks: {
                 label: (tt)=> {
@@ -952,20 +989,19 @@
                   return `${tt.dataset.label}: ${Number.isFinite(v)?v.toFixed(2):"—"}`;
                 }
               }
-            }
+            },
+            thresholdLine: { value: 0 } // set per pollutant in render
           },
           scales: {
-            x: { type: "time", time: { tooltipFormat: 'PPpp' } },
-            y: { title: { display: true, text: "Concentration (µg/m³ or ppm)" } }
+            x: { type: "time" },
+            y: { title: { display: true, text: "concentration (µg/m³ or ppm)" } }
           },
-          elements: {
-            point: { radius: 0 },
-            line:  { tension: 0.25 }
-          }
+          elements: { point: { radius: 0 }, line: { tension: 0.25 } }
         }
       });
       return pollutionChart;
     }
+
     function renderPollutionChart(){
       const chart = ensureChart();
       const pollutant = document.getElementById("chartPollutant").value;
@@ -973,27 +1009,36 @@
       const daysBack = parseInt(document.getElementById("chartDaysBack").value, 10);
       const showPred = document.getElementById("chartShowPred").checked;
 
-      const measured = aggregateSeries(sliceDaysBack(tsStore[pollutant], daysBack), gran)
+      chart.options.scales.x.time.unit = (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
+
+      const measuredAgg = aggregateSeries(sliceDaysBack(tsStore[pollutant], daysBack), gran)
         .map(p=>({ x: p.t, y: p.v }));
       const now = Date.now();
-      const predicted = showPred
+      const predictedAgg = showPred
         ? aggregateSeries(tsStore.pred[pollutant].filter(p=>p.ts >= now), gran).map(p=>({ x:p.t, y:p.v }))
         : [];
 
+      const { mean, up, lo } = rollingMeanStd(measuredAgg, 6);
+
       const thr = THRESHOLDS[pollutant] ?? Infinity;
-      const peaks = measured.filter(p=>p.y >= thr).map(p=>({ x:p.x, y:p.y }));
+      const peaks = measuredAgg.filter(p=>p.y >= thr).map(p=>({ x:p.x, y:p.y }));
 
       chart.data.datasets = [
-        { label: `${pollutant} (measured)`, data: measured, borderWidth: 2, borderDash: [], pointRadius: 0 },
-        ...(showPred ? [{ label: `${pollutant} (predicted)`, data: predicted, borderWidth: 2, borderDash: [6,4], pointRadius: 0 }] : []),
+        { label: "Upper bound (roll+sd)", data: up, borderWidth: 2, borderDash: [6,4], pointRadius: 0 },
+        { label: "Lower bound (roll−sd)", data: lo, borderWidth: 2, borderDash: [6,4], pointRadius: 0 },
+        { label: `${pollutant} (measured)`, data: mean.length ? mean : measuredAgg, borderWidth: 3, pointRadius: 0 },
+        ...(showPred ? [{ label: `${pollutant} (predicted)`, data: predictedAgg, borderWidth: 2, borderDash: [8,6], pointRadius: 0 }] : []),
         { label: "Peaks ≥ threshold", data: peaks, type: "scatter", pointRadius: 3, showLine: false }
       ];
 
+      chart.options.plugins.thresholdLine.value = thr;
+
       document.getElementById("pollutionChartStatus").textContent =
-        `${pollutant} • granularity: ${gran} • window: ${daysBack}d • ${measured.length} pts`;
+        `${pollutant} • granularity: ${gran} • window: ${daysBack}d • ${measuredAgg.length} pts`;
 
       chart.update();
     }
+
     function syncMeasuredSeries(nowPoll){
       const ts = Date.now();
       for (const k of ["O3","NO2","NO","CO","NH3"]) {
