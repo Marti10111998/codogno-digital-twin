@@ -16,14 +16,13 @@
   <style>
     html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
 
-    /* Discrete (vertical) legends – right AND left, identical content */
+    /* Discrete (vertical) legend – left only */
     .uhiLegendPanel{
       position:absolute; z-index:12;
       background:rgba(0,0,0,0.6); color:white; border-radius:12px; padding:10px 12px;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:12px; width:180px;
       box-shadow:0 6px 14px rgba(0,0,0,.25); backdrop-filter: blur(2px);
     }
-    #uhiLegendRight { right:1rem; top:6rem; }
     #uhiLegendLeft  { left:1rem;  top:6rem; }
     .uhiLegendPanel .title{ font-weight:700; margin-bottom:6px; }
     .uhiLegendPanel .row{ display:flex; align-items:center; margin:3px 0; }
@@ -120,6 +119,14 @@
         </select>
       </div>
 
+      <!-- NEW: toggle heatmap points -->
+      <div class="col-span-2">
+        <label class="inline-flex items-center">
+          <input type="checkbox" id="heatmapToggle" class="mr-2" checked />
+          Show Heatmap Points
+        </label>
+      </div>
+
       <div class="col-span-2">
         <label class="inline-flex items-center"><input type="checkbox" id="liveTrafficToggle" class="mr-2" checked /> Live Traffic (TomTom)</label>
         <select id="trafficRefresh" class="w-full border rounded px-2 py-1 mt-2">
@@ -131,12 +138,11 @@
     </div>
   </div>
 
-  <!-- Detailed discrete legends (identical, left & right) -->
+  <!-- Discrete legend (left only) -->
   <div id="uhiLegendLeft"  class="uhiLegendPanel hidden">
     <div class="title">Colors by UHI</div>
     <div id="uhiLegendRowsLeft"></div>
   </div>
-
 
   <div id="tooltip"></div>
 
@@ -177,7 +183,7 @@
         </select>
       </div>
       <div>
-        <label class="block text-sm font-medium">Forecast</label>
+        <label class="block text sm font-medium">Forecast</label>
         <select id="chartHorizon" class="w-full border rounded px-2 py-1">
           <option value="0">Off</option>
           <option value="24">Next 24 hours</option>
@@ -381,26 +387,19 @@
       return (h % 1000)/1000;
     }
 
-    // ===== Legend helpers (two mirrored panels) =====
+    // ===== Legend helpers (left-only) =====
     function renderDiscreteLegends(breaksAsc, colors, minVal){
       const lowers = [minVal].concat(breaksAsc.slice(0, -1));
-      const makeHTML = ()=>{
-        let html = "";
-        for (let i = lowers.length - 1; i >= 0; i--){
-          html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`;
-        }
-        return html;
-      };
+      const html = lowers.slice().reverse().map((lo, idx) => {
+        const color = colors[colors.length - 1 - idx];
+        return `<div class="row"><div class="sw" style="background:${color}"></div><span>&ge; ${fmt(lo)}</span></div>`;
+      }).join("");
       const left  = document.getElementById("uhiLegendLeft");
-      const right = document.getElementById("uhiLegendRight");
-      document.getElementById("uhiLegendRowsLeft").innerHTML  = makeHTML();
-      document.getElementById("uhiLegendRowsRight").innerHTML = makeHTML();
+      document.getElementById("uhiLegendRowsLeft").innerHTML  = html;
       left.classList.remove("hidden");
-      right.classList.remove("hidden");
     }
     function hideDiscreteLegends(){
       document.getElementById("uhiLegendLeft").classList.add("hidden");
-      document.getElementById("uhiLegendRight").classList.add("hidden");
     }
 
     // ==========================
@@ -1044,8 +1043,39 @@
         }
         viewer.scene.requestRender();
       }
-      loadHeatmap("morning");
-      document.getElementById("heatmapTimeSelector").addEventListener("change", (e)=>loadHeatmap(e.target.value));
+
+      // Helpers to show/hide heatmap points
+      function clearHeatmap(){
+        for (const e of heatmapEntities) viewer.entities.remove(e);
+        heatmapEntities.length = 0;
+        viewer.scene.requestRender();
+      }
+      function setHeatmapVisible(on){
+        const timeSel = document.getElementById("heatmapTimeSelector");
+        timeSel.disabled = !on;
+        if (on){
+          loadHeatmap(timeSel.value);
+        } else {
+          clearHeatmap();
+        }
+      }
+
+      // Initial heatmap load respecting toggle
+      if (document.getElementById("heatmapToggle").checked) {
+        loadHeatmap("morning");
+      }
+
+      // Only reload when visible
+      document.getElementById("heatmapTimeSelector")
+        .addEventListener("change", (e)=>{
+          if (document.getElementById("heatmapToggle").checked){
+            loadHeatmap(e.target.value);
+          }
+        });
+
+      // Toggle listener
+      document.getElementById("heatmapToggle")
+        .addEventListener("change", (e)=> setHeatmapVisible(e.target.checked));
 
       // Live Traffic (TomTom)
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
