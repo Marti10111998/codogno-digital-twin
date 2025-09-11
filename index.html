@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Codogno Digital Twin — 7-day Trends, Accumulating History</title>
+  <title>Codogno Digital Twin — Spectral UHI with Detailed Legends</title>
 
   <!-- UI / 3D -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -15,26 +15,30 @@
 
   <style>
     html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
-    #legend {
-      position:absolute; bottom:1rem; left:1rem; background:white; padding:.5rem; border-radius:.5rem;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:12px; z-index:10; width:220px;
-      box-shadow:0 2px 4px rgba(0,0,0,.2);
+
+    /* Discrete (vertical) legends – right AND left, identical content */
+    .uhiLegendPanel{
+      position:absolute; z-index:12;
+      background:rgba(0,0,0,0.6); color:white; border-radius:12px; padding:10px 12px;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:12px; width:180px;
+      box-shadow:0 6px 14px rgba(0,0,0,.25); backdrop-filter: blur(2px);
     }
-    #legendGradient { height:16px; background:linear-gradient(to right,#5E4FA2,#3288BD,#99D594,#E6F598,#FEE08B,#FC8D59,#D53E4F); margin-top:.25rem; }
+    #uhiLegendRight { right:1rem; top:6rem; }
+    #uhiLegendLeft  { left:1rem;  top:6rem; }
+    .uhiLegendPanel .title{ font-weight:700; margin-bottom:6px; }
+    .uhiLegendPanel .row{ display:flex; align-items:center; margin:3px 0; }
+    .uhiLegendPanel .sw{
+      width:16px; height:16px; border-radius:3px; margin-right:8px;
+      border:1px solid rgba(255,255,255,.4);
+    }
+    .hidden{ display:none; }
+
+    /* Tooltip */
     #tooltip {
       position:absolute; background:white; border:1px solid #ccc; padding:6px 8px; font-size:13px; pointer-events:none;
       border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:240px; display:none;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
     }
-    #uhiLegendPanel{
-      position:absolute; right:1rem; top:6rem; z-index:12;
-      background:rgba(0,0,0,0.6); color:white; border-radius:12px; padding:10px 12px;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:12px; width:170px;
-      box-shadow:0 6px 14px rgba(0,0,0,.25); backdrop-filter: blur(2px);
-    }
-    #uhiLegendPanel .title{ font-weight:700; margin-bottom:6px; }
-    #uhiLegendPanel .row{ display:flex; align-items:center; margin:3px 0; }
-    #uhiLegendPanel .sw{ width:16px; height:16px; border-radius:3px; margin-right:8px; border:1px solid rgba(255,255,255,.4); }
-    .hidden{ display:none; }
   </style>
 </head>
 
@@ -61,8 +65,8 @@
       <div>
         <label class="block font-medium">Color Mode</label>
         <select id="colorMode" class="w-full border rounded px-2 py-1">
-          <option value="continuous" selected>Continuous</option>
-          <option value="quantile">Quantile (discrete)</option>
+          <option value="continuous">Continuous</option>
+          <option value="quantile" selected>Quantile (discrete)</option>
         </select>
       </div>
 
@@ -77,8 +81,8 @@
 
       <div class="col-span-2">
         <label class="block font-medium">Color Bins (diversity)</label>
-        <input type="range" id="binCount" min="5" max="24" step="1" value="18" class="w-full" />
-        <div class="text-xs text-gray-600 mt-1">Bins: <span id="binCountLabel">18</span></div>
+        <input type="range" id="binCount" min="8" max="32" step="1" value="20" class="w-full" />
+        <div class="text-xs text-gray-600 mt-1">Bins: <span id="binCountLabel">20</span></div>
       </div>
 
       <div class="col-span-2">
@@ -127,18 +131,14 @@
     </div>
   </div>
 
-  <!-- Continuous legend -->
-  <div id="legend">
-    <div class="font-semibold">UHI Temperature (°C)</div>
-    <div id="legendGradient"></div>
-    <div id="legendRange" class="flex justify-between"><span>25.00</span><span>40.00</span></div>
-    <div id="legendMode" class="text-[11px] text-gray-600 mt-1">Mode: Predicted</div>
-  </div>
-
-  <!-- Discrete legend -->
-  <div id="uhiLegendPanel" class="hidden">
+  <!-- Detailed discrete legends (identical, left & right) -->
+  <div id="uhiLegendLeft"  class="uhiLegendPanel hidden">
     <div class="title">Colors by UHI</div>
-    <div id="uhiLegendRows"></div>
+    <div id="uhiLegendRowsLeft"></div>
+  </div>
+  <div id="uhiLegendRight" class="uhiLegendPanel hidden">
+    <div class="title">Colors by UHI</div>
+    <div id="uhiLegendRowsRight"></div>
   </div>
 
   <div id="tooltip"></div>
@@ -227,7 +227,8 @@
     const STEP_MINUTES  = 60;              // hourly steps
     const HORIZON_STEPS = 7 * 24;          // next 7 days
 
-    const JITTER_STRENGTH = 0.05;
+    // Smaller jitter, more faithful quantiles
+    const JITTER_STRENGTH = 0.03;
 
     // ==========================
     // Utility
@@ -244,7 +245,7 @@
     const lerp = (a,b,t)=>a + (b-a)*t;
 
     // ==========================
-    // UHI color ramp (continuous) & autoscale
+    // UHI color ramp (continuous) – Spectral stops
     // ==========================
     let UHI_MIN = 25, UHI_MAX = 40;
     let UHI_AUTOSCALE = true;
@@ -263,14 +264,7 @@
       if (lo === hi) return sorted[lo];
       return sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
     }
-    function setLegendText(min, max) {
-      const legend = document.getElementById("legendRange");
-      if (!legend) return;
-      legend.children[0].textContent = fmt(min);
-      legend.children[1].textContent = fmt(max);
-    }
 
-    // >>> Spectral palette for the continuous ramp <<<
     const UHI_STOPS = [
       { p: 0.00,  c: Cesium.Color.fromBytes(94, 79,162,255) },  // #5E4FA2
       { p: 0.125, c: Cesium.Color.fromBytes(50,136,189,255) },  // #3288BD
@@ -315,13 +309,13 @@
     }
 
     function computeCurrentUHIBounds(){
-      if (!UHI_AUTOSCALE) { renderContinuousLegend(); return; }
+      if (!UHI_AUTOSCALE) return;
       const vals = [];
       for (const b of buildings){
         const v = getEntityTemp(b);
         if (typeof v === "number" && isFinite(v)) vals.push(v);
       }
-      if (!vals.length){ renderContinuousLegend(); return; }
+      if (!vals.length) return;
       vals.sort((a,b)=>a-b);
       let min = quantile(vals, LOWER_P);
       let max = quantile(vals, UPPER_P);
@@ -332,7 +326,6 @@
       }
       UHI_MIN = Math.floor(min * POW) / POW;
       UHI_MAX = Math.ceil (max * POW) / POW;
-      renderContinuousLegend();
     }
 
     // ==========================
@@ -348,7 +341,29 @@
       if(!m) return Cesium.Color.WHITE.withAlpha(a);
       return new Cesium.Color(parseInt(m[1],16)/255, parseInt(m[2],16)/255, parseInt(m[3],16)/255, a);
     }
-    function quantileBreaks(values, k=7){
+    // Interpolate along control-point palette to produce n colors (more differentiation)
+    function interpPalette(hexStops, n){
+      if (n <= hexStops.length) {
+        // Evenly sample existing stops
+        return Array.from({length:n}, (_,i)=>hexStops[Math.round(i*(hexStops.length-1)/(n-1))]);
+      }
+      // Build cumulative positions
+      const pos = hexStops.map((_,i)=>i/(hexStops.length-1));
+      function hexToRGB(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
+      const rgb = hexStops.map(hexToRGB);
+      const out = [];
+      for (let i=0;i<n;i++){
+        const t = (n===1)?0:i/(n-1);
+        // find span
+        let k=1; while(k<pos.length && t>pos[k]) k++;
+        const a = Math.max(1,k)-1, b = Math.min(pos.length-1,k);
+        const w = (t - pos[a]) / Math.max(1e-6,(pos[b]-pos[a]));
+        const c = [0,1,2].map(j=>Math.round( rgb[a][j] + (rgb[b][j]-rgb[a][j])*w ));
+        out.push(`#${c.map(v=>v.toString(16).padStart(2,'0')).join('')}`);
+      }
+      return out;
+    }
+    function quantileBreaks(values, k=20){
       const v = values.filter(Number.isFinite).slice().sort((a,b)=>a-b);
       if(!v.length) return [];
       const br = [];
@@ -368,32 +383,27 @@
       let h=0; for (let i=0;i<name.length;i++) h=(h*31 + name.charCodeAt(i))|0;
       return (h % 1000)/1000;
     }
-    function renderContinuousLegend(){
-      const grad = document.getElementById("legendGradient");
-      if(grad){
-        grad.innerHTML = "";
-        grad.style.height = "16px";
-        // Spectral gradient (matches UHI_STOPS)
-        grad.style.background =
-          "linear-gradient(to right,#5E4FA2,#3288BD,#99D594,#E6F598,#FEE08B,#FC8D59,#D53E4F)";
-      }
-      setLegendText(UHI_MIN, UHI_MAX);
-    }
-    function showVerticalLegend(breaksAsc, colors, minVal){
-      document.getElementById("legend").classList.add("hidden");
-      const panel = document.getElementById("uhiLegendPanel");
-      const rows = document.getElementById("uhiLegendRows");
-      panel.classList.remove("hidden");
+
+    // ===== Legend helpers (two mirrored panels) =====
+    function renderDiscreteLegends(breaksAsc, colors, minVal){
       const lowers = [minVal].concat(breaksAsc.slice(0, -1));
-      let html = "";
-      for (let i = lowers.length - 1; i >= 0; i--){
-        html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`;
-      }
-      rows.innerHTML = html;
+      const makeHTML = ()=>{
+        let html = "";
+        for (let i = lowers.length - 1; i >= 0; i--){
+          html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`;
+        }
+        return html;
+      };
+      const left  = document.getElementById("uhiLegendLeft");
+      const right = document.getElementById("uhiLegendRight");
+      document.getElementById("uhiLegendRowsLeft").innerHTML  = makeHTML();
+      document.getElementById("uhiLegendRowsRight").innerHTML = makeHTML();
+      left.classList.remove("hidden");
+      right.classList.remove("hidden");
     }
-    function hideVerticalLegend(){
-      document.getElementById("uhiLegendPanel").classList.add("hidden");
-      document.getElementById("legend").classList.remove("hidden");
+    function hideDiscreteLegends(){
+      document.getElementById("uhiLegendLeft").classList.add("hidden");
+      document.getElementById("uhiLegendRight").classList.add("hidden");
     }
 
     // ==========================
@@ -440,7 +450,7 @@
         latestPredictions = e.data.data;
         updatePredictedUHIForBuildings();
         paintPollutionPanelNow();
-        syncPredictionSeries(); // update chart overlay
+        syncPredictionSeries();
       }
     };
 
@@ -579,13 +589,11 @@
       const alpha      = 1.0;
       const showHeat   = document.getElementById("heatToggle")?.checked ?? true;
       const usePred    = document.getElementById("predictionToggle")?.checked ?? true;
-      const colorMode  = document.getElementById("colorMode")?.value || "continuous";
+      const colorMode  = document.getElementById("colorMode")?.value || "quantile";
       const paletteKey = document.getElementById("palette")?.value || "spectral";
-      const bins       = parseInt(document.getElementById("binCount")?.value || "18", 10);
-      const lm = document.getElementById("legendMode");
+      const bins       = parseInt(document.getElementById("binCount")?.value || "20", 10);
 
       document.getElementById("binCountLabel").textContent = String(bins);
-      if (lm) lm.textContent = "Mode: " + (usePred ? "Predicted" : "Measured");
 
       // Prepare legend / bins
       let breaks = null, colors = null, minVal = null;
@@ -600,16 +608,17 @@
         }
         if (vals.length){
           vals.sort((a,b)=>a-b);
+          computeCurrentUHIBounds();  // keep min/max in sync for display ranges elsewhere if needed
           minVal = vals[0];
           breaks = quantileBreaks(vals, bins);
-          const pal = PALETTES[paletteKey] || PALETTES.spectral;
-          colors = Array.from({length:bins}, (_,i)=>pal[Math.round(i*(pal.length-1)/(bins-1))]);
-          showVerticalLegend(breaks, colors, minVal);
+          const palStops = PALETTES[paletteKey] || PALETTES.spectral;
+          colors = interpPalette(palStops, bins);
+          renderDiscreteLegends(breaks, colors, minVal);
         } else {
-          hideVerticalLegend();
+          hideDiscreteLegends();
         }
       } else {
-        hideVerticalLegend();
+        hideDiscreteLegends();
         computeCurrentUHIBounds();
       }
 
@@ -625,7 +634,7 @@
               if (JITTER_STRENGTH) t += (stableJitterFromName(building.name)-0.5) * (2*JITTER_STRENGTH);
               color = colorFromBins(t, breaks, colors, alpha);
             } else {
-              color = uhiToColor(t, alpha); // continuous
+              color = uhiToColor(t, alpha); // continuous fall-back
             }
           }
         }
@@ -854,8 +863,8 @@
       for (const k of KEYS) {
         pushMeasured(k, ts, Number(nowPoll[k]) || 0);
       }
-      saveTsStore();          // persist after every sample
-      renderPollutionChart(); // update chart
+      saveTsStore();
+      renderPollutionChart();
     }
     function syncPredictionSeries(){
       const baseTs = Date.now();
