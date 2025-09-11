@@ -20,7 +20,7 @@
       font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:12px; z-index:10; width:220px;
       box-shadow:0 2px 4px rgba(0,0,0,.2);
     }
-    #legendGradient { height:16px; background:linear-gradient(to right,#313695,#4575b4,#74add1,#fee090,#d73027); margin-top:.25rem; }
+    #legendGradient { height:16px; background:linear-gradient(to right,#5E4FA2,#3288BD,#99D594,#E6F598,#FEE08B,#FC8D59,#D53E4F); margin-top:.25rem; }
     #tooltip {
       position:absolute; background:white; border:1px solid #ccc; padding:6px 8px; font-size:13px; pointer-events:none;
       border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:240px; display:none;
@@ -69,8 +69,8 @@
       <div class="col-span-2">
         <label class="block font-medium">Palette</label>
         <select id="palette" class="w-full border rounded px-2 py-1">
-          <option value="bluered" selected>Blue→Red</option>
-          <option value="spectral">Spectral</option>
+          <option value="bluered">Blue→Red</option>
+          <option value="spectral" selected>Spectral</option>
           <option value="viridis">Viridis</option>
         </select>
       </div>
@@ -270,12 +270,15 @@
       legend.children[1].textContent = fmt(max);
     }
 
+    // >>> Spectral palette for the continuous ramp <<<
     const UHI_STOPS = [
-      { p: 0.00, c: Cesium.Color.fromBytes(49,54,149,255) },
-      { p: 0.25, c: Cesium.Color.fromBytes(69,117,180,255) },
-      { p: 0.50, c: Cesium.Color.fromBytes(116,173,209,255) },
-      { p: 0.75, c: Cesium.Color.fromBytes(254,224,144,255) },
-      { p: 1.00, c: Cesium.Color.fromBytes(215,48,39,255) }
+      { p: 0.00,  c: Cesium.Color.fromBytes(94, 79,162,255) },  // #5E4FA2
+      { p: 0.125, c: Cesium.Color.fromBytes(50,136,189,255) },  // #3288BD
+      { p: 0.25,  c: Cesium.Color.fromBytes(153,213,148,255) }, // #99D594
+      { p: 0.50,  c: Cesium.Color.fromBytes(230,245,152,255) }, // #E6F598
+      { p: 0.75,  c: Cesium.Color.fromBytes(254,224,139,255) }, // #FEE08B
+      { p: 0.875, c: Cesium.Color.fromBytes(252,141, 89,255) }, // #FC8D59
+      { p: 1.00,  c: Cesium.Color.fromBytes(213, 62, 79,255) }  // #D53E4F
     ];
     function interpolateColor(stops,t){
       t = clamp01(t);
@@ -370,7 +373,9 @@
       if(grad){
         grad.innerHTML = "";
         grad.style.height = "16px";
-        grad.style.background = "linear-gradient(to right,#313695,#4575b4,#74add1,#fee090,#d73027)";
+        // Spectral gradient (matches UHI_STOPS)
+        grad.style.background =
+          "linear-gradient(to right,#5E4FA2,#3288BD,#99D594,#E6F598,#FEE08B,#FC8D59,#D53E4F)";
       }
       setLegendText(UHI_MIN, UHI_MAX);
     }
@@ -575,7 +580,7 @@
       const showHeat   = document.getElementById("heatToggle")?.checked ?? true;
       const usePred    = document.getElementById("predictionToggle")?.checked ?? true;
       const colorMode  = document.getElementById("colorMode")?.value || "continuous";
-      const paletteKey = document.getElementById("palette")?.value || "bluered";
+      const paletteKey = document.getElementById("palette")?.value || "spectral";
       const bins       = parseInt(document.getElementById("binCount")?.value || "18", 10);
       const lm = document.getElementById("legendMode");
 
@@ -597,7 +602,7 @@
           vals.sort((a,b)=>a-b);
           minVal = vals[0];
           breaks = quantileBreaks(vals, bins);
-          const pal = PALETTES[paletteKey] || PALETTES.bluered;
+          const pal = PALETTES[paletteKey] || PALETTES.spectral;
           colors = Array.from({length:bins}, (_,i)=>pal[Math.round(i*(pal.length-1)/(bins-1))]);
           showVerticalLegend(breaks, colors, minVal);
         } else {
