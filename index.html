@@ -16,7 +16,7 @@
   <style>
     html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
 
-    /* Discrete (vertical) legend – top-right only */
+    /* Discrete legend – top-right only */
     .uhiLegendPanel{
       position:absolute; z-index:12;
       background:rgba(0,0,0,0.6); color:white; border-radius:12px; padding:10px 12px;
@@ -339,17 +339,14 @@
     // Interpolate along control-point palette to produce n colors (more differentiation)
     function interpPalette(hexStops, n){
       if (n <= hexStops.length) {
-        // Evenly sample existing stops
         return Array.from({length:n}, (_,i)=>hexStops[Math.round(i*(hexStops.length-1)/(n-1))]);
       }
-      // Build cumulative positions
       const pos = hexStops.map((_,i)=>i/(hexStops.length-1));
       function hexToRGB(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
       const rgb = hexStops.map(hexToRGB);
       const out = [];
       for (let i=0;i<n;i++){
         const t = (n===1)?0:i/(n-1);
-        // find span
         let k=1; while(k<pos.length && t>pos[k]) k++;
         const a = Math.max(1,k)-1, b = Math.min(pos.length-1,k);
         const w = (t - pos[a]) / Math.max(1e-6,(pos[b]-pos[a]));
@@ -379,18 +376,23 @@
       return (h % 1000)/1000;
     }
 
-    // ===== Legend helpers (right panel only) =====
+    // ===== Legend helpers (right panel only, null-safe) =====
     function renderDiscreteLegends(breaksAsc, colors, minVal){
+      const rightRows = document.getElementById("uhiLegendRowsRight");
+      const rightWrap = document.getElementById("uhiLegendRight");
+      if (!rightRows || !rightWrap) return; // prevent null crash
+
       const lowers = [minVal].concat(breaksAsc.slice(0, -1));
       let html = "";
       for (let i = lowers.length - 1; i >= 0; i--){
         html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`;
       }
-      document.getElementById("uhiLegendRowsRight").innerHTML = html;
-      document.getElementById("uhiLegendRight").classList.remove("hidden");
+      rightRows.innerHTML = html;
+      rightWrap.classList.remove("hidden");
     }
     function hideDiscreteLegends(){
-      document.getElementById("uhiLegendRight").classList.add("hidden");
+      const rightWrap = document.getElementById("uhiLegendRight");
+      if (rightWrap) rightWrap.classList.add("hidden");
     }
 
     // ==========================
@@ -575,7 +577,6 @@
       const colorHex   = document.getElementById("colorPicker")?.value || "#cccccc";
       const alpha      = 1.0;
       const showHeat   = document.getElementById("heatToggle")?.checked ?? true;
-      const usePred    = document.getElementById("predictionToggle")?.checked ?? true;
       const colorMode  = document.getElementById("colorMode")?.value || "quantile";
       const paletteKey = document.getElementById("palette")?.value || "spectral";
       const bins       = parseInt(document.getElementById("binCount")?.value || "20", 10);
@@ -595,7 +596,7 @@
         }
         if (vals.length){
           vals.sort((a,b)=>a-b);
-          computeCurrentUHIBounds();  // keep min/max in sync for display ranges elsewhere if needed
+          computeCurrentUHIBounds();
           minVal = vals[0];
           breaks = quantileBreaks(vals, bins);
           const palStops = PALETTES[paletteKey] || PALETTES.spectral;
@@ -617,11 +618,11 @@
         if (showHeat) {
           let t = getEntityTemp(building);
           if (typeof t === "number" && isFinite(t)) {
-            if (colorMode === "quantile" && breaks && colors && breaks.length) {
+            if (breaks && colors && breaks.length) {
               if (JITTER_STRENGTH) t += (stableJitterFromName(building.name)-0.5) * (2*JITTER_STRENGTH);
               color = colorFromBins(t, breaks, colors, alpha);
             } else {
-              color = uhiToColor(t, alpha); // continuous fall-back
+              color = uhiToColor(t, alpha);
             }
           }
         }
@@ -796,11 +797,9 @@
 
       chart.options.scales.x.time.unit = (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
 
-      // Aggregate measured (past window)
       const measuredAgg = aggregateSeries(sliceDaysBack(tsStore[pollutant], daysBack), gran)
         .map(p=>({ x: p.t, y: p.v }));
 
-      // Predicted (future window)
       let predictedAgg = [];
       if (showPred && horizonHrs > 0) {
         const now = Date.now(), horizonMs = horizonHrs * 3600 * 1000;
@@ -808,7 +807,6 @@
         predictedAgg = aggregateSeries(future, gran).map(p=>({ x:p.t, y:p.v }));
       }
 
-      // Bounds & peaks
       const { mean, up, lo } = rollingMeanStd(measuredAgg, 6);
       const thr = THRESHOLDS[pollutant] ?? Infinity;
       const peaks = measuredAgg.filter(p=>p.y >= thr).map(p=>({ x:p.x, y:p.y }));
@@ -847,9 +845,7 @@
 
     function syncMeasuredSeries(nowPoll){
       const ts = Date.now();
-      for (const k of KEYS) {
-        pushMeasured(k, ts, Number(nowPoll[k]) || 0);
-      }
+      for (const k of KEYS) pushMeasured(k, ts, Number(nowPoll[k]) || 0);
       saveTsStore();
       renderPollutionChart();
     }
