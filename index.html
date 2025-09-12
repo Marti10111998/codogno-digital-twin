@@ -118,6 +118,12 @@
           <option value="evening">Evening</option>
           <option value="night">Night</option>
         </select>
+
+        <!-- NEW: Toggle for the static traffic heatmap dots -->
+        <label class="inline-flex items-center mt-2">
+          <input type="checkbox" id="heatmapDotsToggle" class="mr-2" checked />
+          Show Heatmap Dots
+        </label>
       </div>
 
       <div class="col-span-2">
@@ -926,10 +932,25 @@
         });
       });
 
-      // Static heatmap points (sample loader wire-up)
-      async function loadHeatmap(timeOfDay) {
+      // ====== Traffic Heatmap dots (static) ======
+
+      // Helper to clear all heatmap entities
+      function clearHeatmap(){
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities.length = 0;
+      }
+
+      // Loader that respects the toggle
+      async function loadHeatmap(timeOfDay) {
+        // Always start clean
+        clearHeatmap();
+
+        // If dots are disabled, bail early
+        const dotsToggle = document.getElementById("heatmapDotsToggle");
+        if (!dotsToggle || !dotsToggle.checked) {
+          viewer.scene.requestRender();
+          return;
+        }
 
         try {
           const file = `${timeOfDay}_heatpoints.json`;
@@ -960,9 +981,31 @@
         }
         viewer.scene.requestRender();
       }
-      loadHeatmap("morning");
 
-      // Live Traffic (TomTom)
+      // Bind selector + toggle
+      const heatmapTimeSelector = document.getElementById("heatmapTimeSelector");
+      const heatmapDotsToggle   = document.getElementById("heatmapDotsToggle");
+
+      heatmapTimeSelector.addEventListener("change", () => {
+        if (heatmapDotsToggle.checked) loadHeatmap(heatmapTimeSelector.value);
+      });
+
+      heatmapDotsToggle.addEventListener("change", () => {
+        if (heatmapDotsToggle.checked) {
+          loadHeatmap(heatmapTimeSelector.value);
+        } else {
+          clearHeatmap();
+        }
+      });
+
+      // Initial load honoring the toggle
+      if (heatmapDotsToggle && heatmapDotsToggle.checked) {
+        loadHeatmap(heatmapTimeSelector.value || "morning");
+      } else {
+        clearHeatmap();
+      }
+
+      // ====== Live Traffic (TomTom) ======
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
       const trafficRefresh = document.getElementById("trafficRefresh");
       const trafficStatus = document.createElement("div");
