@@ -16,15 +16,14 @@
   <style>
     html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
 
-    /* Discrete (vertical) legends – right AND left, identical content */
+    /* Discrete (vertical) legend – top-right only */
     .uhiLegendPanel{
       position:absolute; z-index:12;
       background:rgba(0,0,0,0.6); color:white; border-radius:12px; padding:10px 12px;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:12px; width:180px;
       box-shadow:0 6px 14px rgba(0,0,0,.25); backdrop-filter: blur(2px);
     }
-    #uhiLegendRight { right:1rem; top:6rem; }
-    #uhiLegendLeft  { left:1rem;  top:6rem; }
+    #uhiLegendRight { right:1rem; top:1rem; }
     .uhiLegendPanel .title{ font-weight:700; margin-bottom:6px; }
     .uhiLegendPanel .row{ display:flex; align-items:center; margin:3px 0; }
     .uhiLegendPanel .sw{
@@ -131,11 +130,7 @@
     </div>
   </div>
 
-  <!-- Detailed discrete legends (identical, left & right) -->
-  <div id="uhiLegendLeft"  class="uhiLegendPanel hidden">
-    <div class="title">Colors by UHI</div>
-    <div id="uhiLegendRowsLeft"></div>
-  </div>
+  <!-- Discrete legend (right only) -->
   <div id="uhiLegendRight" class="uhiLegendPanel hidden">
     <div class="title">Colors by UHI</div>
     <div id="uhiLegendRowsRight"></div>
@@ -384,25 +379,17 @@
       return (h % 1000)/1000;
     }
 
-    // ===== Legend helpers (two mirrored panels) =====
+    // ===== Legend helpers (right panel only) =====
     function renderDiscreteLegends(breaksAsc, colors, minVal){
       const lowers = [minVal].concat(breaksAsc.slice(0, -1));
-      const makeHTML = ()=>{
-        let html = "";
-        for (let i = lowers.length - 1; i >= 0; i--){
-          html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`;
-        }
-        return html;
-      };
-      const left  = document.getElementById("uhiLegendLeft");
-      const right = document.getElementById("uhiLegendRight");
-      document.getElementById("uhiLegendRowsLeft").innerHTML  = makeHTML();
-      document.getElementById("uhiLegendRowsRight").innerHTML = makeHTML();
-      left.classList.remove("hidden");
-      right.classList.remove("hidden");
+      let html = "";
+      for (let i = lowers.length - 1; i >= 0; i--){
+        html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`;
+      }
+      document.getElementById("uhiLegendRowsRight").innerHTML = html;
+      document.getElementById("uhiLegendRight").classList.remove("hidden");
     }
     function hideDiscreteLegends(){
-      document.getElementById("uhiLegendLeft").classList.add("hidden");
       document.getElementById("uhiLegendRight").classList.add("hidden");
     }
 
@@ -465,7 +452,7 @@
         WindSpeed_m_s: weather.wind
       };
       try {
-        const r = await fetch(`${POLLUTION_API}/predict`, {
+        const r = await fetch(\`\${POLLUTION_API}/predict\`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(features)
@@ -482,8 +469,8 @@
     // Weather + UHI (realtime)
     // ==========================
     async function fetchUHIAndUpdate(){
-      const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
-      const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
+      const urbanURL = \`https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=\${weatherApiKey}\`;
+      const ruralURL = \`https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=\${weatherApiKey}\`;
 
       try {
         const [uRes, rRes] = await Promise.all([resilientFetch(urbanURL), resilientFetch(ruralURL)]);
@@ -783,7 +770,7 @@
               callbacks: {
                 label: (tt)=> {
                   const v = tt.parsed.y;
-                  return `${tt.dataset.label}: ${Number.isFinite(v)?v.toFixed(2):"—"}`;
+                  return \`\${tt.dataset.label}: \${Number.isFinite(v)?v.toFixed(2):"—"}\`;
                 }
               }
             },
@@ -829,15 +816,15 @@
       chart.data.datasets = [
         { label: "Upper bound (roll+sd)", data: up, borderWidth: 2, borderDash: [6,4], pointRadius: 0 },
         { label: "Lower bound (roll−sd)", data: lo, borderWidth: 2, borderDash: [6,4], pointRadius: 0 },
-        { label: `${pollutant} (measured)`, data: mean.length ? mean : measuredAgg, borderWidth: 3, pointRadius: 0 },
-        ...(showPred ? [{ label: `${pollutant} (predicted)`, data: predictedAgg, borderWidth: 2, borderDash: [8,6], pointRadius: 0 }] : []),
+        { label: \`\${pollutant} (measured)\`, data: mean.length ? mean : measuredAgg, borderWidth: 3, pointRadius: 0 },
+        ...(showPred ? [{ label: \`\${pollutant} (predicted)\`, data: predictedAgg, borderWidth: 2, borderDash: [8,6], pointRadius: 0 }] : []),
         { label: "Peaks ≥ threshold", data: peaks, type: "scatter", pointRadius: 3, showLine: false }
       ];
 
       chart.options.plugins.thresholdLine.value = thr;
 
       document.getElementById("pollutionChartStatus").textContent =
-        `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
+        \`\${pollutant} • granularity: \${gran} • past: \${daysBack}d • future: \${horizonHrs}h • pts: \${measuredAgg.length}\`;
 
       chart.update();
     }
@@ -845,7 +832,7 @@
     // Optional: server backfill (NOT called by default)
     async function backfillHistory(days=7){
       try{
-        const r = await fetch(`${POLLUTION_API}/history?days=${days}`, { cache: "no-store" });
+        const r = await fetch(\`\${POLLUTION_API}/history?days=\${days}\`, { cache: "no-store" });
         if (!r.ok) throw new Error("history api error");
         const rows = await r.json();
         for (const row of rows){
