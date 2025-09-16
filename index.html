@@ -194,6 +194,12 @@
           <input id="chartShowPred" type="checkbox" class="mr-2" checked /> Show Predicted
         </label>
       </div>
+
+      <!-- NEW: editable threshold -->
+      <div>
+        <label class="block text-sm font-medium">Soglia</label>
+        <input id="chartThreshold" type="number" step="0.1" class="w-full border rounded px-2 py-1" />
+      </div>
     </div>
 
     <div class="mt-3">
@@ -694,8 +700,12 @@
       const cutoff = Date.now() - days*24*3600*1000;
       return points.filter(p=>p.ts >= cutoff);
     }
+
+    // NEW: units per pollutant and editable thresholds
+    const UNITS = { O3:"µg/m³", NO2:"µg/m³", NO:"µg/m³", CO:"ppm", NH3:"µg/m³" };
     const THRESHOLDS = { O3:100, NO2:40, NO:50, CO:10, NH3:2 };
 
+    // Threshold line plugin (existing)
     const thresholdPlugin = {
       id: 'thresholdLine',
       afterDatasetsDraw(chart, args, opts) {
@@ -712,7 +722,78 @@
         ctx.restore();
       }
     };
+
+    // NEW: vertical day separators
+    const dayLinesPlugin = {
+      id: 'dayLines',
+      beforeDatasetsDraw(chart, args, opts) {
+        const { ctx, chartArea, scales } = chart;
+        const x = scales.x;
+        if (!x || x.type !== 'time') return;
+
+        const start = x.getValueForPixel(chartArea.left);
+        const end   = x.getValueForPixel(chartArea.right);
+        if (!isFinite(start) || !isFinite(end)) return;
+
+        const d0 = new Date(start);
+        d0.setHours(0,0,0,0);
+        if (d0.getTime() < start) d0.setDate(d0.getDate() + 1);
+
+        ctx.save();
+        ctx.setLineDash([4,4]);
+        ctx.lineWidth = 1;
+
+        for (let t = d0.getTime(); t <= end; t += 24*3600*1000) {
+          const xp = x.getPixelForValue(t);
+          ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+          ctx.beginPath();
+          ctx.moveTo(xp, chartArea.top);
+          ctx.lineTo(xp, chartArea.bottom);
+          ctx.stroke();
+
+          if (opts?.showLabels) {
+            const lab = new Date(t).toLocaleDateString();
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.font = '10px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(lab, xp, chartArea.top + 10);
+          }
+        }
+        ctx.restore();
+      }
+    };
+
     Chart.register(thresholdPlugin);
+    Chart.register(dayLinesPlugin);
+
+    // NEW: peak detection and prediction band
+    function findPeaks(points){
+      if (!points || points.length < 3) return [];
+      const ys = points.map(p=>p.y);
+      const mean = ys.reduce((s,y)=>s+y,0)/ys.length;
+      const sd = Math.sqrt(ys.reduce((s,y)=>s+(y-mean)*(y-mean),0)/ys.length) || 0;
+      const minProm = Math.max(0.0001, sd*0.8);
+      const out = [];
+      for (let i=1;i<points.length-1;i++){
+        const y = points[i].y, yl = points[i-1].y, yr = points[i+1].y;
+        if (y > yl && y > yr && (y - Math.max(yl, yr) >= minProm)) out.push(points[i]);
+      }
+      return out;
+    }
+    function buildPredictionBand(measuredAgg, predictedAgg){
+      if (!predictedAgg?.length) return { upper:[], lower:[] };
+      const N = Math.min(48, measuredAgg.length);
+      let sd = 0;
+      if (N >= 6){
+        const ys = measuredAgg.slice(-N).map(p=>p.y);
+        const mean = ys.reduce((s,y)=>s+y,0)/ys.length;
+        sd = Math.sqrt(ys.reduce((s,y)=>s+(y-mean)*(y-mean),0)/ys.length);
+      }
+      return {
+        lower: predictedAgg.map(p => ({ x:p.x, y: p.y - (sd || p.y*0.15) })),
+        upper: predictedAgg.map(p => ({ x:p.x, y: p.y + (sd || p.y*0.15) }))
+      };
+    }
 
     let pollutionChart = null;
     function ensureChart(){
@@ -729,8 +810,13 @@
           interaction: { mode: "index", intersect: false },
           plugins: {
             legend: { display: true, position: 'top' },
-            tooltip: { callbacks: { label: (tt)=>`${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}` } },
-            thresholdLine: { value: 0 }
+            tooltip: { callbacks: { label: (tt)=>{
+              const pol = tt.dataset.metaPollutant || '';
+              const unit = UNITS[pol] || '';
+              return `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}${unit ? ' ' + unit : ''}`;
+            } } },
+            thresholdLine: { value: 0 },
+            dayLines: { showLabels: false } // set true to display dates above lines
           },
           scales: {
             x: { type: "time" },
@@ -750,8 +836,10 @@
       const showPred = document.getElementById("chartShowPred").checked;
       const horizonHrs = parseInt(document.getElementById("chartHorizon").value, 10);
 
+      // time unit
       chart.options.scales.x.time.unit = (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
 
+      // aggregated series
       const measuredAgg = aggregateSeries(sliceDaysBack(tsStore[pollutant], daysBack), gran).map(p=>({ x:p.t, y:p.v }));
 
       let predictedAgg = [];
@@ -761,16 +849,92 @@
         predictedAgg = aggregateSeries(future, gran).map(p=>({ x:p.t, y:p.v }));
       }
 
-      const thr = THRESHOLDS[pollutant] ?? Infinity;
+      // threshold (editable)
+      const thr = Number.isFinite(THRESHOLDS[pollutant]) ? THRESHOLDS[pollutant] : Infinity;
 
-      chart.data.datasets = [
-        { label: `${pollutant} (measured)`, data: measuredAgg, borderWidth: 3, pointRadius: 0 },
-        ...(showPred ? [{ label: `${pollutant} (predicted)`, data: predictedAgg, borderWidth: 2, borderDash: [8,6], pointRadius: 0 }] : [])
-      ];
+      // peaks
+      const peaks = findPeaks(measuredAgg);
+
+      // prediction band
+      const band = buildPredictionBand(measuredAgg, predictedAgg);
+
+      // datasets
+      const unit = UNITS[pollutant] || '';
+      const dsMeasured = {
+        label: `${pollutant} (misurato)`,
+        data: measuredAgg,
+        borderWidth: 3,
+        pointRadius: 0,
+        metaPollutant: pollutant,
+        order: 20
+      };
+
+      const datasets = [dsMeasured];
+
+      if (showPred && predictedAgg.length){
+        const dsPredLower = {
+          label: `${pollutant} (previsto — limite inf)`,
+          data: band.lower,
+          borderWidth: 0,
+          pointRadius: 0,
+          fill: false,
+          hidden: true,
+          metaPollutant: pollutant,
+          order: 5
+        };
+        const dsPredUpper = {
+          label: `${pollutant} (previsto — incertezza)`,
+          data: band.upper,
+          borderWidth: 0,
+          pointRadius: 0,
+          fill: { target: "-1" }, // fill between this (upper) and previous (lower)
+          backgroundColor: 'rgba(0, 99, 255, 0.10)',
+          metaPollutant: pollutant,
+          order: 6
+        };
+        const dsPred = {
+          label: `${pollutant} (previsto)`,
+          data: predictedAgg,
+          borderWidth: 2,
+          borderDash: [8,6],
+          pointRadius: 0,
+          metaPollutant: pollutant,
+          order: 10
+        };
+        datasets.push(dsPredLower, dsPredUpper, dsPred);
+      }
+
+      if (peaks.length){
+        datasets.push({
+          type: 'scatter',
+          label: `${pollutant} — picchi`,
+          data: peaks,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: 'rgba(220, 38, 38, 0.9)',
+          showLine: false,
+          metaPollutant: pollutant,
+          order: 30
+        });
+      }
+
+      chart.data.datasets = datasets;
+
+      // axis label with unit
+      chart.options.scales.y.title.text = `${pollutant} (${unit})`;
+
+      // apply threshold
       chart.options.plugins.thresholdLine.value = thr;
+
+      // status
       document.getElementById("pollutionChartStatus").textContent =
         `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
+
       chart.update();
+
+      // sync UI threshold input if not focused
+      const thrInput = document.getElementById('chartThreshold');
+      if (thrInput && document.activeElement !== thrInput) thrInput.value = String(thr);
     }
 
     async function backfillHistory(days=7){
@@ -800,6 +964,18 @@
     function initChartUI(){
       ["chartPollutant","chartGranularity","chartDaysBack","chartShowPred","chartHorizon"]
         .forEach(id=> document.getElementById(id).addEventListener("change", renderPollutionChart));
+
+      // NEW: editable threshold handler
+      const thrInput = document.getElementById('chartThreshold');
+      if (thrInput){
+        thrInput.addEventListener('change', ()=>{
+          const pol = document.getElementById("chartPollutant").value;
+          const v = parseFloat(thrInput.value);
+          if (Number.isFinite(v)) THRESHOLDS[pol] = v;
+          renderPollutionChart();
+        });
+      }
+
       renderPollutionChart();
     }
 
@@ -810,9 +986,9 @@
       const out = latestPredictions
         ? { O3: latestPredictions.O3[0], NO2: latestPredictions.NO2[0], NO: latestPredictions.NO[0], CO: latestPredictions.CO[0], NH3: latestPredictions.NH3[0] }
         : histories;
-      const thresholds = { O3:100, NO2:40, NO:50, CO:10, NH3:2 };
-      const level = (p, v)=> v < thresholds[p]*0.6 ? "bg-green-100 text-green-800"
-                             : v < thresholds[p]     ? "bg-yellow-100 text-yellow-800"
+
+      const level = (p, v)=> v < THRESHOLDS[p]*0.6 ? "bg-green-100 text-green-800"
+                             : v < THRESHOLDS[p]     ? "bg-yellow-100 text-yellow-800"
                                                      : "bg-red-100 text-red-800";
       const entries = ["O3","NO2","NO","CO","NH3"].map(k=>{
         const v = (out && typeof out[k]==="number") ? out[k] : (out?.[k]?.slice(-1)[0] ?? 0);
