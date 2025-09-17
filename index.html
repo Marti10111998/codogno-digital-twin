@@ -48,20 +48,28 @@
       flex-direction: column;
       align-items: flex-end;
       gap: var(--panel-gap);
-      z-index: 20;
+      z-index: 25;
     }
     .top-right-stack .uhiLegendPanel{ position: static; }
 
-    .control-panel{ width: 20rem; } /* ~w-80 */
+    .control-panel{ width: 20rem; z-index: 30; } /* ~w-80 */
 
     #pollutionChartPanel{
       width: min(95vw, 1000px);
-      z-index: 5; /* allow smaller tiles to float above if needed */
+      z-index: 10; /* allow smaller tiles to float above if needed */
     }
 
     #pollutionPanel{
       right: calc(env(safe-area-inset-right, 0px) + var(--pad));
       bottom: calc(env(safe-area-inset-bottom, 0px) + var(--pad));
+      z-index: 20;
+    }
+
+    /* optional flip to left when needed via JS */
+    .top-right-stack.trs-left{
+      left: calc(env(safe-area-inset-left, 0px) + 1rem);
+      right: auto;
+      align-items: flex-start;
     }
 
     @media (max-width: 1024px){
@@ -937,6 +945,9 @@
       document.getElementById("pollutionChartStatus").textContent =
         `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
       chart.update();
+
+      // ensure overlays don't collide after chart resizes
+      layoutOverlays();
     }
 
     async function backfillHistory(days=14){
@@ -949,7 +960,8 @@
           for (const k of ["O3","NO2","NO","CO","NH3"]){ if (k in row) pushMeasured(k, ts, Number(row[k])); }
         }
         pruneOldData(); saveTsStore(); renderPollutionChart();
-      }catch(e){ console.warn("History backfill failed or unavailable:", e); }
+      }catch(e){ console.warn("History backfill failed or unavailable:", e);
+      }
     }
 
     function syncMeasuredSeries(nowPoll){
@@ -991,6 +1003,9 @@
       }).join("");
       document.getElementById("pollutionOutput").innerHTML = `<div class="space-y-2">${entries}</div>`;
       document.getElementById("pollutionStamp").textContent = "Updated: " + new Date().toLocaleTimeString();
+
+      // re-layout overlays after content height changes
+      layoutOverlays();
     }
 
     // ==========================
@@ -1065,6 +1080,47 @@
         console.warn("Noise-Planet WFS fetch failed:", e);
       }
     }
+
+    // ==========================
+    // === No-overlap layout manager ===
+    // ==========================
+    function rectsOverlap(a, b){
+      return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+    }
+
+    function layoutOverlays(){
+      const chart = document.getElementById('pollutionChartPanel');
+      const tiles = document.getElementById('pollutionPanel');
+      const stack = document.getElementById('topRightStack');
+      const ctrl  = document.querySelector('.control-panel');
+      if (!chart || !tiles || !stack || !ctrl) return;
+
+      // 1) Keep chart above the tiles if they overlap
+      chart.style.bottom = '1rem'; // reset
+      requestAnimationFrame(()=>{
+        const cr = chart.getBoundingClientRect();
+        const tr = tiles.getBoundingClientRect();
+        const gap = 12;
+        if (rectsOverlap(cr, tr)){
+          const needed = (window.innerHeight - tr.top) + gap;
+          chart.style.bottom = `${Math.max(16, Math.ceil(needed))}px`;
+        }
+      });
+
+      // 2) If the top-right stack overlaps the left control panel, flip it to the left
+      stack.classList.remove('trs-left');
+      requestAnimationFrame(()=>{
+        const sr = stack.getBoundingClientRect();
+        const lr = ctrl.getBoundingClientRect();
+        if (rectsOverlap(sr, lr)) stack.classList.add('trs-left');
+      });
+    }
+
+    // Run on load/resize/orientation/content changes
+    window.addEventListener('resize', layoutOverlays);
+    window.addEventListener('orientationchange', layoutOverlays);
+    const _ro = new ResizeObserver(()=> layoutOverlays());
+    _ro.observe(document.body);
 
     // ==========================
     // Cesium App
@@ -1288,6 +1344,7 @@
             const dt = ((performance.now()-started)/1000).toFixed(1);
             setTrafficStatus(`updated @ ${new Date().toLocaleTimeString()} (+${dt}s)`);
             viewer.scene.requestRender();
+            layoutOverlays(); // in case badge height changes
           } else {
             requestAnimationFrame(waitReady);
           }
@@ -1304,10 +1361,15 @@
         if (trafficLayer) { viewer.imageryLayers.remove(trafficLayer, false); trafficLayer = null; }
         setTrafficStatus("off");
         viewer.scene.requestRender();
+        layoutOverlays();
       }
       liveTrafficToggle.addEventListener("change", (e)=> e.target.checked ? beginTrafficUpdates() : stopTrafficUpdates());
       trafficRefresh.addEventListener("change", ()=> { if (liveTrafficToggle.checked) beginTrafficUpdates(); });
+
       beginTrafficUpdates();
+
+      // initial layout pass
+      layoutOverlays();
     }
 
     // ==========================
