@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Codogno Digital Twin — UHI + Pollution + Noise</title>
+  <title>Codogno Digital Twin — Spectral UHI (Legend Top-Right)</title>
 
   <!-- UI / 3D -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -16,16 +16,21 @@
   <style>
     html, body, #cesiumContainer { margin:0; padding:0; width:100%; height:100%; overflow:hidden; }
 
-    /* Discrete (vertical) legend — we’ll place it inside a stack container */
+    /* Discrete (vertical) legend — TOP RIGHT */
     .uhiLegendPanel{
-      position:absolute; /* overridden to static inside stack */
-      z-index:50; background:rgba(0,0,0,0.6); color:white; border-radius:12px; padding:10px 12px;
+      position:absolute;
+      z-index:50; /* higher than control/chart panels */
+      background:rgba(0,0,0,0.6); color:white; border-radius:12px; padding:10px 12px;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:12px; width:200px;
       box-shadow:0 6px 14px rgba(0,0,0,.25); backdrop-filter: blur(2px);
     }
+    #uhiLegendRight { right:1rem; top:6rem; }
     .uhiLegendPanel .title{ font-weight:700; margin-bottom:6px; }
     .uhiLegendPanel .row{ display:flex; align-items:center; margin:3px 0; }
-    .uhiLegendPanel .sw{ width:16px; height:16px; border-radius:3px; margin-right:8px; border:1px solid rgba(255,255,255,.4); }
+    .uhiLegendPanel .sw{
+      width:16px; height:16px; border-radius:3px; margin-right:8px;
+      border:1px solid rgba(255,255,255,.4);
+    }
     .hidden{ display:none; }
 
     /* Tooltip */
@@ -34,53 +39,6 @@
       border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:240px; display:none;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
     }
-
-    /* --- Responsive overlay layout & safe spacing --- */
-    :root{
-      --pad: 1rem;
-      --panel-gap: .75rem;
-    }
-    .top-right-stack{
-      position: absolute;
-      top: calc(env(safe-area-inset-top, 0px) + var(--pad));
-      right: calc(env(safe-area-inset-right, 0px) + var(--pad));
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: var(--panel-gap);
-      z-index: 20;
-    }
-    .top-right-stack .uhiLegendPanel{ position: static; }
-
-    .control-panel{ width: 20rem; } /* ~w-80 */
-
-    #pollutionChartPanel{
-      width: min(95vw, 1000px);
-      z-index: 5; /* allow smaller tiles to float above if needed */
-    }
-
-    #pollutionPanel{
-      right: calc(env(safe-area-inset-right, 0px) + var(--pad));
-      bottom: calc(env(safe-area-inset-bottom, 0px) + var(--pad));
-    }
-
-    @media (max-width: 1024px){
-      .control-panel{
-        left: calc(env(safe-area-inset-left, 0px) + var(--pad));
-        right: calc(env(safe-area-inset-right, 0px) + var(--pad));
-        width: auto;
-        max-width: 36rem;
-      }
-      .top-right-stack{
-        left: calc(env(safe-area-inset-left, 0px) + var(--pad));
-        right: auto;
-        align-items: flex-start;
-      }
-      .uhiLegendPanel{ max-height: 40vh; overflow:auto; }
-    }
-    @media (max-width: 640px){
-      #pollutionChartPanel{ bottom: calc(5.5rem + var(--pad)); }
-    }
   </style>
 </head>
 
@@ -88,17 +46,8 @@
   <div id="cesiumContainer"></div>
 
   <!-- Control Panel -->
-  <div class="control-panel absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-80 space-y-4 z-10 font-sans">
+  <div class="absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-80 space-y-4 z-10 font-sans">
     <div class="text-lg font-semibold">Codogno Digital Twin</div>
-
-    <!-- Mini backup tools for pollution TS -->
-    <div class="flex gap-2 text-xs">
-      <button id="exportTsBtn" class="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 border">Export TS</button>
-      <label class="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 border cursor-pointer">
-        Import TS <input id="importTsFile" type="file" accept="application/json" class="hidden" />
-      </label>
-      <button id="clearTsBtn" class="ml-auto px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">Clear TS</button>
-    </div>
 
     <div class="grid grid-cols-2 gap-3">
       <div class="col-span-2">
@@ -161,19 +110,6 @@
         <div id="modelBadge" class="text-[11px] text-gray-600 mt-1">Forecast: Holt-Winters (Web Worker)</div>
       </div>
 
-      <!-- Noise overlays -->
-      <div class="col-span-2 border-t pt-2">
-        <div class="font-medium text-sm mb-1">Noise Layers</div>
-        <label class="inline-flex items-center mb-1">
-          <input type="checkbox" id="npWmsToggle" class="mr-2" /> Noise-Planet LAeq hexagons (WMS)
-        </label>
-        <input id="npWmsOpacity" type="range" min="0" max="100" value="70" class="w-full mb-2" />
-        <label class="inline-flex items-center mb-1">
-          <input type="checkbox" id="eeaNoiseToggle" class="mr-2" /> EEA strategic noise (roads 55dB Lden)
-        </label>
-        <input id="eeaWmsOpacity" type="range" min="0" max="100" value="60" class="w-full" />
-      </div>
-
       <div class="col-span-2">
         <label class="block font-medium">Traffic Heatmap Time</label>
         <select id="heatmapTimeSelector" class="w-full border rounded px-2 py-1">
@@ -182,6 +118,8 @@
           <option value="evening">Evening</option>
           <option value="night">Night</option>
         </select>
+
+        <!-- NEW: Toggle for the static traffic heatmap dots -->
         <label class="inline-flex items-center mt-2">
           <input type="checkbox" id="heatmapDotsToggle" class="mr-2" checked />
           Show Heatmap Dots
@@ -199,12 +137,10 @@
     </div>
   </div>
 
-  <!-- Top-right stack: holds traffic status + UHI legend without overlap -->
-  <div id="topRightStack" class="top-right-stack">
-    <div id="uhiLegendRight" class="uhiLegendPanel hidden">
-      <div class="title">Colors by UHI (°C)</div>
-      <div id="uhiLegendRowsRight"></div>
-    </div>
+  <!-- UHI legend (TOP RIGHT) -->
+  <div id="uhiLegendRight" class="uhiLegendPanel hidden">
+    <div class="title">Colors by UHI</div>
+    <div id="uhiLegendRowsRight"></div>
   </div>
 
   <div id="tooltip"></div>
@@ -218,18 +154,17 @@
 
   <!-- Time-series chart -->
   <div id="pollutionChartPanel"
-       class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 p-4 rounded-xl shadow-lg z-10 font-sans">
+       class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 p-4 rounded-xl shadow-lg w-[900px] z-10 font-sans">
     <div class="flex items-center justify-between">
-      <div class="text-lg font-semibold">Trends — Air & Noise</div>
+      <div class="text-lg font-semibold">Pollution — Trends & Peaks</div>
       <div class="text-xs text-gray-600" id="pollutionChartStatus">—</div>
     </div>
 
-    <div class="grid grid-cols-8 gap-3 mt-3">
+    <div class="grid grid-cols-7 gap-3 mt-3">
       <div class="col-span-2">
-        <label class="block text-sm font-medium">Series</label>
+        <label class="block text-sm font-medium">Pollutant</label>
         <select id="chartPollutant" class="w-full border rounded px-2 py-1">
           <option>O3</option><option>NO2</option><option>NO</option><option>CO</option><option>NH3</option>
-          <option selected>LAeq</option>
         </select>
       </div>
       <div class="col-span-2">
@@ -243,34 +178,36 @@
       <div>
         <label class="block text-sm font-medium">Days back</label>
         <select id="chartDaysBack" class="w-full border rounded px-2 py-1">
-          <option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option><option value="14">14 days</option>
+          <option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option>
         </select>
       </div>
       <div>
         <label class="block text sm font-medium">Forecast</label>
         <select id="chartHorizon" class="w-full border rounded px-2 py-1">
-          <option value="0" selected>Off</option>
+          <option value="0">Off</option>
           <option value="24">Next 24 hours</option>
-          <option value="168">Next 7 days</option>
+          <option value="168" selected>Next 7 days</option>
         </select>
       </div>
       <div class="flex items-end">
         <label class="inline-flex items-center">
-          <input id="chartShowPred" type="checkbox" class="mr-2" /> Show Predicted (air only)
+          <input id="chartShowPred" type="checkbox" class="mr-2" checked /> Show Predicted
         </label>
       </div>
-      <div class="col-span-2">
-        <label class="block text-sm font-medium">Day markers</label>
-        <label class="inline-flex items-center"><input id="dayMarkersToggle" type="checkbox" class="mr-2" checked /> Show midnight lines</label>
+
+      <!-- NEW: editable threshold -->
+      <div>
+        <label class="block text-sm font-medium">Soglia</label>
+        <input id="chartThreshold" type="number" step="0.1" class="w-full border rounded px-2 py-1" />
       </div>
     </div>
 
     <div class="mt-3">
-      <canvas id="pollutionChart" height="160"></canvas>
+      <canvas id="pollutionChart" height="140"></canvas>
     </div>
 
     <div class="mt-2 text-[12px] text-gray-600">
-      Tips: hover for exact values • vertical lines = change of day • switch granularity for smoother trends.
+      Tips: hover for exact values • peaks are highlighted • switch granularity for smoother trends.
     </div>
   </div>
 
@@ -291,14 +228,15 @@
     let viewer, buildings = [], heatmapEntities = [];
     let trafficLayer = null, trafficTimer = null;
 
-    let npWmsLayer = null, eeaNoiseLayer = null;
-
     const histories = { urbanTemp: [], O3: [], NO2: [], NO: [], CO: [], NH3: [] };
     let lastWeather = { temp: null, wind: 0, clouds: 0, humidity: 0, pressure: 0, rain1h: 0 };
 
     // === Forecast 7 days ahead at hourly cadence ===
     const STEP_MINUTES  = 60;              // hourly steps
     const HORIZON_STEPS = 7 * 24;          // next 7 days
+
+    // Smaller jitter, more faithful quantiles
+    const JITTER_STRENGTH = 0.03;
 
     // ==========================
     // Utility
@@ -336,13 +274,13 @@
     }
 
     const UHI_STOPS = [
-      { p: 0.00,  c: Cesium.Color.fromBytes(94, 79,162,255) },
-      { p: 0.125, c: Cesium.Color.fromBytes(50,136,189,255) },
-      { p: 0.25,  c: Cesium.Color.fromBytes(153,213,148,255) },
-      { p: 0.50,  c: Cesium.Color.fromBytes(230,245,152,255) },
-      { p: 0.75,  c: Cesium.Color.fromBytes(254,224,139,255) },
-      { p: 0.875, c: Cesium.Color.fromBytes(252,141, 89,255) },
-      { p: 1.00,  c: Cesium.Color.fromBytes(213, 62, 79,255) }
+      { p: 0.00,  c: Cesium.Color.fromBytes(94, 79,162,255) },  // #5E4FA2
+      { p: 0.125, c: Cesium.Color.fromBytes(50,136,189,255) },  // #3288BD
+      { p: 0.25,  c: Cesium.Color.fromBytes(153,213,148,255) }, // #99D594
+      { p: 0.50,  c: Cesium.Color.fromBytes(230,245,152,255) }, // #E6F598
+      { p: 0.75,  c: Cesium.Color.fromBytes(254,224,139,255) }, // #FEE08B
+      { p: 0.875, c: Cesium.Color.fromBytes(252,141, 89,255) }, // #FC8D59
+      { p: 1.00,  c: Cesium.Color.fromBytes(213, 62, 79,255) }  // #D53E4F
     ];
     function interpolateColor(stops,t){
       t = clamp01(t);
@@ -445,13 +383,17 @@
       for(let i=0;i<breaks.length;i++){ if(x <= breaks[i]) return hexToCesium(colors[i], alpha); }
       return hexToCesium(colors[colors.length-1], alpha);
     }
+    function stableJitterFromName(name){
+      let h=0; for (let i=0;i<name.length;i++) h=(h*31 + name.charCodeAt(i))|0;
+      return (h % 1000)/1000;
+    }
 
-    // ===== Legend helpers =====
+    // ===== Legend helpers (RIGHT ONLY) =====
     function renderDiscreteLegends(breaksAsc, colors, minVal){
       const lowers = [minVal].concat(breaksAsc.slice(0, -1));
       let html = "";
       for (let i = lowers.length - 1; i >= 0; i--){
-        html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])} °C</span></div>`;
+        html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`;
       }
       const right = document.getElementById("uhiLegendRight");
       const rows  = document.getElementById("uhiLegendRowsRight");
@@ -618,9 +560,8 @@
       for (const b of buildings) {
         const height = parseFloat(b.properties?.height?.getValue?.() ?? b.properties?.height) || 10;
         const prop = new Cesium.SampledProperty(Number);
-
-        prop.backwardExtrapolationType = Cesium.ExtrapolationType.HOLD;
-        prop.forwardExtrapolationType  = Cesium.ExtrapolationType.HOLD;
+        prop.setBackwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
+        prop.setForwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
         prop.backwardExtrapolationDuration = 24*3600;
         prop.forwardExtrapolationDuration  = 7*24*3600;
 
@@ -696,16 +637,15 @@
     }
 
     // ==========================
-    // Time-series storage (air + noise)
+    // Time-series chart wiring
     // ==========================
     const tsStore = {
       O3: [], NO2: [], NO: [], CO: [], NH3: [],
-      LAeq: [],                                 // Noise-Planet (dB(A))
-      pred: { O3: [], NO2: [], NO: [], CO: [], NH3: [] } // no pred for LAeq
+      pred: { O3: [], NO2: [], NO: [], CO: [], NH3: [] }
     };
-    const RETENTION_DAYS = 14;
-    const STORE_KEY = "pollution_ts_v3"; // bump to v3 (prevents clash with older schema)
-    const KEYS = ["O3","NO2","NO","CO","NH3","LAeq"];
+    const RETENTION_DAYS = 7;
+    const STORE_KEY = "pollution_ts_v1";
+    const KEYS = ["O3","NO2","NO","CO","NH3"];
 
     function pruneOldData() {
       const cutoff = Date.now() - RETENTION_DAYS * 24 * 3600 * 1000;
@@ -714,8 +654,8 @@
     }
     function saveTsStore() {
       pruneOldData();
-      const cap = (arr, n = 200000) => (arr.length > n ? arr.slice(arr.length - n) : arr);
-      const payload = { O3: cap(tsStore.O3), NO2: cap(tsStore.NO2), NO: cap(tsStore.NO), CO: cap(tsStore.CO), NH3: cap(tsStore.NH3), LAeq: cap(tsStore.LAeq) };
+      const cap = (arr, n = 100000) => (arr.length > n ? arr.slice(arr.length - n) : arr);
+      const payload = { O3: cap(tsStore.O3), NO2: cap(tsStore.NO2), NO: cap(tsStore.NO), CO: cap(tsStore.CO), NH3: cap(tsStore.NH3) };
       try { localStorage.setItem(STORE_KEY, JSON.stringify(payload)); } catch {}
     }
     function loadTsStore() {
@@ -731,57 +671,14 @@
       } catch {}
     }
 
-    // === Export / Import / Clear ===
-    function exportTs(){
-      const payload = {
-        exportedAt: Date.now(),
-        retentionDays: RETENTION_DAYS,
-        data: { O3: tsStore.O3, NO2: tsStore.NO2, NO: tsStore.NO, CO: tsStore.CO, NH3: tsStore.NH3, LAeq: tsStore.LAeq }
-      };
-      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `codogno-pollution-ts-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-    function importTs(file){
-      const reader = new FileReader();
-      reader.onload = () => {
-        try{
-          const obj = JSON.parse(reader.result);
-          const d = obj?.data || obj; // accept raw or wrapped form
-          for (const k of KEYS){
-            const arr = Array.isArray(d[k]) ? d[k] : [];
-            tsStore[k] = arr.map(p => ({ ts: Number(p.ts), v: Number(p.v) }))
-                           .filter(p => Number.isFinite(p.ts) && Number.isFinite(p.v));
-          }
-          saveTsStore();
-          renderPollutionChart();
-          paintPollutionPanelNow();
-          alert("Imported time-series successfully.");
-        }catch(e){ alert("Failed to import JSON."); }
-      };
-      reader.readAsText(file);
-    }
-    function clearTs(){
-      for (const k of KEYS) tsStore[k] = [];
-      saveTsStore();
-      renderPollutionChart();
-      paintPollutionPanelNow();
-    }
-
     function pushMeasured(k, ts, val){ tsStore[k].push({ ts, v: Number(val) }); }
     function setPredictedHorizon(predObj, baseTs=Date.now()){
       const stepMs = STEP_MINUTES * 60 * 1000;
-      for (const k of ["O3","NO2","NO","CO","NH3"]){
+      for (const k of KEYS){
         const pred = (predObj?.[k] || []).map((v, i)=>({ ts: baseTs + i*stepMs, v: Number(v) }));
         tsStore.pred[k] = pred;
       }
     }
-
-    // Bucket + slice helpers
     function aggregateSeries(points, mode){
       if (!points.length) return [];
       const bucketStart = (t)=> {
@@ -804,9 +701,11 @@
       return points.filter(p=>p.ts >= cutoff);
     }
 
-    const THRESHOLDS = { O3:100, NO2:40, NO:50, CO:10, NH3:2, LAeq:55 }; // 55 dB general comfort marker
+    // NEW: units per pollutant and editable thresholds
+    const UNITS = { O3:"µg/m³", NO2:"µg/m³", NO:"µg/m³", CO:"ppm", NH3:"µg/m³" };
+    const THRESHOLDS = { O3:100, NO2:40, NO:50, CO:10, NH3:2 };
 
-    // === Chart plugins: threshold + day markers ===
+    // Threshold line plugin (existing)
     const thresholdPlugin = {
       id: 'thresholdLine',
       afterDatasetsDraw(chart, args, opts) {
@@ -814,9 +713,8 @@
         const y = scales.y.getPixelForValue(opts.value);
         if (!isFinite(y) || y < chartArea.top || y > chartArea.bottom) return;
         ctx.save();
-        ctx.strokeStyle = opts.color || 'red';
-        ctx.setLineDash([6,4]);
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(chartArea.left, y);
         ctx.lineTo(chartArea.right, y);
@@ -825,41 +723,77 @@
       }
     };
 
-    const dayMarkersPlugin = {
-      id: 'dayMarkers',
-      beforeDraw(chart, args, opts){
-        if (!opts.enabled) return;
-        const {ctx, chartArea, scales} = chart;
-        const xScale = scales.x;
-        if (!xScale) return;
-        const from = xScale.getValueForPixel(chartArea.left);
-        const to   = xScale.getValueForPixel(chartArea.right);
-        if (!isFinite(from) || !isFinite(to)) return;
+    // NEW: vertical day separators
+    const dayLinesPlugin = {
+      id: 'dayLines',
+      beforeDatasetsDraw(chart, args, opts) {
+        const { ctx, chartArea, scales } = chart;
+        const x = scales.x;
+        if (!x || x.type !== 'time') return;
 
-        const start = new Date(Math.min(from, to));
-        start.setHours(0,0,0,0);
-        const end = new Date(Math.max(from, to));
-        end.setHours(23,59,59,999);
+        const start = x.getValueForPixel(chartArea.left);
+        const end   = x.getValueForPixel(chartArea.right);
+        if (!isFinite(start) || !isFinite(end)) return;
+
+        const d0 = new Date(start);
+        d0.setHours(0,0,0,0);
+        if (d0.getTime() < start) d0.setDate(d0.getDate() + 1);
 
         ctx.save();
-        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.setLineDash([4,4]);
         ctx.lineWidth = 1;
-        ctx.setLineDash([2,4]);
 
-        for (let t = start.getTime(); t <= end.getTime(); t += 24*3600*1000){
-          const x = xScale.getPixelForValue(t);
-          if (x >= chartArea.left && x <= chartArea.right){
-            ctx.beginPath();
-            ctx.moveTo(x, chartArea.top);
-            ctx.lineTo(x, chartArea.bottom);
-            ctx.stroke();
+        for (let t = d0.getTime(); t <= end; t += 24*3600*1000) {
+          const xp = x.getPixelForValue(t);
+          ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+          ctx.beginPath();
+          ctx.moveTo(xp, chartArea.top);
+          ctx.lineTo(xp, chartArea.bottom);
+          ctx.stroke();
+
+          if (opts?.showLabels) {
+            const lab = new Date(t).toLocaleDateString();
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.font = '10px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(lab, xp, chartArea.top + 10);
           }
         }
         ctx.restore();
       }
     };
 
-    Chart.register(thresholdPlugin, dayMarkersPlugin);
+    Chart.register(thresholdPlugin);
+    Chart.register(dayLinesPlugin);
+
+    // NEW: peak detection and prediction band
+    function findPeaks(points){
+      if (!points || points.length < 3) return [];
+      const ys = points.map(p=>p.y);
+      const mean = ys.reduce((s,y)=>s+y,0)/ys.length;
+      const sd = Math.sqrt(ys.reduce((s,y)=>s+(y-mean)*(y-mean),0)/ys.length) || 0;
+      const minProm = Math.max(0.0001, sd*0.8);
+      const out = [];
+      for (let i=1;i<points.length-1;i++){
+        const y = points[i].y, yl = points[i-1].y, yr = points[i+1].y;
+        if (y > yl && y > yr && (y - Math.max(yl, yr) >= minProm)) out.push(points[i]);
+      }
+      return out;
+    }
+    function buildPredictionBand(measuredAgg, predictedAgg){
+      if (!predictedAgg?.length) return { upper:[], lower:[] };
+      const N = Math.min(48, measuredAgg.length);
+      let sd = 0;
+      if (N >= 6){
+        const ys = measuredAgg.slice(-N).map(p=>p.y);
+        const mean = ys.reduce((s,y)=>s+y,0)/ys.length;
+        sd = Math.sqrt(ys.reduce((s,y)=>s+(y-mean)*(y-mean),0)/ys.length);
+      }
+      return {
+        lower: predictedAgg.map(p => ({ x:p.x, y: p.y - (sd || p.y*0.15) })),
+        upper: predictedAgg.map(p => ({ x:p.x, y: p.y + (sd || p.y*0.15) }))
+      };
+    }
 
     let pollutionChart = null;
     function ensureChart(){
@@ -876,13 +810,17 @@
           interaction: { mode: "index", intersect: false },
           plugins: {
             legend: { display: true, position: 'top' },
-            tooltip: { callbacks: { label: (tt)=>`${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}` } },
-            thresholdLine: { value: 0, color: 'red' },
-            dayMarkers: { enabled: true }
+            tooltip: { callbacks: { label: (tt)=>{
+              const pol = tt.dataset.metaPollutant || '';
+              const unit = UNITS[pol] || '';
+              return `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}${unit ? ' ' + unit : ''}`;
+            } } },
+            thresholdLine: { value: 0 },
+            dayLines: { showLabels: false } // set true to display dates above lines
           },
           scales: {
             x: { type: "time" },
-            y: { title: { display: true, text: "Concentration (µg/m³) or dB(A)" } }
+            y: { title: { display: true, text: "concentration (µg/m³ or ppm)" } }
           },
           elements: { point: { radius: 0 }, line: { tension: 0.25 } }
         }
@@ -895,13 +833,13 @@
       const pollutant = document.getElementById("chartPollutant").value;
       const gran = document.getElementById("chartGranularity").value;
       const daysBack = parseInt(document.getElementById("chartDaysBack").value, 10);
-      const showPred = document.getElementById("chartShowPred").checked && pollutant!=="LAeq";
+      const showPred = document.getElementById("chartShowPred").checked;
       const horizonHrs = parseInt(document.getElementById("chartHorizon").value, 10);
-      const showDayLines = document.getElementById("dayMarkersToggle").checked;
 
+      // time unit
       chart.options.scales.x.time.unit = (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
-      chart.options.plugins.dayMarkers.enabled = showDayLines;
 
+      // aggregated series
       const measuredAgg = aggregateSeries(sliceDaysBack(tsStore[pollutant], daysBack), gran).map(p=>({ x:p.t, y:p.v }));
 
       let predictedAgg = [];
@@ -911,42 +849,102 @@
         predictedAgg = aggregateSeries(future, gran).map(p=>({ x:p.t, y:p.v }));
       }
 
-      const thr = THRESHOLDS[pollutant] ?? Infinity;
+      // threshold (editable)
+      const thr = Number.isFinite(THRESHOLDS[pollutant]) ? THRESHOLDS[pollutant] : Infinity;
 
-      const LABEL_UNITS = { O3:"µg/m³", NO2:"µg/m³", NO:"µg/m³", CO:"mg/m³", NH3:"µg/m³", LAeq:"dB(A)" };
-      const yTitle = pollutant === "LAeq" ? "Sound level (dB(A))" : "Concentration (µg/m³) / CO in mg/m³";
-      chart.options.scales.y.title.display = true;
-      chart.options.scales.y.title.text = yTitle;
+      // peaks
+      const peaks = findPeaks(measuredAgg);
 
-      const isNoise = (pollutant === "LAeq");
-      const mainStyle = isNoise
-        ? { borderWidth: 3, borderDash: [2,2], pointRadius: 0, fill: true, cubicInterpolationMode: 'monotone' }
-        : { borderWidth: 3, pointRadius: 0, tension: 0.25 };
+      // prediction band
+      const band = buildPredictionBand(measuredAgg, predictedAgg);
 
-      chart.data.datasets = [
-        { label: `${pollutant} (measured, ${LABEL_UNITS[pollutant]||""})`, data: measuredAgg, ...mainStyle },
-        ...(showPred ? [{
-          label: `${pollutant} (predicted, ${LABEL_UNITS[pollutant]||""})`,
-          data: predictedAgg, borderWidth: 2, borderDash: [8,6], pointRadius: 0, tension: 0.25
-        }] : [])
-      ];
+      // datasets
+      const unit = UNITS[pollutant] || '';
+      const dsMeasured = {
+        label: `${pollutant} (misurato)`,
+        data: measuredAgg,
+        borderWidth: 3,
+        pointRadius: 0,
+        metaPollutant: pollutant,
+        order: 20
+      };
 
+      const datasets = [dsMeasured];
+
+      if (showPred && predictedAgg.length){
+        const dsPredLower = {
+          label: `${pollutant} (previsto — limite inf)`,
+          data: band.lower,
+          borderWidth: 0,
+          pointRadius: 0,
+          fill: false,
+          hidden: true,
+          metaPollutant: pollutant,
+          order: 5
+        };
+        const dsPredUpper = {
+          label: `${pollutant} (previsto — incertezza)`,
+          data: band.upper,
+          borderWidth: 0,
+          pointRadius: 0,
+          fill: { target: "-1" }, // fill between this (upper) and previous (lower)
+          backgroundColor: 'rgba(0, 99, 255, 0.10)',
+          metaPollutant: pollutant,
+          order: 6
+        };
+        const dsPred = {
+          label: `${pollutant} (previsto)`,
+          data: predictedAgg,
+          borderWidth: 2,
+          borderDash: [8,6],
+          pointRadius: 0,
+          metaPollutant: pollutant,
+          order: 10
+        };
+        datasets.push(dsPredLower, dsPredUpper, dsPred);
+      }
+
+      if (peaks.length){
+        datasets.push({
+          type: 'scatter',
+          label: `${pollutant} — picchi`,
+          data: peaks,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: 'rgba(220, 38, 38, 0.9)',
+          showLine: false,
+          metaPollutant: pollutant,
+          order: 30
+        });
+      }
+
+      chart.data.datasets = datasets;
+
+      // axis label with unit
+      chart.options.scales.y.title.text = `${pollutant} (${unit})`;
+
+      // apply threshold
       chart.options.plugins.thresholdLine.value = thr;
-      chart.options.plugins.thresholdLine.color = isNoise ? '#2563eb' : 'red';
 
+      // status
       document.getElementById("pollutionChartStatus").textContent =
         `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
+
       chart.update();
+
+      // sync UI threshold input if not focused
+      const thrInput = document.getElementById('chartThreshold');
+      if (thrInput && document.activeElement !== thrInput) thrInput.value = String(thr);
     }
 
-    async function backfillHistory(days=14){
+    async function backfillHistory(days=7){
       try{
         const r = await fetch(`${POLLUTION_API}/history?days=${days}`, { cache: "no-store" });
         if (!r.ok) throw new Error("history api error");
         const rows = await r.json();
         for (const row of rows){
           const ts = Number(row.ts); if (!Number.isFinite(ts)) continue;
-          for (const k of ["O3","NO2","NO","CO","NH3"]){ if (k in row) pushMeasured(k, ts, Number(row[k])); }
+          for (const k of KEYS){ if (k in row) pushMeasured(k, ts, Number(row[k])); }
         }
         pruneOldData(); saveTsStore(); renderPollutionChart();
       }catch(e){ console.warn("History backfill failed or unavailable:", e); }
@@ -954,7 +952,7 @@
 
     function syncMeasuredSeries(nowPoll){
       const ts = Date.now();
-      for (const k of ["O3","NO2","NO","CO","NH3"]) pushMeasured(k, ts, Number(nowPoll[k]) || 0);
+      for (const k of KEYS) pushMeasured(k, ts, Number(nowPoll[k]) || 0);
       saveTsStore();
       renderPollutionChart();
     }
@@ -964,29 +962,38 @@
       renderPollutionChart();
     }
     function initChartUI(){
-      ["chartPollutant","chartGranularity","chartDaysBack","chartShowPred","chartHorizon","dayMarkersToggle"]
+      ["chartPollutant","chartGranularity","chartDaysBack","chartShowPred","chartHorizon"]
         .forEach(id=> document.getElementById(id).addEventListener("change", renderPollutionChart));
+
+      // NEW: editable threshold handler
+      const thrInput = document.getElementById('chartThreshold');
+      if (thrInput){
+        thrInput.addEventListener('change', ()=>{
+          const pol = document.getElementById("chartPollutant").value;
+          const v = parseFloat(thrInput.value);
+          if (Number.isFinite(v)) THRESHOLDS[pol] = v;
+          renderPollutionChart();
+        });
+      }
+
       renderPollutionChart();
     }
 
     // ==========================
-    // Pollution tiles panel (units added)
+    // Pollution tiles panel
     // ==========================
     function paintPollutionPanelNow(){
-      const UNITS = { O3:"µg/m³", NO2:"µg/m³", NO:"µg/m³", CO:"mg/m³", NH3:"µg/m³" };
       const out = latestPredictions
         ? { O3: latestPredictions.O3[0], NO2: latestPredictions.NO2[0], NO: latestPredictions.NO[0], CO: latestPredictions.CO[0], NH3: latestPredictions.NH3[0] }
         : histories;
-      const thresholds = THRESHOLDS;
-      const level = (p, v)=> v < thresholds[p]*0.6 ? "bg-green-100 text-green-800"
-                             : v < thresholds[p]     ? "bg-yellow-100 text-yellow-800"
+
+      const level = (p, v)=> v < THRESHOLDS[p]*0.6 ? "bg-green-100 text-green-800"
+                             : v < THRESHOLDS[p]     ? "bg-yellow-100 text-yellow-800"
                                                      : "bg-red-100 text-red-800";
       const entries = ["O3","NO2","NO","CO","NH3"].map(k=>{
         const v = (out && typeof out[k]==="number") ? out[k] : (out?.[k]?.slice(-1)[0] ?? 0);
-        const unit = UNITS[k] || "";
         return `<div class="p-2 rounded-lg ${level(k, v)} flex justify-between items-center">
-                  <span class="font-medium">${k}</span>
-                  <span class="font-semibold">${(v||0).toFixed(2)} <span class="opacity-80">${unit}</span></span>
+                  <span class="font-medium">${k}</span><span class="font-semibold">${(v||0).toFixed(2)}</span>
                 </div>`;
       }).join("");
       document.getElementById("pollutionOutput").innerHTML = `<div class="space-y-2">${entries}</div>`;
@@ -994,94 +1001,10 @@
     }
 
     // ==========================
-    // Noise-Planet: WMS overlays + LAeq WFS time-series
-    // ==========================
-    function toggleNoisePlanetWMS(on){
-      if (on && !npWmsLayer){
-        const provider = new Cesium.WebMapServiceImageryProvider({
-          url: 'https://data.noise-planet.org/geoserver/noisecapture/wms',
-          layers: 'noisecapture:noisecapture_area_laeq',
-          parameters: { transparent: true, format: 'image/png' }
-        });
-        npWmsLayer = viewer.imageryLayers.addImageryProvider(provider);
-        npWmsLayer.alpha = parseInt(document.getElementById('npWmsOpacity').value,10)/100;
-      }
-      if (!on && npWmsLayer){
-        viewer.imageryLayers.remove(npWmsLayer, false);
-        npWmsLayer = null;
-      }
-      viewer.scene.requestRender();
-    }
-    function toggleEEANoiseWMS(on){
-      if (on && !eeaNoiseLayer){
-        const provider = new Cesium.ArcGisMapServerImageryProvider({
-          url: 'https://copernicus.discomap.eea.europa.eu/ArcGIS/rest/services/Noise/NoiseGrid_Dyna_LAEA/MapServer',
-          layers: 'show:3' // Agglomeration Road 55 dB Lden
-        });
-        eeaNoiseLayer = viewer.imageryLayers.addImageryProvider(provider);
-        eeaNoiseLayer.alpha = parseInt(document.getElementById('eeaWmsOpacity').value,10)/100;
-      }
-      if (!on && eeaNoiseLayer){
-        viewer.imageryLayers.remove(eeaNoiseLayer, false);
-        eeaNoiseLayer = null;
-      }
-      viewer.scene.requestRender();
-    }
-
-    document.getElementById('npWmsToggle').addEventListener('change', e=> toggleNoisePlanetWMS(e.target.checked));
-    document.getElementById('npWmsOpacity').addEventListener('input', e=> { if (npWmsLayer) { npWmsLayer.alpha = e.target.value/100; viewer.scene.requestRender(); }});
-    document.getElementById('eeaNoiseToggle').addEventListener('change', e=> toggleEEANoiseWMS(e.target.checked));
-    document.getElementById('eeaWmsOpacity').addEventListener('input', e=> { if (eeaNoiseLayer) { eeaNoiseLayer.alpha = e.target.value/100; viewer.scene.requestRender(); }});
-
-    // === LAeq time-series via WFS (GeoJSON) ===
-    const BBOX = { minLon: 9.63, minLat: 45.13, maxLon: 9.76, maxLat: 45.20 };
-
-    async function fetchLAeqFromNoisePlanet(days=14){
-      const endMs = Date.now();
-      const startMs = endMs - days*24*3600*1000;
-
-      const base = 'https://data.noise-planet.org/geoserver/noisecapture/ows';
-      const typeName = 'noisecapture:noisecapture_leaflet_point';
-      const cql = encodeURIComponent(
-        `BBOX(the_geom,${BBOX.minLon},${BBOX.minLat},${BBOX.maxLon},${BBOX.maxLat}) AND time_epoch BETWEEN ${Math.floor(startMs)} AND ${Math.floor(endMs)}`
-      );
-      const url = `${base}?service=WFS&version=1.1.0&request=GetFeature&typeName=${typeName}&outputFormat=application/json&CQL_FILTER=${cql}`;
-
-      try{
-        const r = await resilientFetch(url);
-        const gj = await r.json();
-        const feats = Array.isArray(gj.features) ? gj.features : [];
-        const rows = feats.map(f=>{
-          const p = f.properties || {};
-          const ts = Number(p.time_epoch);
-          const v  = Number(p.noise_level);
-          return (Number.isFinite(ts) && Number.isFinite(v)) ? { ts, v } : null;
-        }).filter(Boolean);
-
-        for (const row of rows){ pushMeasured('LAeq', row.ts, row.v); }
-        saveTsStore();
-        renderPollutionChart();
-      }catch(e){
-        console.warn("Noise-Planet WFS fetch failed:", e);
-      }
-    }
-
-    // ==========================
     // Cesium App
     // ==========================
     async function startCesiumApp(){
-      // Load from localStorage (may be empty after a data clear)
       loadTsStore();
-
-      // Bind backup buttons
-      document.getElementById("exportTsBtn").addEventListener("click", exportTs);
-      document.getElementById("importTsFile").addEventListener("change", (e)=> {
-        const f = e.target.files?.[0]; if (f) importTs(f);
-        e.target.value = "";
-      });
-      document.getElementById("clearTsBtn").addEventListener("click", ()=> {
-        if (confirm("Clear all stored pollution & noise time-series? This cannot be undone.")) clearTs();
-      });
 
       const viewerOpts = { baseLayerPicker:true, timeline:false, animation:false, shadows:true };
       viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
@@ -1118,16 +1041,8 @@
 
       initChartUI();
 
-      // First pull air + UHI
       await fetchUHIAndUpdate();
       setInterval(fetchUHIAndUpdate, 60_000);
-
-      // Backfill AIR history if API available (recovers after data loss)
-      backfillHistory(14); // non-blocking; safe if API is offline
-
-      // Pull LAeq now and every 15 minutes
-      await fetchLAeqFromNoisePlanet(14);
-      setInterval(()=>fetchLAeqFromNoisePlanet(14), 15*60*1000);
 
       setInterval(()=>{ pruneOldData(); saveTsStore(); }, 5*60*1000);
 
@@ -1194,15 +1109,24 @@
       });
 
       // ====== Traffic Heatmap dots (static) ======
+
+      // Helper to clear all heatmap entities
       function clearHeatmap(){
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities.length = 0;
       }
 
+      // Loader that respects the toggle
       async function loadHeatmap(timeOfDay) {
+        // Always start clean
         clearHeatmap();
+
+        // If dots are disabled, bail early
         const dotsToggle = document.getElementById("heatmapDotsToggle");
-        if (!dotsToggle || !dotsToggle.checked) { viewer.scene.requestRender(); return; }
+        if (!dotsToggle || !dotsToggle.checked) {
+          viewer.scene.requestRender();
+          return;
+        }
 
         try {
           const file = `${timeOfDay}_heatpoints.json`;
@@ -1234,6 +1158,7 @@
         viewer.scene.requestRender();
       }
 
+      // Bind selector + toggle
       const heatmapTimeSelector = document.getElementById("heatmapTimeSelector");
       const heatmapDotsToggle   = document.getElementById("heatmapDotsToggle");
 
@@ -1242,29 +1167,31 @@
       });
 
       heatmapDotsToggle.addEventListener("change", () => {
-        if (heatmapDotsToggle.checked) loadHeatmap(heatmapTimeSelector.value);
-        else clearHeatmap();
+        if (heatmapDotsToggle.checked) {
+          loadHeatmap(heatmapTimeSelector.value);
+        } else {
+          clearHeatmap();
+        }
       });
 
-      if (heatmapDotsToggle && heatmapDotsToggle.checked) loadHeatmap(heatmapTimeSelector.value || "morning");
-      else clearHeatmap();
+      // Initial load honoring the toggle
+      if (heatmapDotsToggle && heatmapDotsToggle.checked) {
+        loadHeatmap(heatmapTimeSelector.value || "morning");
+      } else {
+        clearHeatmap();
+      }
 
       // ====== Live Traffic (TomTom) ======
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
       const trafficRefresh = document.getElementById("trafficRefresh");
-
-      // Traffic status badge in the top-right stack
       const trafficStatus = document.createElement("div");
       Object.assign(trafficStatus.style, {
-        background:"rgba(255,255,255,0.9)",
-        padding:"6px 10px",
-        borderRadius:"10px",
-        fontFamily:"system-ui, sans-serif",
-        fontSize:"12px",
-        boxShadow:"0 2px 6px rgba(0,0,0,.15)"
+        position:"absolute", right:"1rem", top:"1rem", zIndex:20,
+        background:"rgba(255,255,255,0.9)", padding:"6px 10px", borderRadius:"10px",
+        fontFamily:"system-ui, sans-serif", fontSize:"12px", boxShadow:"0 2px 6px rgba(0,0,0,.15)"
       });
       trafficStatus.textContent = "Traffic: starting…";
-      document.getElementById("topRightStack").appendChild(trafficStatus);
+      document.body.appendChild(trafficStatus);
       const setTrafficStatus = (msg)=>trafficStatus.textContent = `Traffic: ${msg}`;
 
       function addOrUpdateTrafficLayer(){
