@@ -39,6 +39,10 @@
       border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.15); z-index:1000; max-width:240px; display:none;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
     }
+
+    /* === Draggable panels === */
+    .drag-handle { cursor: move; user-select: none; -webkit-user-select: none; }
+    .dragging    { opacity: .95; }
   </style>
 </head>
 
@@ -46,7 +50,11 @@
   <div id="cesiumContainer"></div>
 
   <!-- Control Panel -->
-  <div class="absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-80 space-y-4 z-10 font-sans">
+  <div id="controlPanel" class="absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-80 space-y-4 z-10 font-sans">
+    <div class="drag-handle -mt-1 -mx-1 mb-2 px-1 py-1 text-[11px] text-gray-500 rounded cursor-move select-none">
+      ⠿ Drag panel
+    </div>
+
     <div class="text-lg font-semibold">Codogno Digital Twin</div>
 
     <div class="grid grid-cols-2 gap-3">
@@ -138,7 +146,7 @@
 
   <!-- UHI legend (TOP RIGHT) -->
   <div id="uhiLegendRight" class="uhiLegendPanel hidden">
-    <div class="title">Colors by UHI</div>
+    <div class="title drag-handle">Colors by UHI</div>
     <div id="uhiLegendRowsRight"></div>
   </div>
 
@@ -146,6 +154,9 @@
 
   <!-- Small tiles -->
   <div id="pollutionPanel" class="absolute bottom-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg w-72 space-y-2 z-10 font-sans text-sm">
+    <div class="drag-handle -mt-1 -mx-1 mb-1 px-1 py-1 text-[11px] text-gray-500 rounded cursor-move select-none">
+      ⠿ Drag
+    </div>
     <div class="font-semibold text-gray-700">Predicted Pollution (now)</div>
     <div id="pollutionOutput">Loading...</div>
     <div id="pollutionStamp" class="text-[11px] text-gray-600">—</div>
@@ -154,7 +165,7 @@
   <!-- Time-series chart -->
   <div id="pollutionChartPanel"
        class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/90 p-4 rounded-xl shadow-lg w-[900px] z-10 font-sans">
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between drag-handle">
       <div class="text-lg font-semibold">Pollution — Trends & Peaks</div>
       <div class="text-xs text-gray-600" id="pollutionChartStatus">—</div>
     </div>
@@ -1249,6 +1260,97 @@
     // Kickoff
     // ==========================
     startCesiumApp();
+
+    // ==========================
+    // Draggable panels (mouse + touch)
+    // ==========================
+    (function enablePanelDragging(){
+      const DRAGS = [
+        { panel: '#controlPanel',        handle: '#controlPanel .drag-handle' },
+        { panel: '#uhiLegendRight',      handle: '#uhiLegendRight .drag-handle' },
+        { panel: '#pollutionPanel',      handle: '#pollutionPanel .drag-handle' },
+        { panel: '#pollutionChartPanel', handle: '#pollutionChartPanel .drag-handle' },
+      ];
+
+      DRAGS.forEach(({panel, handle})=>{
+        const el = document.querySelector(panel);
+        const grip = document.querySelector(handle);
+        if (!el || !grip) return;
+
+        el.style.position = 'absolute';
+        const state = { x:0, y:0, left:0, top:0, dragging:false };
+
+        const onDown = (e)=>{
+          if (e.target.closest('input,select,textarea,button,label')) return;
+
+          const rect = el.getBoundingClientRect();
+          const scrollX = window.scrollX || 0;
+          const scrollY = window.scrollY || 0;
+
+          // remove centering transforms/classes so left/top can take over
+          el.classList.remove('-translate-x-1/2', 'left-1/2');
+
+          if (!el.style.left) el.style.left = (rect.left + scrollX) + 'px';
+          if (!el.style.top)  el.style.top  = (rect.top  + scrollY) + 'px';
+
+          state.x = (e.touches ? e.touches[0].clientX : e.clientX);
+          state.y = (e.touches ? e.touches[0].clientY : e.clientY);
+          state.left = parseFloat(el.style.left) || rect.left + scrollX;
+          state.top  = parseFloat(el.style.top)  || rect.top  + scrollY;
+          state.dragging = true;
+
+          el.dataset.prevZ = el.style.zIndex || '';
+          el.style.zIndex = '10000';
+          el.classList.add('dragging');
+
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('touchmove', onMove, { passive:false });
+          window.addEventListener('mouseup', onUp, { once:true });
+          window.addEventListener('touchend', onUp, { once:true });
+          e.preventDefault();
+        };
+
+        const clampToViewport = (left, top, w, h)=>{
+          const pad = 8;
+          const maxL = window.innerWidth  - w - pad;
+          const maxT = window.innerHeight - h - pad;
+          return [
+            Math.max(pad, Math.min(left, maxL)),
+            Math.max(pad, Math.min(top,  maxT))
+          ];
+        };
+
+        const onMove = (e)=>{
+          if (!state.dragging) return;
+          const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+          const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+          const dx = cx - state.x;
+          const dy = cy - state.y;
+
+          const rect = el.getBoundingClientRect();
+          let nextLeft = state.left + dx;
+          let nextTop  = state.top  + dy;
+          [nextLeft, nextTop] = clampToViewport(nextLeft, nextTop, rect.width, rect.height);
+
+          el.style.left = nextLeft + 'px';
+          el.style.top  = nextTop  + 'px';
+          el.style.right = '';
+          el.style.bottom = '';
+          e.preventDefault();
+        };
+
+        const onUp = ()=>{
+          state.dragging = false;
+          el.classList.remove('dragging');
+          if (el.dataset.prevZ !== undefined) el.style.zIndex = el.dataset.prevZ;
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('touchmove', onMove);
+        };
+
+        grip.addEventListener('mousedown', onDown);
+        grip.addEventListener('touchstart', onDown, { passive:false });
+      });
+    })();
   </script>
 </body>
 </html>
