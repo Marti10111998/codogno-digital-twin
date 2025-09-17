@@ -19,7 +19,7 @@
     /* Discrete (vertical) legend — TOP RIGHT */
     .uhiLegendPanel{
       position:absolute;
-      z-index:50; /* higher than control/chart panels */
+      z-index:50;
       background:rgba(0,0,0,0.6); color:white; border-radius:12px; padding:10px 12px;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; font-size:12px; width:200px;
       box-shadow:0 6px 14px rgba(0,0,0,.25); backdrop-filter: blur(2px);
@@ -119,7 +119,6 @@
           <option value="night">Night</option>
         </select>
 
-        <!-- NEW: Toggle for the static traffic heatmap dots -->
         <label class="inline-flex items-center mt-2">
           <input type="checkbox" id="heatmapDotsToggle" class="mr-2" checked />
           Show Heatmap Dots
@@ -164,7 +163,7 @@
       <div class="col-span-2">
         <label class="block text-sm font-medium">Pollutant</label>
         <select id="chartPollutant" class="w-full border rounded px-2 py-1">
-          <option>O3</option><option>NO2</option><option>NO</option><option>CO</option><option>NH3</option>
+          <option>O3</option><option>NO2</option><option>NO</option><option>CO</option><option>NH3</option><option>Noise</option>
         </select>
       </div>
       <div class="col-span-2">
@@ -195,7 +194,7 @@
         </label>
       </div>
 
-      <!-- NEW: editable threshold -->
+      <!-- Editable threshold -->
       <div>
         <label class="block text-sm font-medium">Soglia</label>
         <input id="chartThreshold" type="number" step="0.1" class="w-full border rounded px-2 py-1" />
@@ -228,7 +227,7 @@
     let viewer, buildings = [], heatmapEntities = [];
     let trafficLayer = null, trafficTimer = null;
 
-    const histories = { urbanTemp: [], O3: [], NO2: [], NO: [], CO: [], NH3: [] };
+    const histories = { urbanTemp: [], O3: [], NO2: [], NO: [], CO: [], NH3: [], Noise: [] };
     let lastWeather = { temp: null, wind: 0, clouds: 0, humidity: 0, pressure: 0, rain1h: 0 };
 
     // === Forecast 7 days ahead at hourly cadence ===
@@ -274,13 +273,13 @@
     }
 
     const UHI_STOPS = [
-      { p: 0.00,  c: Cesium.Color.fromBytes(94, 79,162,255) },  // #5E4FA2
-      { p: 0.125, c: Cesium.Color.fromBytes(50,136,189,255) },  // #3288BD
-      { p: 0.25,  c: Cesium.Color.fromBytes(153,213,148,255) }, // #99D594
-      { p: 0.50,  c: Cesium.Color.fromBytes(230,245,152,255) }, // #E6F598
-      { p: 0.75,  c: Cesium.Color.fromBytes(254,224,139,255) }, // #FEE08B
-      { p: 0.875, c: Cesium.Color.fromBytes(252,141, 89,255) }, // #FC8D59
-      { p: 1.00,  c: Cesium.Color.fromBytes(213, 62, 79,255) }  // #D53E4F
+      { p: 0.00,  c: Cesium.Color.fromBytes(94, 79,162,255) },
+      { p: 0.125, c: Cesium.Color.fromBytes(50,136,189,255) },
+      { p: 0.25,  c: Cesium.Color.fromBytes(153,213,148,255) },
+      { p: 0.50,  c: Cesium.Color.fromBytes(230,245,152,255) },
+      { p: 0.75,  c: Cesium.Color.fromBytes(254,224,139,255) },
+      { p: 0.875, c: Cesium.Color.fromBytes(252,141, 89,255) },
+      { p: 1.00,  c: Cesium.Color.fromBytes(213, 62, 79,255) }
     ];
     function interpolateColor(stops,t){
       t = clamp01(t);
@@ -431,11 +430,12 @@
           }
           const out = {
             urbanTemp: hw(ensure(histories.urbanTemp, 28), 0.5,0.3,0.2, 24, horizon),
-            O3:  hw(ensure(histories.O3, 80),  0.5,0.3,0.2, 24, horizon),
-            NO2: hw(ensure(histories.NO2, 30), 0.5,0.3,0.2, 24, horizon),
-            NO:  hw(ensure(histories.NO, 20),  0.5,0.3,0.2, 24, horizon),
-            CO:  hw(ensure(histories.CO, 1.0), 0.5,0.3,0.2, 24, horizon),
-            NH3: hw(ensure(histories.NH3, 1.0),0.5,0.3,0.2, 24, horizon)
+            O3:   hw(ensure(histories.O3,   80), 0.5,0.3,0.2, 24, horizon),
+            NO2:  hw(ensure(histories.NO2,  30), 0.5,0.3,0.2, 24, horizon),
+            NO:   hw(ensure(histories.NO,   20), 0.5,0.3,0.2, 24, horizon),
+            CO:   hw(ensure(histories.CO,  1.0), 0.5,0.3,0.2, 24, horizon),
+            NH3:  hw(ensure(histories.NH3, 1.0), 0.5,0.3,0.2, 24, horizon),
+            Noise: hw(ensure(histories.Noise, 60), 0.5,0.3,0.2, 24, horizon)
           };
           postMessage({ kind:"PREDICTIONS", data: out, ts: Date.now() });
         }
@@ -477,6 +477,30 @@
     }
 
     // ==========================
+    // Noise heuristic
+    // ==========================
+    function estimateNoiseFromContext(w){
+      // Baseline by time of day (LAeq)
+      const tod = document.getElementById("heatmapTimeSelector")?.value ||
+                  ((h)=> h<6?'night': h<10?'morning': h<16?'lunch': h<21?'evening':'night')((new Date()).getHours());
+      const baseByTod = { morning:64, lunch:60, evening:66, night:52 };
+      let val = baseByTod[tod] ?? 60;
+
+      // Adjustments
+      const live = document.getElementById("liveTrafficToggle")?.checked;
+      const wind = w?.wind || 0;
+      const rain = w?.rain1h || 0;
+
+      if (!live) val -= 2;                    // if live traffic is off, assume slightly quieter
+      val -= 0.4 * Math.max(0, wind - 1.0);   // more dispersion with stronger wind
+      if (rain > 0) val -= 1.5;               // rainy periods tend to reduce outdoor traffic/people
+
+      // Clamp to plausible city range
+      const cap = (x,min,max)=>Math.max(min, Math.min(max, x));
+      return cap(val, 40, 85);
+    }
+
+    // ==========================
     // Weather + UHI (realtime)
     // ==========================
     async function fetchUHIAndUpdate(){
@@ -505,7 +529,10 @@
         let nowPoll = await predictWithAPI(lastWeather);
         if (!nowPoll) nowPoll = simulatePollutionFromWeather(lastWeather);
 
-        for (const k of ["O3","NO2","NO","CO","NH3"]) {
+        // Ensure Noise present
+        if (typeof nowPoll.Noise !== 'number') nowPoll.Noise = estimateNoiseFromContext(lastWeather);
+
+        for (const k of ["O3","NO2","NO","CO","NH3","Noise"]) {
           histories[k].push(Number(nowPoll[k]) || 0);
           if (histories[k].length > 2000) histories[k].shift();
         }
@@ -535,12 +562,14 @@
     function simulatePollutionFromWeather(w){
       const { temp, wind, humidity, clouds } = w;
       const cap = (x,min,max)=>Math.max(min, Math.min(max, x));
+      const Noise = estimateNoiseFromContext(w);
       return {
         O3:  cap(60 + (temp-20)*2 - clouds*0.3 + wind*-2, 20, 140),
         NO2: cap(20 + clouds*0.2 + (30 - wind*3), 5, 80),
         NO:  cap(10 + (humidity-50)*0.1 + (30 - wind*4), 2, 70),
         CO:  cap(0.6 + (30 - wind*5)*0.02, 0.2, 3),
-        NH3: cap(0.8 + (humidity-50)*0.01, 0.3, 4)
+        NH3: cap(0.8 + (humidity-50)*0.01, 0.3, 4),
+        Noise
       };
     }
 
@@ -640,12 +669,12 @@
     // Time-series chart wiring
     // ==========================
     const tsStore = {
-      O3: [], NO2: [], NO: [], CO: [], NH3: [],
-      pred: { O3: [], NO2: [], NO: [], CO: [], NH3: [] }
+      O3: [], NO2: [], NO: [], CO: [], NH3: [], Noise: [],
+      pred: { O3: [], NO2: [], NO: [], CO: [], NH3: [], Noise: [] }
     };
     const RETENTION_DAYS = 7;
     const STORE_KEY = "pollution_ts_v1";
-    const KEYS = ["O3","NO2","NO","CO","NH3"];
+    const KEYS = ["O3","NO2","NO","CO","NH3","Noise"];
 
     function pruneOldData() {
       const cutoff = Date.now() - RETENTION_DAYS * 24 * 3600 * 1000;
@@ -655,7 +684,7 @@
     function saveTsStore() {
       pruneOldData();
       const cap = (arr, n = 100000) => (arr.length > n ? arr.slice(arr.length - n) : arr);
-      const payload = { O3: cap(tsStore.O3), NO2: cap(tsStore.NO2), NO: cap(tsStore.NO), CO: cap(tsStore.CO), NH3: cap(tsStore.NH3) };
+      const payload = { O3: cap(tsStore.O3), NO2: cap(tsStore.NO2), NO: cap(tsStore.NO), CO: cap(tsStore.CO), NH3: cap(tsStore.NH3), Noise: cap(tsStore.Noise) };
       try { localStorage.setItem(STORE_KEY, JSON.stringify(payload)); } catch {}
     }
     function loadTsStore() {
@@ -701,11 +730,11 @@
       return points.filter(p=>p.ts >= cutoff);
     }
 
-    // NEW: units per pollutant and editable thresholds
-    const UNITS = { O3:"µg/m³", NO2:"µg/m³", NO:"µg/m³", CO:"ppm", NH3:"µg/m³" };
-    const THRESHOLDS = { O3:100, NO2:40, NO:50, CO:10, NH3:2 };
+    // Units + thresholds (editable)
+    const UNITS = { O3:"µg/m³", NO2:"µg/m³", NO:"µg/m³", CO:"ppm", NH3:"µg/m³", Noise:"dB(A)" };
+    const THRESHOLDS = { O3:100, NO2:40, NO:50, CO:10, NH3:2, Noise:65 };
 
-    // Threshold line plugin (existing)
+    // Threshold line plugin
     const thresholdPlugin = {
       id: 'thresholdLine',
       afterDatasetsDraw(chart, args, opts) {
@@ -723,7 +752,7 @@
       }
     };
 
-    // NEW: vertical day separators
+    // Vertical day separators
     const dayLinesPlugin = {
       id: 'dayLines',
       beforeDatasetsDraw(chart, args, opts) {
@@ -766,7 +795,7 @@
     Chart.register(thresholdPlugin);
     Chart.register(dayLinesPlugin);
 
-    // NEW: peak detection and prediction band
+    // Peaks + prediction band
     function findPeaks(points){
       if (!points || points.length < 3) return [];
       const ys = points.map(p=>p.y);
@@ -816,7 +845,7 @@
               return `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}${unit ? ' ' + unit : ''}`;
             } } },
             thresholdLine: { value: 0 },
-            dayLines: { showLabels: false } // set true to display dates above lines
+            dayLines: { showLabels: false }
           },
           scales: {
             x: { type: "time" },
@@ -836,10 +865,8 @@
       const showPred = document.getElementById("chartShowPred").checked;
       const horizonHrs = parseInt(document.getElementById("chartHorizon").value, 10);
 
-      // time unit
       chart.options.scales.x.time.unit = (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
 
-      // aggregated series
       const measuredAgg = aggregateSeries(sliceDaysBack(tsStore[pollutant], daysBack), gran).map(p=>({ x:p.t, y:p.v }));
 
       let predictedAgg = [];
@@ -849,16 +876,11 @@
         predictedAgg = aggregateSeries(future, gran).map(p=>({ x:p.t, y:p.v }));
       }
 
-      // threshold (editable)
       const thr = Number.isFinite(THRESHOLDS[pollutant]) ? THRESHOLDS[pollutant] : Infinity;
 
-      // peaks
       const peaks = findPeaks(measuredAgg);
-
-      // prediction band
       const band = buildPredictionBand(measuredAgg, predictedAgg);
 
-      // datasets
       const unit = UNITS[pollutant] || '';
       const dsMeasured = {
         label: `${pollutant} (misurato)`,
@@ -887,7 +909,7 @@
           data: band.upper,
           borderWidth: 0,
           pointRadius: 0,
-          fill: { target: "-1" }, // fill between this (upper) and previous (lower)
+          fill: { target: "-1" },
           backgroundColor: 'rgba(0, 99, 255, 0.10)',
           metaPollutant: pollutant,
           order: 6
@@ -920,19 +942,14 @@
 
       chart.data.datasets = datasets;
 
-      // axis label with unit
       chart.options.scales.y.title.text = `${pollutant} (${unit})`;
-
-      // apply threshold
       chart.options.plugins.thresholdLine.value = thr;
 
-      // status
       document.getElementById("pollutionChartStatus").textContent =
         `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
 
       chart.update();
 
-      // sync UI threshold input if not focused
       const thrInput = document.getElementById('chartThreshold');
       if (thrInput && document.activeElement !== thrInput) thrInput.value = String(thr);
     }
@@ -965,7 +982,6 @@
       ["chartPollutant","chartGranularity","chartDaysBack","chartShowPred","chartHorizon"]
         .forEach(id=> document.getElementById(id).addEventListener("change", renderPollutionChart));
 
-      // NEW: editable threshold handler
       const thrInput = document.getElementById('chartThreshold');
       if (thrInput){
         thrInput.addEventListener('change', ()=>{
@@ -984,14 +1000,14 @@
     // ==========================
     function paintPollutionPanelNow(){
       const out = latestPredictions
-        ? { O3: latestPredictions.O3[0], NO2: latestPredictions.NO2[0], NO: latestPredictions.NO[0], CO: latestPredictions.CO[0], NH3: latestPredictions.NH3[0] }
+        ? { O3: latestPredictions.O3[0], NO2: latestPredictions.NO2[0], NO: latestPredictions.NO[0], CO: latestPredictions.CO[0], NH3: latestPredictions.NH3[0], Noise: latestPredictions.Noise[0] }
         : histories;
 
       const level = (p, v)=> v < THRESHOLDS[p]*0.6 ? "bg-green-100 text-green-800"
                              : v < THRESHOLDS[p]     ? "bg-yellow-100 text-yellow-800"
                                                      : "bg-red-100 text-red-800";
-      const entries = ["O3","NO2","NO","CO","NH3"].map(k=>{
-        const v = (out && typeof out[k]==="number") ? out[k] : (out?.[k]?.slice(-1)[0] ?? 0);
+      const entries = ["O3","NO2","NO","CO","NH3","Noise"].map(k=>{
+        const v = (out && typeof out[k]==="number") ? out[k] : (out?.[k]?.slice?.(-1)[0] ?? 0);
         return `<div class="p-2 rounded-lg ${level(k, v)} flex justify-between items-center">
                   <span class="font-medium">${k}</span><span class="font-semibold">${(v||0).toFixed(2)}</span>
                 </div>`;
@@ -1109,48 +1125,42 @@
       });
 
       // ====== Traffic Heatmap dots (static) ======
-
-      // Helper to clear all heatmap entities
       function clearHeatmap(){
         for (const e of heatmapEntities) viewer.entities.remove(e);
         heatmapEntities.length = 0;
       }
 
-      // Loader that respects the toggle
       async function loadHeatmap(timeOfDay) {
-        // Always start clean
         clearHeatmap();
 
-        // If dots are disabled, bail early
         const dotsToggle = document.getElementById("heatmapDotsToggle");
-        if (!dotsToggle || !dotsToggle.checked) {
-          viewer.scene.requestRender();
-          return;
-        }
+        const shouldDraw = !!(dotsToggle && dotsToggle.checked);
 
         try {
           const file = `${timeOfDay}_heatpoints.json`;
           const response = await resilientFetch(file);
           const data = await response.json();
 
-          const LIFT_M = 6.0;
-          for (const [lat, lon, speed] of data) {
-            const normalized = clamp01(speed / 60);
-            const hue = (1 - normalized) * 240; // blue→red
-            const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
+          if (shouldDraw) {
+            const LIFT_M = 6.0;
+            for (const [lat, lon, speed] of data) {
+              const normalized = clamp01(speed / 60);
+              const hue = (1 - normalized) * 240; // blue→red
+              const color = Cesium.Color.fromHsl(hue / 360, 1.0, 0.5).withAlpha(0.8);
 
-            const entity = viewer.entities.add({
-              position: Cesium.Cartesian3.fromDegrees(lon, lat, LIFT_M),
-              point: {
-                pixelSize: 10,
-                color,
-                outlineColor: Cesium.Color.WHITE,
-                outlineWidth: 1,
-                heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
-                disableDepthTestDistance: Number.POSITIVE_INFINITY
-              }
-            });
-            heatmapEntities.push(entity);
+              const entity = viewer.entities.add({
+                position: Cesium.Cartesian3.fromDegrees(lon, lat, LIFT_M),
+                point: {
+                  pixelSize: 10,
+                  color,
+                  outlineColor: Cesium.Color.WHITE,
+                  outlineWidth: 1,
+                  heightReference: Cesium.HeightReference.RELATIVE_TO_GROUND,
+                  disableDepthTestDistance: Number.POSITIVE_INFINITY
+                }
+              });
+              heatmapEntities.push(entity);
+            }
           }
         } catch (e) {
           console.warn("Heatmap load failed", e);
@@ -1158,12 +1168,11 @@
         viewer.scene.requestRender();
       }
 
-      // Bind selector + toggle
       const heatmapTimeSelector = document.getElementById("heatmapTimeSelector");
       const heatmapDotsToggle   = document.getElementById("heatmapDotsToggle");
 
       heatmapTimeSelector.addEventListener("change", () => {
-        if (heatmapDotsToggle.checked) loadHeatmap(heatmapTimeSelector.value);
+        loadHeatmap(heatmapTimeSelector.value);
       });
 
       heatmapDotsToggle.addEventListener("change", () => {
@@ -1174,7 +1183,6 @@
         }
       });
 
-      // Initial load honoring the toggle
       if (heatmapDotsToggle && heatmapDotsToggle.checked) {
         loadHeatmap(heatmapTimeSelector.value || "morning");
       } else {
