@@ -230,12 +230,13 @@
     Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxMTUyZDQ1NS1mMzZhLTQzYTEtOWE5NC1iZjM4OWJlMWVhZTMiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NDc4MjQzNjV9.GicPO1Vdm6jWAy1XAnct4jCx4muG1tuFcF-Dlvlg1Rw";
 
     // Optional backend (predict/backfill); app works without it
-    const POLLUTION_API = "http://localhost:8000"; // set "" to disable cloud sync
+    const POLLUTION_API = "http://localhost:8000";
 
     // ======== CLOUD SYNC SETTINGS (NEW) ========
     const CLOUD_SYNC_ENABLED = !!POLLUTION_API;
     const SYNC_KEY = "pollution_ts_sync_v1";
     const DEVICE_KEY = "device_id_v1";
+
     function getDeviceId(){
       try{
         let id = localStorage.getItem(DEVICE_KEY);
@@ -353,12 +354,12 @@
       }
       if (!vals.length) return;
       vals.sort((a,b)=>a-b);
-      let min = quantile(vals, LOWER_P);
-      let max = quantile(vals, UPPER_P);
-      if ((max - min) < MIN_SPAN){
+      let min = quantile(vals, 0.05);
+      let max = quantile(vals, 0.95);
+      if ((max - min) < 2.0){
         const mid = (min + max)/2;
-        min = mid - MIN_SPAN/2;
-        max = mid + MIN_SPAN/2;
+        min = mid - 1.0;
+        max = mid + 1.0;
       }
       UHI_MIN = Math.floor(min * POW) / POW;
       UHI_MAX = Math.ceil (max * POW) / POW;
@@ -410,10 +411,6 @@
     function colorFromBins(x, breaks, colors, alpha=1){
       for(let i=0;i<breaks.length;i++){ if(x <= breaks[i]) return hexToCesium(colors[i], alpha); }
       return hexToCesium(colors[colors.length-1], alpha);
-    }
-    function stableJitterFromName(name){
-      let h=0; for (let i=0;i<name.length;i++) h=(h*31 + name.charCodeAt(i))|0;
-      return (h % 1000)/1000;
     }
 
     // ===== Legend helpers (RIGHT ONLY) =====
@@ -705,48 +702,12 @@
       for (const k of KEYS) tsStore[k] = (tsStore[k] || []).filter(p => p.ts >= cutoff && Number.isFinite(p.v));
       return cutoff;
     }
-
-    // ==== CLOUD SYNC: gather rows since cutoff & send ====
-    function collectPointsSince(cutoffTs){
-      const rows = [];
-      for (const k of KEYS) {
-        for (const p of tsStore[k]) {
-          if (p.ts > cutoffTs && Number.isFinite(p.v)) rows.push({ ts: p.ts, pollutant: k, value: p.v });
-        }
-      }
-      rows.sort((a,b)=>a.ts - b.ts);
-      return rows;
-    }
-    let syncTimer = null;
-    async function syncToCloud(){
-      if (!CLOUD_SYNC_ENABLED) return;
-      clearTimeout(syncTimer);
-      syncTimer = setTimeout(async ()=>{
-        try{
-          const { lastTs } = getLastSynced();
-          const payload = collectPointsSince(lastTs);
-          if (!payload.length) return;
-
-          const r = await fetch(`${POLLUTION_API}/ingest`, {
-            method: "POST",
-            headers: { "Content-Type":"application/json" },
-            body: JSON.stringify({ device: getDeviceId(), rows: payload })
-          });
-          if (!r.ok) throw new Error("ingest error");
-          const newest = payload[payload.length - 1].ts;
-          setLastSynced(newest);
-        } catch(e){
-          console.warn("Cloud sync failed:", e);
-        }
-      }, 800);
-    }
-
     function saveTsStore() {
       pruneOldData();
       const cap = (arr, n = 100000) => (arr.length > n ? arr.slice(arr.length - n) : arr);
       const payload = { O3: cap(tsStore.O3), NO2: cap(tsStore.NO2), NO: cap(tsStore.NO), CO: cap(tsStore.CO), NH3: cap(tsStore.NH3), Noise: cap(tsStore.Noise) };
       try { localStorage.setItem(STORE_KEY, JSON.stringify(payload)); } catch {}
-      // NEW: push to cloud so other devices can backfill
+      // NEW: push to cloud (if enabled)
       syncToCloud();
     }
     function loadTsStore() {
@@ -792,9 +753,11 @@
       return points.filter(p=>p.ts >= cutoff);
     }
 
+    // Units + thresholds (editable)
     const UNITS = { O3:"µg/m³", NO2:"µg/m³", NO:"µg/m³", CO:"ppm", NH3:"µg/m³", Noise:"dB(A)" };
     const THRESHOLDS = { O3:100, NO2:40, NO:50, CO:10, NH3:2, Noise:65 };
 
+    // Threshold line plugin
     const thresholdPlugin = {
       id: 'thresholdLine',
       afterDatasetsDraw(chart, args, opts) {
@@ -812,6 +775,7 @@
       }
     };
 
+    // Vertical day separators
     const dayLinesPlugin = {
       id: 'dayLines',
       beforeDatasetsDraw(chart, args, opts) {
@@ -854,6 +818,7 @@
     Chart.register(thresholdPlugin);
     Chart.register(dayLinesPlugin);
 
+    // Peaks + prediction band
     function findPeaks(points){
       if (!points || points.length < 3) return [];
       const ys = points.map(p=>p.y);
@@ -1075,6 +1040,44 @@
     }
 
     // ==========================
+    // ====== CLOUD SYNC (NEW)
+    // ==========================
+    function collectPointsSince(cutoffTs){
+      const rows = [];
+      for (const k of KEYS) {
+        for (const p of tsStore[k]) {
+          if (p.ts > cutoffTs && Number.isFinite(p.v)) rows.push({ ts: p.ts, pollutant: k, value: p.v });
+        }
+      }
+      rows.sort((a,b)=>a.ts - b.ts);
+      return rows;
+    }
+
+    let syncTimer = null;
+    async function syncToCloud(){
+      if (!CLOUD_SYNC_ENABLED) return;
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(async ()=>{
+        try{
+          const { lastTs } = getLastSynced();
+          const payload = collectPointsSince(lastTs);
+          if (!payload.length) return;
+
+          const r = await fetch(`${POLLUTION_API}/ingest`, {
+            method: "POST",
+            headers: { "Content-Type":"application/json" },
+            body: JSON.stringify({ device: getDeviceId(), rows: payload })
+          });
+          if (!r.ok) throw new Error("ingest error");
+          const newest = payload[payload.length - 1].ts;
+          setLastSynced(newest);
+        } catch(e){
+          console.warn("Cloud sync failed:", e);
+        }
+      }, 800);
+    }
+
+    // ==========================
     // Cesium App
     // ==========================
     async function startCesiumApp(){
@@ -1115,8 +1118,8 @@
 
       // ===== ensure 7-day data is available on *new devices* =====
       if (CLOUD_SYNC_ENABLED) {
-        await backfillHistory(7);  // fetch & fill 7-day cloud history if backend is up
-        saveTsStore();             // persist locally so the chart is populated next time
+        await backfillHistory(7);
+        saveTsStore();
       }
 
       initChartUI();
@@ -1355,3 +1358,54 @@
           el.style.zIndex = '10000';
           el.classList.add('dragging');
 
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('touchmove', onMove, { passive:false });
+          window.addEventListener('mouseup', onUp, { once:true });
+          window.addEventListener('touchend', onUp, { once:true });
+          e.preventDefault();
+        };
+
+        const clampToViewport = (left, top, w, h)=>{
+          const pad = 8;
+          const maxL = window.innerWidth  - w - pad;
+          const maxT = window.innerHeight - h - pad;
+          return [
+            Math.max(pad, Math.min(left, maxL)),
+            Math.max(pad, Math.min(top,  maxT))
+          ];
+        };
+
+        const onMove = (e)=>{
+          if (!state.dragging) return;
+          const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+          const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+          const dx = cx - state.x;
+          const dy = cy - state.y;
+
+          const rect = el.getBoundingClientRect();
+          let nextLeft = state.left + dx;
+          let nextTop  = state.top  + dy;
+          [nextLeft, nextTop] = clampToViewport(nextLeft, nextTop, rect.width, rect.height);
+
+          el.style.left = nextLeft + 'px';
+          el.style.top  = nextTop  + 'px';
+          el.style.right = '';
+          el.style.bottom = '';
+          e.preventDefault();
+        };
+
+        const onUp = ()=>{
+          state.dragging = false;
+          el.classList.remove('dragging');
+          if (el.dataset.prevZ !== undefined) el.style.zIndex = el.dataset.prevZ;
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('touchmove', onMove);
+        };
+
+        grip.addEventListener('mousedown', onDown);
+        grip.addEventListener('touchstart', onDown, { passive:false });
+      });
+    })();
+  </script>
+</body>
+</html>
