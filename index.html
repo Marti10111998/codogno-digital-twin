@@ -221,6 +221,39 @@
     </div>
   </div>
 
+  <!-- ICT / Ops panel -->
+<div id="ictPanel"
+     class="absolute top-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg w-[520px] z-20 font-sans">
+  <div class="flex items-center justify-between">
+    <div class="text-lg font-semibold">ICT — System Health</div>
+    <div id="ictStamp" class="text-xs text-gray-500">—</div>
+  </div>
+
+  <div class="grid grid-cols-3 gap-3 mt-3 text-sm">
+    <div class="p-3 rounded-xl bg-green-50 border border-green-200">
+      <div class="text-[11px] text-green-700">Uptime (24h)</div>
+      <div id="ictUptime" class="text-xl font-semibold text-green-800">—</div>
+    </div>
+    <div class="p-3 rounded-xl bg-blue-50 border border-blue-200">
+      <div class="text-[11px] text-blue-700">Latest update</div>
+      <div id="ictLatest" class="text-xl font-semibold text-blue-800">—</div>
+    </div>
+    <div class="p-3 rounded-xl bg-violet-50 border border-violet-200">
+      <div class="text-[11px] text-violet-700">API latency</div>
+      <div id="ictLatency" class="text-xl font-semibold text-violet-800">—</div>
+    </div>
+  </div>
+
+  <div class="mt-3">
+    <canvas id="ictChart" height="120"></canvas>
+  </div>
+
+  <div class="mt-2 text-[12px] text-gray-600">
+    Bars: updates/hour • Line: API latency (ms). Expected ~6 updates/hour with a 10-min cron.
+  </div>
+</div>
+
+
   <script type="module">
     // ==========================
     // 🔑 KEYS
@@ -1311,6 +1344,118 @@
       trafficRefresh.addEventListener("change", ()=> { if (liveTrafficToggle.checked) beginTrafficUpdates(); });
       beginTrafficUpdates();
     }
+
+// ======== ICT / Ops telemetry ========
+let ictChart = null;
+
+function bucketByHour(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const d = new Date(Number(r.ts));
+    d.setMinutes(0,0,0);
+    const k = d.getTime();
+    map.set(k, (map.get(k) || 0) + 1);
+  }
+  return [...map.entries()].sort((a,b)=>a[0]-b[0]).map(([t,c])=>({ t, c }));
+}
+
+async function timedFetch(url, init){
+  const t0 = performance.now();
+  const res = await fetch(url, init);
+  const t1 = performance.now();
+  return { res, ms: Math.max(0, Math.round(t1 - t0)) };
+}
+
+function ensureIctChart(){
+  if (ictChart) return ictChart;
+  const ctx = document.getElementById("ictChart").getContext("2d");
+  ictChart = new Chart(ctx, {
+    type: "bar",
+    data: { labels: [], datasets: [] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { type: "time", time: { unit: "hour" } },
+        y: { title: { display:true, text:"updates/hour" }, beginAtZero:true, suggestedMax:8 },
+        y1:{ title: { display:true, text:"latency (ms)" }, position:"right", beginAtZero:true, grid:{ drawOnChartArea:false } }
+      },
+      plugins: { legend: { display: true, position: "top" } },
+      elements: { point: { radius: 0 }, line: { tension: 0.25 } }
+    }
+  });
+  return ictChart;
+}
+
+async function refreshICT(){
+  const stampEl  = document.getElementById("ictStamp");
+  const upEl     = document.getElementById("ictUptime");
+  const latestEl = document.getElementById("ictLatest");
+  const latEl    = document.getElementById("ictLatency");
+
+  // 1) fetch latest (also measure latency)
+  const latestTimed = await timedFetch(`${POLLUTION_API}/latest`, { cache:"no-store" }).catch(()=>null);
+  let latestJson = null, latencyMs = null;
+  if (latestTimed && latestTimed.res.ok) {
+    latestJson = await latestTimed.res.json();
+    latencyMs = latestTimed.ms;
+  }
+  // 2) fetch 24h history (also measure latency)
+  const histTimed = await timedFetch(`${POLLUTION_API}/history?days=1`, { cache:"no-store" }).catch(()=>null);
+  let history = [];
+  if (histTimed && histTimed.res.ok) {
+    history = await histTimed.res.json();
+    latencyMs = Math.max(latencyMs ?? 0, histTimed.ms); // show the slower one
+  }
+
+  // stamps
+  const now = new Date();
+  stampEl.textContent = `as of ${now.toLocaleTimeString()}`;
+
+  // latest time
+  const ts = Number(latestJson?.ts) || (history.length ? Number(history.at(-1).ts) : NaN);
+  latestEl.textContent = Number.isFinite(ts) ? new Date(ts).toLocaleTimeString() : "—";
+
+  // uptime over last 24h: expected 6 updates/hour (cron 10m)
+  const perHour = bucketByHour(history);
+  const hoursCovered = Math.max(1, Math.round((24*3600*1000) / (3600*1000)));
+  const last24 = perHour.slice(-24);
+  const actual = last24.reduce((s,p)=>s + Math.min(p.c, 6), 0);
+  const expected = 24 * 6;
+  const uptime = Math.round((actual/expected)*100);
+  upEl.textContent = `${Math.max(0, Math.min(100, uptime))}%`;
+
+  // latency
+  latEl.textContent = latencyMs != null ? `${latencyMs} ms` : "—";
+
+  // chart: bars = updates/hour, line = latency (simple flat line for last fetch)
+  const chart = ensureIctChart();
+  chart.data.labels = last24.map(p=>p.t);
+  chart.data.datasets = [
+    {
+      type: "bar",
+      label: "Updates/hour",
+      data: last24.map(p=>({ x:p.t, y:p.c })),
+      borderWidth: 0
+    },
+    {
+      type: "line",
+      label: "API latency (ms)",
+      yAxisID: "y1",
+      data: last24.map(p=>({ x:p.t, y: latencyMs || 0 })),
+      borderWidth: 2,
+      pointRadius: 0
+    }
+  ];
+  chart.update();
+}
+
+// call on startup & refresh every minute
+refreshICT();
+setInterval(refreshICT, 60_000);
+
 
     // ==========================
     // Kickoff
