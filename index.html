@@ -43,6 +43,23 @@
     /* === Draggable panels === */
     .drag-handle { cursor: move; user-select: none; -webkit-user-select: none; }
     .dragging    { opacity: .95; }
+    /* === universal panel helpers === */
+.panel { position:absolute; }
+.panel .panel-tools {
+  position:absolute; right:8px; top:6px; display:flex; gap:6px; z-index:5;
+}
+.panel .toolbtn{
+  width:22px; height:22px; line-height:22px; text-align:center;
+  font-size:12px; border-radius:6px; background:rgba(0,0,0,.06);
+  border:1px solid rgba(0,0,0,.08); cursor:pointer; user-select:none;
+}
+.panel-collapsed .panel-body{ display:none; }
+.panel .resize-handle{
+  position:absolute; right:6px; bottom:6px; width:14px; height:14px;
+  border-right:2px solid rgba(0,0,0,.25); border-bottom:2px solid rgba(0,0,0,.25);
+  cursor:nwse-resize; opacity:.6;
+}
+
   </style>
 </head>
 
@@ -1462,95 +1479,163 @@ setInterval(refreshICT, 60_000);
     // ==========================
     startCesiumApp();
 
-    // ==========================
-    // Draggable panels (mouse + touch)
-    // ==========================
-    (function enablePanelDragging(){
-      const DRAGS = [
-        { panel: '#controlPanel',        handle: '#controlPanel .drag-handle' },
-        { panel: '#uhiLegendRight',      handle: '#uhiLegendRight .drag-handle' },
-        { panel: '#pollutionPanel',      handle: '#pollutionPanel .drag-handle' },
-        { panel: '#pollutionChartPanel', handle: '#pollutionChartPanel .drag-handle' },
-      ];
+   // ==========================
+// Panels: drag + collapse + resize
+// ==========================
+(function enhancePanels(){
+  const PANELS = [
+    { id:'#controlPanel',        handle:'.drag-handle' },
+    { id:'#uhiLegendRight',      handle:'.drag-handle' },
+    { id:'#pollutionPanel',      handle:'.drag-handle' },
+    { id:'#pollutionChartPanel', handle:'.drag-handle' },
+    { id:'#ictPanel',            handle:'.drag-handle' }, // if you added the ICT panel
+  ];
 
-      DRAGS.forEach(({panel, handle})=>{
-        const el = document.querySelector(panel);
-        const grip = document.querySelector(handle);
-        if (!el || !grip) return;
+  PANELS.forEach(cfg=>{
+    const el = document.querySelector(cfg.id);
+    if (!el) return;
 
-        el.style.position = 'absolute';
-        const state = { x:0, y:0, left:0, top:0, dragging:false };
+    // mark as panel
+    el.classList.add('panel');
 
-        const onDown = (e)=>{
-          if (e.target.closest('input,select,textarea,button,label')) return;
+    // wrap content (except the first drag-handle) into .panel-body
+    if (!el.querySelector('.panel-body')) {
+      const handle = el.querySelector(cfg.handle) || el.firstElementChild;
+      const body = document.createElement('div');
+      body.className = 'panel-body';
+      let n = handle ? handle.nextSibling : el.firstChild;
+      while (n) {
+        const next = n.nextSibling;
+        if (!(n.classList && n.classList.contains('panel-tools'))) body.appendChild(n);
+        n = next;
+      }
+      el.appendChild(body);
+    }
 
-          const rect = el.getBoundingClientRect();
-          const scrollX = window.scrollX || 0;
-          const scrollY = window.scrollY || 0;
-
-          el.classList.remove('-translate-x-1/2', 'left-1/2');
-
-          if (!el.style.left) el.style.left = (rect.left + scrollX) + 'px';
-          if (!el.style.top)  el.style.top  = (rect.top  + scrollY) + 'px';
-
-          state.x = (e.touches ? e.touches[0].clientX : e.clientX);
-          state.y = (e.touches ? e.touches[0].clientY : e.clientY);
-          state.left = parseFloat(el.style.left) || rect.left + scrollX;
-          state.top  = parseFloat(el.style.top)  || rect.top  + scrollY;
-          state.dragging = true;
-
-          el.dataset.prevZ = el.style.zIndex || '';
-          el.style.zIndex = '10000';
-          el.classList.add('dragging');
-
-          window.addEventListener('mousemove', onMove);
-          window.addEventListener('touchmove', onMove, { passive:false });
-          window.addEventListener('mouseup', onUp, { once:true });
-          window.addEventListener('touchend', onUp, { once:true });
-          e.preventDefault();
-        };
-
-        const clampToViewport = (left, top, w, h)=>{
-          const pad = 8;
-          const maxL = window.innerWidth  - w - pad;
-          const maxT = window.innerHeight - h - pad;
-          return [
-            Math.max(pad, Math.min(left, maxL)),
-            Math.max(pad, Math.min(top,  maxT))
-          ];
-        };
-
-        const onMove = (e)=>{
-          if (!state.dragging) return;
-          const cx = (e.touches ? e.touches[0].clientX : e.clientX);
-          const cy = (e.touches ? e.touches[0].clientY : e.clientY);
-          const dx = cx - state.x;
-          const dy = cy - state.y;
-
-          const rect = el.getBoundingClientRect();
-          let nextLeft = state.left + dx;
-          let nextTop  = state.top  + dy;
-          [nextLeft, nextTop] = clampToViewport(nextLeft, nextTop, rect.width, rect.height);
-
-          el.style.left = nextLeft + 'px';
-          el.style.top  = nextTop  + 'px';
-          el.style.right = '';
-          el.style.bottom = '';
-          e.preventDefault();
-        };
-
-        const onUp = ()=>{
-          state.dragging = false;
-          el.classList.remove('dragging');
-          if (el.dataset.prevZ !== undefined) el.style.zIndex = el.dataset.prevZ;
-          window.removeEventListener('mousemove', onMove);
-          window.removeEventListener('touchmove', onMove);
-        };
-
-        grip.addEventListener('mousedown', onDown);
-        grip.addEventListener('touchstart', onDown, { passive:false });
+    // add tools (collapse/expand + reset size)
+    if (!el.querySelector('.panel-tools')) {
+      const tools = document.createElement('div');
+      tools.className = 'panel-tools';
+      tools.innerHTML = `
+        <div class="toolbtn" title="Collapse/Expand" data-act="toggle">−</div>
+        <div class="toolbtn" title="Reset size" data-act="reset">⤺</div>
+      `;
+      el.appendChild(tools);
+      tools.addEventListener('click', (e)=>{
+        const btn = e.target.closest('.toolbtn'); if (!btn) return;
+        if (btn.dataset.act === 'toggle') el.classList.toggle('panel-collapsed');
+        if (btn.dataset.act === 'reset') { el.style.width=''; el.style.height=''; }
       });
-    })();
+    }
+
+    // add resize corner
+    if (!el.querySelector('.resize-handle')) {
+      const rh = document.createElement('div');
+      rh.className = 'resize-handle';
+      el.appendChild(rh);
+
+      let resizing=false, startX=0, startY=0, startW=0, startH=0;
+      const onDown = (ev)=>{
+        resizing = true;
+        const p = ev.touches ? ev.touches[0] : ev;
+        startX = p.clientX; startY = p.clientY;
+        const r = el.getBoundingClientRect();
+        startW = r.width; startH = r.height;
+        ev.preventDefault();
+      };
+      const onMove = (ev)=>{
+        if (!resizing) return;
+        const p = ev.touches ? ev.touches[0] : ev;
+        const dw = p.clientX - startX;
+        const dh = p.clientY - startY;
+        el.style.width  = Math.max(260, startW + dw) + 'px';
+        el.style.height = Math.max(120, startH + dh) + 'px';
+        ev.preventDefault();
+      };
+      const onUp = ()=>{ resizing=false; };
+      rh.addEventListener('mousedown', onDown);
+      rh.addEventListener('touchstart', onDown, { passive:false });
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('touchmove', onMove, { passive:false });
+      window.addEventListener('mouseup', onUp);
+      window.addEventListener('touchend', onUp);
+    }
+
+    // dragging
+    const grip = el.querySelector(cfg.handle);
+    if (!grip) return;
+
+    el.style.position = 'absolute';
+    const state = { x:0, y:0, left:0, top:0, dragging:false };
+
+    const clampToViewport = (left, top, w, h)=>{
+      const pad = 8;
+      const maxL = window.innerWidth  - w - pad;
+      const maxT = window.innerHeight - h - pad;
+      return [ Math.max(pad, Math.min(left, maxL)), Math.max(pad, Math.min(top,  maxT)) ];
+    };
+
+    const onDown = (e)=>{
+      if (e.target.closest('input,select,textarea,button,label,.resize-handle,.panel-tools')) return;
+
+      const rect = el.getBoundingClientRect();
+      const scrollX = window.scrollX || 0;
+      const scrollY = window.scrollY || 0;
+
+      el.classList.remove('-translate-x-1/2', 'left-1/2'); // let left/top take control
+
+      if (!el.style.left) el.style.left = (rect.left + scrollX) + 'px';
+      if (!el.style.top)  el.style.top  = (rect.top  + scrollY) + 'px';
+
+      state.x = (e.touches ? e.touches[0].clientX : e.clientX);
+      state.y = (e.touches ? e.touches[0].clientY : e.clientY);
+      state.left = parseFloat(el.style.left) || rect.left + scrollX;
+      state.top  = parseFloat(el.style.top)  || rect.top  + scrollY;
+      state.dragging = true;
+
+      el.dataset.prevZ = el.style.zIndex || '';
+      el.style.zIndex = '10000';
+      el.classList.add('dragging');
+
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('touchmove', onMove, { passive:false });
+      window.addEventListener('mouseup', onUp, { once:true });
+      window.addEventListener('touchend', onUp, { once:true });
+      e.preventDefault();
+    };
+
+    const onMove = (e)=>{
+      if (!state.dragging) return;
+      const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+      const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+      const dx = cx - state.x;
+      const dy = cy - state.y;
+
+      const rect = el.getBoundingClientRect();
+      let nextLeft = state.left + dx;
+      let nextTop  = state.top  + dy;
+      [nextLeft, nextTop] = clampToViewport(nextLeft, nextTop, rect.width, rect.height);
+
+      el.style.left = nextLeft + 'px';
+      el.style.top  = nextTop  + 'px';
+      el.style.right = '';
+      el.style.bottom = '';
+      e.preventDefault();
+    };
+
+    const onUp = ()=>{
+      state.dragging = false;
+      el.classList.remove('dragging');
+      if (el.dataset.prevZ !== undefined) el.style.zIndex = el.dataset.prevZ;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('touchmove', onMove);
+    };
+
+    grip.addEventListener('mousedown', onDown);
+    grip.addEventListener('touchstart', onDown, { passive:false });
+  });
+})();
+
   </script>
 </body>
 </html>
