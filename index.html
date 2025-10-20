@@ -662,10 +662,11 @@
       for (const b of buildings) {
         const height = parseFloat(b.properties?.height?.getValue?.() ?? b.properties?.height) || 10;
         const prop = new Cesium.SampledProperty(Number);
-        prop.setBackwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
-        prop.setForwardExtrapolationType(Cesium.ExtrapolationType.HOLD);
-        prop.backwardExtrapolationDuration = 24*3600;
-        prop.forwardExtrapolationDuration  = 7*24*3600;
+        prop.backwardExtrapolationType   = Cesium.ExtrapolationType.HOLD;
+        prop.forwardExtrapolationType    = Cesium.ExtrapolationType.HOLD;
+        prop.backwardExtrapolationDuration = 24 * 3600;
+        prop.forwardExtrapolationDuration  = 7  * 24 * 3600;
+
 
         for (let i=0; i<predUrban.length; i++){
           const t = new Date(now + i * STEP_MINUTES * 60 * 1000);
