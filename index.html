@@ -241,6 +241,8 @@
   <!-- ICT / Ops panel -->
 <div id="ictPanel"
      class="absolute top-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg w-[520px] z-20 font-sans">
+     <div class="drag-handle -mt-1 -mx-1 mb-2 px-1 py-1 text-[11px] text-gray-500 rounded cursor-move select-none">⠿ Drag</div>
+
   <div class="flex items-center justify-between">
     <div class="text-lg font-semibold">ICT — System Health</div>
     <div id="ictStamp" class="text-xs text-gray-500">—</div>
@@ -262,7 +264,7 @@
   </div>
 
   <div class="mt-3">
-    <canvas id="ictChart" height="120"></canvas>
+    <canvas id="ictChart" style="height:160px; width:100%;"></canvas>
   </div>
 
   <div class="mt-2 text-[12px] text-gray-600">
