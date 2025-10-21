@@ -933,6 +933,12 @@
       return pollutionChart;
     }
 
+    // ---- chart colors (blue theme) ----
+const CH_BLUE_MEASURED  = '#2563eb';              // blue-600
+const CH_BLUE_PREDICTED = '#3b82f6';              // blue-500 (dashed)
+const CH_BLUE_BAND      = 'rgba(59,130,246,0.10)';// fill for uncertainty band
+
+
     function renderPollutionChart(){
       const chart = ensureChart();
       const pollutant = document.getElementById("chartPollutant").value;
@@ -958,14 +964,37 @@
       const band = buildPredictionBand(measuredAgg, predictedAgg);
 
       const unit = UNITS[pollutant] || '';
-      const dsMeasured = {
-        label: `${pollutant} (misurato)`,
-        data: measuredAgg,
-        borderWidth: 3,
-        pointRadius: 0,
-        metaPollutant: pollutant,
-        order: 20
-      };
+      const dsPredLower = {
+  label: `${pollutant} (previsto — limite inf)`,
+  data: band.lower,
+  borderWidth: 0,
+  pointRadius: 0,
+  fill: false,
+  hidden: true,
+  metaPollutant: pollutant,
+  order: 5
+};
+const dsPredUpper = {
+  label: `${pollutant} (previsto — incertezza)`,
+  data: band.upper,
+  borderWidth: 0,
+  pointRadius: 0,
+  fill: { target: "-1" },
+  backgroundColor: CH_BLUE_BAND,
+  metaPollutant: pollutant,
+  order: 6
+};
+const dsPred = {
+  label: `${pollutant} (previsto)`,
+  data: predictedAgg,
+  borderWidth: 2,
+  borderDash: [8,6],
+  borderColor: CH_BLUE_PREDICTED,
+  pointRadius: 0,
+  metaPollutant: pollutant,
+  order: 10
+};
+
 
       const datasets = [dsMeasured];
 
