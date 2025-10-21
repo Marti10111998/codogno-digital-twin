@@ -43,23 +43,23 @@
     /* === Draggable panels === */
     .drag-handle { cursor: move; user-select: none; -webkit-user-select: none; }
     .dragging    { opacity: .95; }
-    /* === universal panel helpers === */
-.panel { position:absolute; }
-.panel .panel-tools {
-  position:absolute; right:8px; top:6px; display:flex; gap:6px; z-index:5;
-}
-.panel .toolbtn{
-  width:22px; height:22px; line-height:22px; text-align:center;
-  font-size:12px; border-radius:6px; background:rgba(0,0,0,.06);
-  border:1px solid rgba(0,0,0,.08); cursor:pointer; user-select:none;
-}
-.panel-collapsed .panel-body{ display:none; }
-.panel .resize-handle{
-  position:absolute; right:6px; bottom:6px; width:14px; height:14px;
-  border-right:2px solid rgba(0,0,0,.25); border-bottom:2px solid rgba(0,0,0,.25);
-  cursor:nwse-resize; opacity:.6;
-}
 
+    /* === universal panel helpers === */
+    .panel { position:absolute; }
+    .panel .panel-tools {
+      position:absolute; right:8px; top:6px; display:flex; gap:6px; z-index:5;
+    }
+    .panel .toolbtn{
+      width:22px; height:22px; line-height:22px; text-align:center;
+      font-size:12px; border-radius:6px; background:rgba(0,0,0,.06);
+      border:1px solid rgba(0,0,0,.08); cursor:pointer; user-select:none;
+    }
+    .panel-collapsed .panel-body{ display:none; }
+    .panel .resize-handle{
+      position:absolute; right:6px; bottom:6px; width:14px; height:14px;
+      border-right:2px solid rgba(0,0,0,.25); border-bottom:2px solid rgba(0,0,0,.25);
+      cursor:nwse-resize; opacity:.6;
+    }
   </style>
 </head>
 
@@ -239,39 +239,38 @@
   </div>
 
   <!-- ICT / Ops panel -->
-<div id="ictPanel"
-     class="absolute top-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg w-[520px] z-20 font-sans">
-     <div class="drag-handle -mt-1 -mx-1 mb-2 px-1 py-1 text-[11px] text-gray-500 rounded cursor-move select-none">⠿ Drag</div>
+  <div id="ictPanel"
+       class="absolute top-4 right-4 bg-white/90 p-4 rounded-xl shadow-lg w-[520px] z-20 font-sans">
+    <div class="drag-handle -mt-1 -mx-1 mb-2 px-1 py-1 text-[11px] text-gray-500 rounded cursor-move select-none">⠿ Drag</div>
 
-  <div class="flex items-center justify-between">
-    <div class="text-lg font-semibold">ICT — System Health</div>
-    <div id="ictStamp" class="text-xs text-gray-500">—</div>
-  </div>
-
-  <div class="grid grid-cols-3 gap-3 mt-3 text-sm">
-    <div class="p-3 rounded-xl bg-green-50 border border-green-200">
-      <div class="text-[11px] text-green-700">Uptime (24h)</div>
-      <div id="ictUptime" class="text-xl font-semibold text-green-800">—</div>
+    <div class="flex items-center justify-between">
+      <div class="text-lg font-semibold">ICT — System Health</div>
+      <div id="ictStamp" class="text-xs text-gray-500">—</div>
     </div>
-    <div class="p-3 rounded-xl bg-blue-50 border border-blue-200">
-      <div class="text-[11px] text-blue-700">Latest update</div>
-      <div id="ictLatest" class="text-xl font-semibold text-blue-800">—</div>
+
+    <div class="grid grid-cols-3 gap-3 mt-3 text-sm">
+      <div class="p-3 rounded-xl bg-green-50 border border-green-200">
+        <div class="text-[11px] text-green-700">Uptime (24h)</div>
+        <div id="ictUptime" class="text-xl font-semibold text-green-800">—</div>
+      </div>
+      <div class="p-3 rounded-xl bg-blue-50 border border-blue-200">
+        <div class="text-[11px] text-blue-700">Latest update</div>
+        <div id="ictLatest" class="text-xl font-semibold text-blue-800">—</div>
+      </div>
+      <div class="p-3 rounded-xl bg-violet-50 border border-violet-200">
+        <div class="text-[11px] text-violet-700">API latency</div>
+        <div id="ictLatency" class="text-xl font-semibold text-violet-800">—</div>
+      </div>
     </div>
-    <div class="p-3 rounded-xl bg-violet-50 border border-violet-200">
-      <div class="text-[11px] text-violet-700">API latency</div>
-      <div id="ictLatency" class="text-xl font-semibold text-violet-800">—</div>
+
+    <div class="mt-3">
+      <canvas id="ictChart" style="height:160px; width:100%;"></canvas>
+    </div>
+
+    <div class="mt-2 text-[12px] text-gray-600">
+      Bars: updates/hour • Line: API latency (ms). Expected ~6 updates/hour with a 10-min cron.
     </div>
   </div>
-
-  <div class="mt-3">
-    <canvas id="ictChart" style="height:160px; width:100%;"></canvas>
-  </div>
-
-  <div class="mt-2 text-[12px] text-gray-600">
-    Bars: updates/hour • Line: API latency (ms). Expected ~6 updates/hour with a 10-min cron.
-  </div>
-</div>
-
 
   <script type="module">
     // ==========================
@@ -316,9 +315,6 @@
     const STEP_MINUTES  = 60;              // hourly steps
     const HORIZON_STEPS = 7 * 24;          // next 7 days
 
-    // Smaller jitter, more faithful quantiles
-    const JITTER_STRENGTH = 0.03;
-
     // ==========================
     // Utility
     // ==========================
@@ -344,8 +340,6 @@
     const fmt = (x) => (Number.isFinite(x) ? x.toFixed(DECIMALS) : "—");
 
     const MIN_SPAN = 2.0;
-    const LOWER_P = 0.05;
-    const UPPER_P = 0.95;
     function quantile(sorted, p){
       if (!sorted.length) return NaN;
       const i = (sorted.length - 1) * p;
@@ -410,8 +404,7 @@
       let max = quantile(vals, 0.95);
       if ((max - min) < 2.0){
         const mid = (min + max)/2;
-        min = mid - 1.0;
-        max = mid + 1.0;
+        min = mid - 1.0; max = mid + 1.0;
       }
       UHI_MIN = Math.floor(min * POW) / POW;
       UHI_MAX = Math.ceil (max * POW) / POW;
@@ -667,7 +660,6 @@
         prop.backwardExtrapolationDuration = 24 * 3600;
         prop.forwardExtrapolationDuration  = 7  * 24 * 3600;
 
-
         for (let i=0; i<predUrban.length; i++){
           const t = new Date(now + i * STEP_MINUTES * 60 * 1000);
           const uhi = computeUHI(predUrban[i], height, wind, clouds);
@@ -760,7 +752,6 @@
       const cap = (arr, n = 100000) => (arr.length > n ? arr.slice(arr.length - n) : arr);
       const payload = { O3: cap(tsStore.O3), NO2: cap(tsStore.NO2), NO: cap(tsStore.NO), CO: cap(tsStore.CO), NH3: cap(tsStore.NH3), Noise: cap(tsStore.Noise) };
       try { localStorage.setItem(STORE_KEY, JSON.stringify(payload)); } catch {}
-      // NEW: push to cloud (if enabled)
       syncToCloud();
     }
     function loadTsStore() {
@@ -871,34 +862,10 @@
     Chart.register(thresholdPlugin);
     Chart.register(dayLinesPlugin);
 
-    // Peaks + prediction band
-    function findPeaks(points){
-      if (!points || points.length < 3) return [];
-      const ys = points.map(p=>p.y);
-      const mean = ys.reduce((s,y)=>s+y,0)/ys.length;
-      const sd = Math.sqrt(ys.reduce((s,y)=>s+(y-mean)*(y-mean),0)/ys.length) || 0;
-      const minProm = Math.max(0.0001, sd*0.8);
-      const out = [];
-      for (let i=1;i<points.length-1;i++){
-        const y = points[i].y, yl = points[i-1].y, yr = points[i+1].y;
-        if (y > yl && y > yr && (y - Math.max(yl, yr) >= minProm)) out.push(points[i]);
-      }
-      return out;
-    }
-    function buildPredictionBand(measuredAgg, predictedAgg){
-      if (!predictedAgg?.length) return { upper:[], lower:[] };
-      const N = Math.min(48, measuredAgg.length);
-      let sd = 0;
-      if (N >= 6){
-        const ys = measuredAgg.slice(-N).map(p=>p.y);
-        const mean = ys.reduce((s,y)=>s+y,0)/ys.length;
-        sd = Math.sqrt(ys.reduce((s,y)=>s+(y-mean)*(y-mean),0)/ys.length);
-      }
-      return {
-        lower: predictedAgg.map(p => ({ x:p.x, y: p.y - (sd || p.y*0.15) })),
-        upper: predictedAgg.map(p => ({ x:p.x, y: p.y + (sd || p.y*0.15) }))
-      };
-    }
+    // ---- chart colors (blue theme) ----
+    const CH_BLUE_MEASURED  = '#2563eb';               // blue-600
+    const CH_BLUE_PREDICTED = '#3b82f6';               // blue-500 (dashed)
+    const CH_BLUE_BAND      = 'rgba(59,130,246,0.10)'; // uncertainty fill
 
     let pollutionChart = null;
     function ensureChart(){
@@ -933,160 +900,72 @@
       return pollutionChart;
     }
 
-    // ---- chart colors (blue theme) ----
-const CH_BLUE_MEASURED  = '#2563eb';              // blue-600
-const CH_BLUE_PREDICTED = '#3b82f6';              // blue-500 (dashed)
-const CH_BLUE_BAND      = 'rgba(59,130,246,0.10)';// fill for uncertainty band
-
+    function findPeaks(points){
+      if (!points || points.length < 3) return [];
+      const ys = points.map(p=>p.y);
+      const mean = ys.reduce((s,y)=>s+y,0)/ys.length;
+      const sd = Math.sqrt(ys.reduce((s,y)=>s+(y-mean)*(y-mean),0)/ys.length) || 0;
+      const minProm = Math.max(0.0001, sd*0.8);
+      const out = [];
+      for (let i=1;i<points.length-1;i++){
+        const y = points[i].y, yl = points[i-1].y, yr = points[i+1].y;
+        if (y > yl && y > yr && (y - Math.max(yl, yr) >= minProm)) out.push(points[i]);
+      }
+      return out;
+    }
+    function buildPredictionBand(measuredAgg, predictedAgg){
+      if (!predictedAgg?.length) return { upper:[], lower:[] };
+      const N = Math.min(48, measuredAgg.length);
+      let sd = 0;
+      if (N >= 6){
+        const ys = measuredAgg.slice(-N).map(p=>p.y);
+        const mean = ys.reduce((s,y)=>s+y,0)/ys.length;
+        sd = Math.sqrt(ys.reduce((s,y)=>s+(y-mean)*(y-mean),0)/ys.length);
+      }
+      return {
+        lower: predictedAgg.map(p => ({ x:p.x, y: p.y - (sd || p.y*0.15) })),
+        upper: predictedAgg.map(p => ({ x:p.x, y: p.y + (sd || p.y*0.15) }))
+      };
+    }
 
     function renderPollutionChart(){
-  const chart = ensureChart();
-  const pollutant = document.getElementById("chartPollutant").value;
-  const gran = document.getElementById("chartGranularity").value;
-  const daysBack = parseInt(document.getElementById("chartDaysBack").value, 10);
-  const showPred = document.getElementById("chartShowPred").checked;
-  const horizonHrs = parseInt(document.getElementById("chartHorizon").value, 10);
+      const chart = ensureChart();
+      const pollutant = document.getElementById("chartPollutant").value;
+      const gran = document.getElementById("chartGranularity").value;
+      const daysBack = parseInt(document.getElementById("chartDaysBack").value, 10);
+      const showPred = document.getElementById("chartShowPred").checked;
+      const horizonHrs = parseInt(document.getElementById("chartHorizon").value, 10);
 
-  // time unit
-  chart.options.scales.x.time.unit = (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
+      chart.options.scales.x.time.unit =
+        (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
 
-  // series building
-  const measuredAgg = aggregateSeries(sliceDaysBack(tsStore[pollutant] || [], daysBack), gran).map(p=>({ x:p.t, y:p.v }));
+      const measuredAgg = aggregateSeries(
+        sliceDaysBack(tsStore[pollutant] || [], daysBack), gran
+      ).map(p=>({ x:p.t, y:p.v }));
 
-  let predictedAgg = [];
-  if (showPred && horizonHrs > 0) {
-    const now = Date.now(), horizonMs = horizonHrs * 3600 * 1000;
-    const future = (tsStore.pred?.[pollutant] || []).filter(p => p.ts >= now && p.ts <= now + horizonMs);
-    predictedAgg = aggregateSeries(future, gran).map(p=>({ x:p.t, y:p.v }));
-  }
-
-  const thr = Number.isFinite(THRESHOLDS[pollutant]) ? THRESHOLDS[pollutant] : Infinity;
-
-  const peaks = findPeaks(measuredAgg);
-  const band = buildPredictionBand(measuredAgg, predictedAgg);
-
-  const unit = UNITS[pollutant] || '';
-
-  // ---- colors (reuse your constants or fall back) ----
-  const CH_BLUE_MEASURED  = window.CH_BLUE_MEASURED  || '#2563eb';
-  const CH_BLUE_PREDICTED = window.CH_BLUE_PREDICTED || '#3b82f6';
-  const CH_BLUE_BAND      = window.CH_BLUE_BAND      || 'rgba(59,130,246,0.10)';
-
-  // measured line (SOLID BLUE)
-  const dsMeasured = {
-    label: `${pollutant} (misurato)`,
-    data: measuredAgg,
-    borderWidth: 3,
-    borderColor: CH_BLUE_MEASURED,
-    backgroundColor: 'transparent',
-    pointRadius: 0,
-    metaPollutant: pollutant,
-    order: 20
-  };
-
-  const datasets = [dsMeasured];
-
-  // predicted line + uncertainty (DASHED BLUE + light fill)
-  if (showPred && predictedAgg.length){
-    const dsPredLower = {
-      label: `${pollutant} (previsto — limite inf)`,
-      data: band.lower,
-      borderWidth: 0,
-      pointRadius: 0,
-      fill: false,
-      hidden: true,
-      metaPollutant: pollutant,
-      order: 5
-    };
-    const dsPredUpper = {
-      label: `${pollutant} (previsto — incertezza)`,
-      data: band.upper,
-      borderWidth: 0,
-      pointRadius: 0,
-      fill: { target: "-1" },
-      backgroundColor: CH_BLUE_BAND,
-      metaPollutant: pollutant,
-      order: 6
-    };
-    const dsPred = {
-      label: `${pollutant} (previsto)`,
-      data: predictedAgg,
-      borderWidth: 2,
-      borderDash: [8,6],
-      borderColor: CH_BLUE_PREDICTED,
-      pointRadius: 0,
-      metaPollutant: pollutant,
-      order: 10
-    };
-    datasets.push(dsPredLower, dsPredUpper, dsPred);
-  }
-
-  // peak markers (red dots)
-  if (peaks.length){
-    datasets.push({
-      type: 'scatter',
-      label: `${pollutant} — picchi`,
-      data: peaks,
-      pointRadius: 4,
-      pointHoverRadius: 6,
-      pointBackgroundColor: 'rgba(220, 38, 38, 0.9)',
-      showLine: false,
-      metaPollutant: pollutant,
-      order: 30
-    });
-  }
-
-  chart.data.datasets = datasets;
-  chart.options.scales.y.title.text = `${pollutant} (${unit})`;
-  chart.options.plugins.thresholdLine.value = thr;
-
-  document.getElementById("pollutionChartStatus").textContent =
-    `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
-
-  chart.update();
-
-  const thrInput = document.getElementById('chartThreshold');
-  if (thrInput && document.activeElement !== thrInput) thrInput.value = String(thr);
-}
-
+      let predictedAgg = [];
+      if (showPred && horizonHrs > 0) {
+        const now = Date.now(), horizonMs = horizonHrs * 3600 * 1000;
+        const future = (tsStore.pred?.[pollutant] || [])
+          .filter(p => p.ts >= now && p.ts <= now + horizonMs);
+        predictedAgg = aggregateSeries(future, gran).map(p=>({ x:p.t, y:p.v }));
+      }
 
       const thr = Number.isFinite(THRESHOLDS[pollutant]) ? THRESHOLDS[pollutant] : Infinity;
-
       const peaks = findPeaks(measuredAgg);
-      const band = buildPredictionBand(measuredAgg, predictedAgg);
+      const band  = buildPredictionBand(measuredAgg, predictedAgg);
+      const unit  = UNITS[pollutant] || '';
 
-      const unit = UNITS[pollutant] || '';
-      const dsPredLower = {
-  label: `${pollutant} (previsto — limite inf)`,
-  data: band.lower,
-  borderWidth: 0,
-  pointRadius: 0,
-  fill: false,
-  hidden: true,
-  metaPollutant: pollutant,
-  order: 5
-};
-const dsPredUpper = {
-  label: `${pollutant} (previsto — incertezza)`,
-  data: band.upper,
-  borderWidth: 0,
-  pointRadius: 0,
-  fill: { target: "-1" },
-  backgroundColor: CH_BLUE_BAND,
-  metaPollutant: pollutant,
-  order: 6
-};
-const dsPred = {
-  label: `${pollutant} (previsto)`,
-  data: predictedAgg,
-  borderWidth: 2,
-  borderDash: [8,6],
-  borderColor: CH_BLUE_PREDICTED,
-  pointRadius: 0,
-  metaPollutant: pollutant,
-  order: 10
-};
-
+      const dsMeasured = {
+        label: `${pollutant} (misurato)`,
+        data: measuredAgg,
+        borderWidth: 3,
+        borderColor: CH_BLUE_MEASURED,
+        backgroundColor: 'transparent',
+        pointRadius: 0,
+        metaPollutant: pollutant,
+        order: 20
+      };
 
       const datasets = [dsMeasured];
 
@@ -1094,31 +973,21 @@ const dsPred = {
         const dsPredLower = {
           label: `${pollutant} (previsto — limite inf)`,
           data: band.lower,
-          borderWidth: 0,
-          pointRadius: 0,
-          fill: false,
-          hidden: true,
-          metaPollutant: pollutant,
-          order: 5
+          borderWidth: 0, pointRadius: 0, fill: false, hidden: true,
+          metaPollutant: pollutant, order: 5
         };
         const dsPredUpper = {
           label: `${pollutant} (previsto — incertezza)`,
           data: band.upper,
-          borderWidth: 0,
-          pointRadius: 0,
-          fill: { target: "-1" },
-          backgroundColor: 'rgba(0, 99, 255, 0.10)',
-          metaPollutant: pollutant,
-          order: 6
+          borderWidth: 0, pointRadius: 0, fill: { target: "-1" },
+          backgroundColor: CH_BLUE_BAND,
+          metaPollutant: pollutant, order: 6
         };
         const dsPred = {
           label: `${pollutant} (previsto)`,
           data: predictedAgg,
-          borderWidth: 2,
-          borderDash: [8,6],
-          pointRadius: 0,
-          metaPollutant: pollutant,
-          order: 10
+          borderWidth: 2, borderDash: [8,6], borderColor: CH_BLUE_PREDICTED,
+          pointRadius: 0, metaPollutant: pollutant, order: 10
         };
         datasets.push(dsPredLower, dsPredUpper, dsPred);
       }
@@ -1128,17 +997,13 @@ const dsPred = {
           type: 'scatter',
           label: `${pollutant} — picchi`,
           data: peaks,
-          pointRadius: 4,
-          pointHoverRadius: 6,
+          pointRadius: 4, pointHoverRadius: 6,
           pointBackgroundColor: 'rgba(220, 38, 38, 0.9)',
-          showLine: false,
-          metaPollutant: pollutant,
-          order: 30
+          showLine: false, metaPollutant: pollutant, order: 30
         });
       }
 
       chart.data.datasets = datasets;
-
       chart.options.scales.y.title.text = `${pollutant} (${unit})`;
       chart.options.plugins.thresholdLine.value = thr;
 
@@ -1290,7 +1155,7 @@ const dsPred = {
         buildingSelector.appendChild(option);
       });
 
-      // ===== ensure 7-day data is available on *new devices* =====
+      // ensure 7-day data is available on *new devices*
       if (CLOUD_SYNC_ENABLED) {
         await backfillHistory(7);
         saveTsStore();
@@ -1486,280 +1351,277 @@ const dsPred = {
       beginTrafficUpdates();
     }
 
-// ======== ICT / Ops telemetry ========
-let ictChart = null;
+    // ======== ICT / Ops telemetry ========
+    let ictChart = null;
 
-function bucketByHour(rows) {
-  const map = new Map();
-  for (const r of rows) {
-    const d = new Date(Number(r.ts));
-    d.setMinutes(0,0,0);
-    const k = d.getTime();
-    map.set(k, (map.get(k) || 0) + 1);
-  }
-  return [...map.entries()].sort((a,b)=>a[0]-b[0]).map(([t,c])=>({ t, c }));
-}
-
-async function timedFetch(url, init){
-  const t0 = performance.now();
-  const res = await fetch(url, init);
-  const t1 = performance.now();
-  return { res, ms: Math.max(0, Math.round(t1 - t0)) };
-}
-
-function ensureIctChart(){
-  if (ictChart) return ictChart;
-  const ctx = document.getElementById("ictChart").getContext("2d");
-  ictChart = new Chart(ctx, {
-    type: "bar",
-    data: { labels: [], datasets: [] },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      parsing: false,
-      interaction: { mode: "index", intersect: false },
-      scales: {
-        x: { type: "time", time: { unit: "hour" } },
-        y: { title: { display:true, text:"updates/hour" }, beginAtZero:true, suggestedMax:8 },
-        y1:{ title: { display:true, text:"latency (ms)" }, position:"right", beginAtZero:true, grid:{ drawOnChartArea:false } }
-      },
-      plugins: { legend: { display: true, position: "top" } },
-      elements: { point: { radius: 0 }, line: { tension: 0.25 } }
+    function bucketByHour(rows) {
+      const map = new Map();
+      for (const r of rows) {
+        const d = new Date(Number(r.ts));
+        d.setMinutes(0,0,0);
+        const k = d.getTime();
+        map.set(k, (map.get(k) || 0) + 1);
+      }
+      return [...map.entries()].sort((a,b)=>a[0]-b[0]).map(([t,c])=>({ t, c }));
     }
-  });
-  return ictChart;
-}
 
-async function refreshICT(){
-  const stampEl  = document.getElementById("ictStamp");
-  const upEl     = document.getElementById("ictUptime");
-  const latestEl = document.getElementById("ictLatest");
-  const latEl    = document.getElementById("ictLatency");
-
-  // 1) fetch latest (also measure latency)
-  const latestTimed = await timedFetch(`${POLLUTION_API}/latest`, { cache:"no-store" }).catch(()=>null);
-  let latestJson = null, latencyMs = null;
-  if (latestTimed && latestTimed.res.ok) {
-    latestJson = await latestTimed.res.json();
-    latencyMs = latestTimed.ms;
-  }
-  // 2) fetch 24h history (also measure latency)
-  const histTimed = await timedFetch(`${POLLUTION_API}/history?days=1`, { cache:"no-store" }).catch(()=>null);
-  let history = [];
-  if (histTimed && histTimed.res.ok) {
-    history = await histTimed.res.json();
-    latencyMs = Math.max(latencyMs ?? 0, histTimed.ms); // show the slower one
-  }
-
-  // stamps
-  const now = new Date();
-  stampEl.textContent = `as of ${now.toLocaleTimeString()}`;
-
-  // latest time
-  const ts = Number(latestJson?.ts) || (history.length ? Number(history.at(-1).ts) : NaN);
-  latestEl.textContent = Number.isFinite(ts) ? new Date(ts).toLocaleTimeString() : "—";
-
-  // uptime over last 24h: expected 6 updates/hour (cron 10m)
-  const perHour = bucketByHour(history);
-  const hoursCovered = Math.max(1, Math.round((24*3600*1000) / (3600*1000)));
-  const last24 = perHour.slice(-24);
-  const actual = last24.reduce((s,p)=>s + Math.min(p.c, 6), 0);
-  const expected = 24 * 6;
-  const uptime = Math.round((actual/expected)*100);
-  upEl.textContent = `${Math.max(0, Math.min(100, uptime))}%`;
-
-  // latency
-  latEl.textContent = latencyMs != null ? `${latencyMs} ms` : "—";
-
-  // chart: bars = updates/hour, line = latency (simple flat line for last fetch)
-  const chart = ensureIctChart();
-  chart.data.labels = last24.map(p=>p.t);
-  chart.data.datasets = [
-    {
-      type: "bar",
-      label: "Updates/hour",
-      data: last24.map(p=>({ x:p.t, y:p.c })),
-      borderWidth: 0
-    },
-    {
-      type: "line",
-      label: "API latency (ms)",
-      yAxisID: "y1",
-      data: last24.map(p=>({ x:p.t, y: latencyMs || 0 })),
-      borderWidth: 2,
-      pointRadius: 0
+    async function timedFetch(url, init){
+      const t0 = performance.now();
+      const res = await fetch(url, init);
+      const t1 = performance.now();
+      return { res, ms: Math.max(0, Math.round(t1 - t0)) };
     }
-  ];
-  chart.update();
-}
 
-// call on startup & refresh every minute
-refreshICT();
-setInterval(refreshICT, 60_000);
+    function ensureIctChart(){
+      if (ictChart) return ictChart;
+      const ctx = document.getElementById("ictChart").getContext("2d");
+      ictChart = new Chart(ctx, {
+        type: "bar",
+        data: { labels: [], datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          parsing: false,
+          interaction: { mode: "index", intersect: false },
+          scales: {
+            x: { type: "time", time: { unit: "hour" } },
+            y: { title: { display:true, text:"updates/hour" }, beginAtZero:true, suggestedMax:8 },
+            y1:{ title: { display:true, text:"latency (ms)" }, position:"right", beginAtZero:true, grid:{ drawOnChartArea:false } }
+          },
+          plugins: { legend: { display: true, position: "top" } },
+          elements: { point: { radius: 0 }, line: { tension: 0.25 } }
+        }
+      });
+      return ictChart;
+    }
 
+    async function refreshICT(){
+      const stampEl  = document.getElementById("ictStamp");
+      const upEl     = document.getElementById("ictUptime");
+      const latestEl = document.getElementById("ictLatest");
+      const latEl    = document.getElementById("ictLatency");
+
+      // 1) fetch latest (also measure latency)
+      const latestTimed = await timedFetch(`${POLLUTION_API}/latest`, { cache:"no-store" }).catch(()=>null);
+      let latestJson = null, latencyMs = null;
+      if (latestTimed && latestTimed.res.ok) {
+        latestJson = await latestTimed.res.json();
+        latencyMs = latestTimed.ms;
+      }
+      // 2) fetch 24h history (also measure latency)
+      const histTimed = await timedFetch(`${POLLUTION_API}/history?days=1`, { cache:"no-store" }).catch(()=>null);
+      let history = [];
+      if (histTimed && histTimed.res.ok) {
+        history = await histTimed.res.json();
+        latencyMs = Math.max(latencyMs ?? 0, histTimed.ms);
+      }
+
+      // stamps
+      const now = new Date();
+      stampEl.textContent = `as of ${now.toLocaleTimeString()}`;
+
+      // latest time
+      const ts = Number(latestJson?.ts) || (history.length ? Number(history.at(-1).ts) : NaN);
+      latestEl.textContent = Number.isFinite(ts) ? new Date(ts).toLocaleTimeString() : "—";
+
+      // uptime over last 24h
+      const perHour = bucketByHour(history);
+      const last24 = perHour.slice(-24);
+      const actual = last24.reduce((s,p)=>s + Math.min(p.c, 6), 0);
+      const expected = 24 * 6;
+      const uptime = Math.round((actual/expected)*100);
+      upEl.textContent = `${Math.max(0, Math.min(100, uptime))}%`;
+
+      // latency
+      latEl.textContent = latencyMs != null ? `${latencyMs} ms` : "—";
+
+      // chart: bars = updates/hour, line = latency
+      const chart = ensureIctChart();
+      chart.data.labels = last24.map(p=>p.t);
+      chart.data.datasets = [
+        {
+          type: "bar",
+          label: "Updates/hour",
+          data: last24.map(p=>({ x:p.t, y:p.c })),
+          borderWidth: 0
+        },
+        {
+          type: "line",
+          label: "API latency (ms)",
+          yAxisID: "y1",
+          data: last24.map(p=>({ x:p.t, y: latencyMs || 0 })),
+          borderWidth: 2,
+          pointRadius: 0
+        }
+      ];
+      chart.update();
+    }
+
+    // call on startup & refresh every minute
+    refreshICT();
+    setInterval(refreshICT, 60_000);
 
     // ==========================
     // Kickoff
     // ==========================
     startCesiumApp();
 
-   // ==========================
-// Panels: drag + collapse + resize
-// ==========================
-(function enhancePanels(){
-  const PANELS = [
-    { id:'#controlPanel',        handle:'.drag-handle' },
-    { id:'#uhiLegendRight',      handle:'.drag-handle' },
-    { id:'#pollutionPanel',      handle:'.drag-handle' },
-    { id:'#pollutionChartPanel', handle:'.drag-handle' },
-    { id:'#ictPanel',            handle:'.drag-handle' }, // if you added the ICT panel
-  ];
+    // ==========================
+    // Panels: drag + collapse + resize
+    // ==========================
+    (function enhancePanels(){
+      const PANELS = [
+        { id:'#controlPanel',        handle:'.drag-handle' },
+        { id:'#uhiLegendRight',      handle:'.drag-handle' },
+        { id:'#pollutionPanel',      handle:'.drag-handle' },
+        { id:'#pollutionChartPanel', handle:'.drag-handle' },
+        { id:'#ictPanel',            handle:'.drag-handle' },
+      ];
 
-  PANELS.forEach(cfg=>{
-    const el = document.querySelector(cfg.id);
-    if (!el) return;
+      PANELS.forEach(cfg=>{
+        const el = document.querySelector(cfg.id);
+        if (!el) return;
 
-    // mark as panel
-    el.classList.add('panel');
+        // mark as panel
+        el.classList.add('panel');
 
-    // wrap content (except the first drag-handle) into .panel-body
-    if (!el.querySelector('.panel-body')) {
-      const handle = el.querySelector(cfg.handle) || el.firstElementChild;
-      const body = document.createElement('div');
-      body.className = 'panel-body';
-      let n = handle ? handle.nextSibling : el.firstChild;
-      while (n) {
-        const next = n.nextSibling;
-        if (!(n.classList && n.classList.contains('panel-tools'))) body.appendChild(n);
-        n = next;
-      }
-      el.appendChild(body);
-    }
+        // wrap content (except the first drag-handle) into .panel-body
+        if (!el.querySelector('.panel-body')) {
+          const handle = el.querySelector(cfg.handle) || el.firstElementChild;
+          const body = document.createElement('div');
+          body.className = 'panel-body';
+          let n = handle ? handle.nextSibling : el.firstChild;
+          while (n) {
+            const next = n.nextSibling;
+            if (!(n.classList && n.classList.contains('panel-tools'))) body.appendChild(n);
+            n = next;
+          }
+          el.appendChild(body);
+        }
 
-    // add tools (collapse/expand + reset size)
-    if (!el.querySelector('.panel-tools')) {
-      const tools = document.createElement('div');
-      tools.className = 'panel-tools';
-      tools.innerHTML = `
-        <div class="toolbtn" title="Collapse/Expand" data-act="toggle">−</div>
-        <div class="toolbtn" title="Reset size" data-act="reset">⤺</div>
-      `;
-      el.appendChild(tools);
-      tools.addEventListener('click', (e)=>{
-        const btn = e.target.closest('.toolbtn'); if (!btn) return;
-        if (btn.dataset.act === 'toggle') el.classList.toggle('panel-collapsed');
-        if (btn.dataset.act === 'reset') { el.style.width=''; el.style.height=''; }
+        // add tools (collapse/expand + reset size)
+        if (!el.querySelector('.panel-tools')) {
+          const tools = document.createElement('div');
+          tools.className = 'panel-tools';
+          tools.innerHTML = `
+            <div class="toolbtn" title="Collapse/Expand" data-act="toggle">−</div>
+            <div class="toolbtn" title="Reset size" data-act="reset">⤺</div>
+          `;
+          el.appendChild(tools);
+          tools.addEventListener('click', (e)=>{
+            const btn = e.target.closest('.toolbtn'); if (!btn) return;
+            if (btn.dataset.act === 'toggle') el.classList.toggle('panel-collapsed');
+            if (btn.dataset.act === 'reset') { el.style.width=''; el.style.height=''; }
+          });
+        }
+
+        // add resize corner
+        if (!el.querySelector('.resize-handle')) {
+          const rh = document.createElement('div');
+          rh.className = 'resize-handle';
+          el.appendChild(rh);
+
+          let resizing=false, startX=0, startY=0, startW=0, startH=0;
+          const onDown = (ev)=>{
+            resizing = true;
+            const p = ev.touches ? ev.touches[0] : ev;
+            startX = p.clientX; startY = p.clientY;
+            const r = el.getBoundingClientRect();
+            startW = r.width; startH = r.height;
+            ev.preventDefault();
+          };
+          const onMove = (ev)=>{
+            if (!resizing) return;
+            const p = ev.touches ? ev.touches[0] : ev;
+            const dw = p.clientX - startX;
+            const dh = p.clientY - startY;
+            el.style.width  = Math.max(260, startW + dw) + 'px';
+            el.style.height = Math.max(120, startH + dh) + 'px';
+            ev.preventDefault();
+          };
+          const onUp = ()=>{ resizing=false; };
+          rh.addEventListener('mousedown', onDown);
+          rh.addEventListener('touchstart', onDown, { passive:false });
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('touchmove', onMove, { passive:false });
+          window.addEventListener('mouseup', onUp);
+          window.addEventListener('touchend', onUp);
+        }
+
+        // dragging
+        const grip = el.querySelector(cfg.handle);
+        if (!grip) return;
+
+        el.style.position = 'absolute';
+        const state = { x:0, y:0, left:0, top:0, dragging:false };
+
+        const clampToViewport = (left, top, w, h)=>{
+          const pad = 8;
+          const maxL = window.innerWidth  - w - pad;
+          const maxT = window.innerHeight - h - pad;
+          return [ Math.max(pad, Math.min(left, maxL)), Math.max(pad, Math.min(top,  maxT)) ];
+        };
+
+        const onDown = (e)=>{
+          if (e.target.closest('input,select,textarea,button,label,.resize-handle,.panel-tools')) return;
+
+          const rect = el.getBoundingClientRect();
+          const scrollX = window.scrollX || 0;
+          const scrollY = window.scrollY || 0;
+
+          el.classList.remove('-translate-x-1/2', 'left-1/2'); // let left/top take control
+
+          if (!el.style.left) el.style.left = (rect.left + scrollX) + 'px';
+          if (!el.style.top)  el.style.top  = (rect.top  + scrollY) + 'px';
+
+          state.x = (e.touches ? e.touches[0].clientX : e.clientX);
+          state.y = (e.touches ? e.touches[0].clientY : e.clientY);
+          state.left = parseFloat(el.style.left) || rect.left + scrollX;
+          state.top  = parseFloat(el.style.top)  || rect.top  + scrollY;
+          state.dragging = true;
+
+          el.dataset.prevZ = el.style.zIndex || '';
+          el.style.zIndex = '10000';
+          el.classList.add('dragging');
+
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('touchmove', onMove, { passive:false });
+          window.addEventListener('mouseup', onUp, { once:true });
+          window.addEventListener('touchend', onUp, { once:true });
+          e.preventDefault();
+        };
+
+        const onMove = (e)=>{
+          if (!state.dragging) return;
+          const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+          const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+          const dx = cx - state.x;
+          const dy = cy - state.y;
+
+          const rect = el.getBoundingClientRect();
+          let nextLeft = state.left + dx;
+          let nextTop  = state.top  + dy;
+          [nextLeft, nextTop] = clampToViewport(nextLeft, nextTop, rect.width, rect.height);
+
+          el.style.left = nextLeft + 'px';
+          el.style.top  = nextTop  + 'px';
+          el.style.right = '';
+          el.style.bottom = '';
+          e.preventDefault();
+        };
+
+        const onUp = ()=>{
+          state.dragging = false;
+          el.classList.remove('dragging');
+          if (el.dataset.prevZ !== undefined) el.style.zIndex = el.dataset.prevZ;
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('touchmove', onMove);
+        };
+
+        grip.addEventListener('mousedown', onDown);
+        grip.addEventListener('touchstart', onDown, { passive:false });
       });
-    }
-
-    // add resize corner
-    if (!el.querySelector('.resize-handle')) {
-      const rh = document.createElement('div');
-      rh.className = 'resize-handle';
-      el.appendChild(rh);
-
-      let resizing=false, startX=0, startY=0, startW=0, startH=0;
-      const onDown = (ev)=>{
-        resizing = true;
-        const p = ev.touches ? ev.touches[0] : ev;
-        startX = p.clientX; startY = p.clientY;
-        const r = el.getBoundingClientRect();
-        startW = r.width; startH = r.height;
-        ev.preventDefault();
-      };
-      const onMove = (ev)=>{
-        if (!resizing) return;
-        const p = ev.touches ? ev.touches[0] : ev;
-        const dw = p.clientX - startX;
-        const dh = p.clientY - startY;
-        el.style.width  = Math.max(260, startW + dw) + 'px';
-        el.style.height = Math.max(120, startH + dh) + 'px';
-        ev.preventDefault();
-      };
-      const onUp = ()=>{ resizing=false; };
-      rh.addEventListener('mousedown', onDown);
-      rh.addEventListener('touchstart', onDown, { passive:false });
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('touchmove', onMove, { passive:false });
-      window.addEventListener('mouseup', onUp);
-      window.addEventListener('touchend', onUp);
-    }
-
-    // dragging
-    const grip = el.querySelector(cfg.handle);
-    if (!grip) return;
-
-    el.style.position = 'absolute';
-    const state = { x:0, y:0, left:0, top:0, dragging:false };
-
-    const clampToViewport = (left, top, w, h)=>{
-      const pad = 8;
-      const maxL = window.innerWidth  - w - pad;
-      const maxT = window.innerHeight - h - pad;
-      return [ Math.max(pad, Math.min(left, maxL)), Math.max(pad, Math.min(top,  maxT)) ];
-    };
-
-    const onDown = (e)=>{
-      if (e.target.closest('input,select,textarea,button,label,.resize-handle,.panel-tools')) return;
-
-      const rect = el.getBoundingClientRect();
-      const scrollX = window.scrollX || 0;
-      const scrollY = window.scrollY || 0;
-
-      el.classList.remove('-translate-x-1/2', 'left-1/2'); // let left/top take control
-
-      if (!el.style.left) el.style.left = (rect.left + scrollX) + 'px';
-      if (!el.style.top)  el.style.top  = (rect.top  + scrollY) + 'px';
-
-      state.x = (e.touches ? e.touches[0].clientX : e.clientX);
-      state.y = (e.touches ? e.touches[0].clientY : e.clientY);
-      state.left = parseFloat(el.style.left) || rect.left + scrollX;
-      state.top  = parseFloat(el.style.top)  || rect.top  + scrollY;
-      state.dragging = true;
-
-      el.dataset.prevZ = el.style.zIndex || '';
-      el.style.zIndex = '10000';
-      el.classList.add('dragging');
-
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('touchmove', onMove, { passive:false });
-      window.addEventListener('mouseup', onUp, { once:true });
-      window.addEventListener('touchend', onUp, { once:true });
-      e.preventDefault();
-    };
-
-    const onMove = (e)=>{
-      if (!state.dragging) return;
-      const cx = (e.touches ? e.touches[0].clientX : e.clientX);
-      const cy = (e.touches ? e.touches[0].clientY : e.clientY);
-      const dx = cx - state.x;
-      const dy = cy - state.y;
-
-      const rect = el.getBoundingClientRect();
-      let nextLeft = state.left + dx;
-      let nextTop  = state.top  + dy;
-      [nextLeft, nextTop] = clampToViewport(nextLeft, nextTop, rect.width, rect.height);
-
-      el.style.left = nextLeft + 'px';
-      el.style.top  = nextTop  + 'px';
-      el.style.right = '';
-      el.style.bottom = '';
-      e.preventDefault();
-    };
-
-    const onUp = ()=>{
-      state.dragging = false;
-      el.classList.remove('dragging');
-      if (el.dataset.prevZ !== undefined) el.style.zIndex = el.dataset.prevZ;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('touchmove', onMove);
-    };
-
-    grip.addEventListener('mousedown', onDown);
-    grip.addEventListener('touchstart', onDown, { passive:false });
-  });
-})();
-
+    })();
   </script>
 </body>
 </html>
