@@ -940,23 +940,115 @@ const CH_BLUE_BAND      = 'rgba(59,130,246,0.10)';// fill for uncertainty band
 
 
     function renderPollutionChart(){
-      const chart = ensureChart();
-      const pollutant = document.getElementById("chartPollutant").value;
-      const gran = document.getElementById("chartGranularity").value;
-      const daysBack = parseInt(document.getElementById("chartDaysBack").value, 10);
-      const showPred = document.getElementById("chartShowPred").checked;
-      const horizonHrs = parseInt(document.getElementById("chartHorizon").value, 10);
+  const chart = ensureChart();
+  const pollutant = document.getElementById("chartPollutant").value;
+  const gran = document.getElementById("chartGranularity").value;
+  const daysBack = parseInt(document.getElementById("chartDaysBack").value, 10);
+  const showPred = document.getElementById("chartShowPred").checked;
+  const horizonHrs = parseInt(document.getElementById("chartHorizon").value, 10);
 
-      chart.options.scales.x.time.unit = (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
+  // time unit
+  chart.options.scales.x.time.unit = (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
 
-      const measuredAgg = aggregateSeries(sliceDaysBack(tsStore[pollutant], daysBack), gran).map(p=>({ x:p.t, y:p.v }));
+  // series building
+  const measuredAgg = aggregateSeries(sliceDaysBack(tsStore[pollutant] || [], daysBack), gran).map(p=>({ x:p.t, y:p.v }));
 
-      let predictedAgg = [];
-      if (showPred && horizonHrs > 0) {
-        const now = Date.now(), horizonMs = horizonHrs * 3600 * 1000;
-        const future = tsStore.pred[pollutant].filter(p => p.ts >= now && p.ts <= now + horizonMs);
-        predictedAgg = aggregateSeries(future, gran).map(p=>({ x:p.t, y:p.v }));
-      }
+  let predictedAgg = [];
+  if (showPred && horizonHrs > 0) {
+    const now = Date.now(), horizonMs = horizonHrs * 3600 * 1000;
+    const future = (tsStore.pred?.[pollutant] || []).filter(p => p.ts >= now && p.ts <= now + horizonMs);
+    predictedAgg = aggregateSeries(future, gran).map(p=>({ x:p.t, y:p.v }));
+  }
+
+  const thr = Number.isFinite(THRESHOLDS[pollutant]) ? THRESHOLDS[pollutant] : Infinity;
+
+  const peaks = findPeaks(measuredAgg);
+  const band = buildPredictionBand(measuredAgg, predictedAgg);
+
+  const unit = UNITS[pollutant] || '';
+
+  // ---- colors (reuse your constants or fall back) ----
+  const CH_BLUE_MEASURED  = window.CH_BLUE_MEASURED  || '#2563eb';
+  const CH_BLUE_PREDICTED = window.CH_BLUE_PREDICTED || '#3b82f6';
+  const CH_BLUE_BAND      = window.CH_BLUE_BAND      || 'rgba(59,130,246,0.10)';
+
+  // measured line (SOLID BLUE)
+  const dsMeasured = {
+    label: `${pollutant} (misurato)`,
+    data: measuredAgg,
+    borderWidth: 3,
+    borderColor: CH_BLUE_MEASURED,
+    backgroundColor: 'transparent',
+    pointRadius: 0,
+    metaPollutant: pollutant,
+    order: 20
+  };
+
+  const datasets = [dsMeasured];
+
+  // predicted line + uncertainty (DASHED BLUE + light fill)
+  if (showPred && predictedAgg.length){
+    const dsPredLower = {
+      label: `${pollutant} (previsto — limite inf)`,
+      data: band.lower,
+      borderWidth: 0,
+      pointRadius: 0,
+      fill: false,
+      hidden: true,
+      metaPollutant: pollutant,
+      order: 5
+    };
+    const dsPredUpper = {
+      label: `${pollutant} (previsto — incertezza)`,
+      data: band.upper,
+      borderWidth: 0,
+      pointRadius: 0,
+      fill: { target: "-1" },
+      backgroundColor: CH_BLUE_BAND,
+      metaPollutant: pollutant,
+      order: 6
+    };
+    const dsPred = {
+      label: `${pollutant} (previsto)`,
+      data: predictedAgg,
+      borderWidth: 2,
+      borderDash: [8,6],
+      borderColor: CH_BLUE_PREDICTED,
+      pointRadius: 0,
+      metaPollutant: pollutant,
+      order: 10
+    };
+    datasets.push(dsPredLower, dsPredUpper, dsPred);
+  }
+
+  // peak markers (red dots)
+  if (peaks.length){
+    datasets.push({
+      type: 'scatter',
+      label: `${pollutant} — picchi`,
+      data: peaks,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      pointBackgroundColor: 'rgba(220, 38, 38, 0.9)',
+      showLine: false,
+      metaPollutant: pollutant,
+      order: 30
+    });
+  }
+
+  chart.data.datasets = datasets;
+  chart.options.scales.y.title.text = `${pollutant} (${unit})`;
+  chart.options.plugins.thresholdLine.value = thr;
+
+  document.getElementById("pollutionChartStatus").textContent =
+    `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
+
+  chart.update();
+
+  const thrInput = document.getElementById('chartThreshold');
+  if (thrInput && document.activeElement !== thrInput) thrInput.value = String(thr);
+}
+
 
       const thr = Number.isFinite(THRESHOLDS[pollutant]) ? THRESHOLDS[pollutant] : Infinity;
 
