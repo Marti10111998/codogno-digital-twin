@@ -1147,9 +1147,9 @@ Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5; // how wide to frame inside that rectan
 await viewer.zoomTo(
   dataSource,
   new Cesium.HeadingPitchRange(
-    Cesium.Math.toRadians(130),  // 180° = looking north from far south
+    Cesium.Math.toRadians(40),  // 180° = looking north from far south
     Cesium.Math.toRadians(-40),  // smaller tilt → almost flat view
-    2800                         // farther back for a wider, higher view
+    2500                         // farther back for a wider, higher view
   )
 );
 
