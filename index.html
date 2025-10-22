@@ -1350,7 +1350,13 @@ const DEVICE_KEY = "device_id_v1";
       }
       liveTrafficToggle.addEventListener("change", (e)=> e.target.checked ? beginTrafficUpdates() : stopTrafficUpdates());
       trafficRefresh.addEventListener("change", ()=> { if (liveTrafficToggle.checked) beginTrafficUpdates(); });
-      beginTrafficUpdates();
+
+      // Only start traffic if the toggle is on
+      if (liveTrafficToggle && liveTrafficToggle.checked) {
+        beginTrafficUpdates();
+        } else {
+        stopTrafficUpdates();
+      }
     }
 
     // ======== ICT / Ops telemetry ========
