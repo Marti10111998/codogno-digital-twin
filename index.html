@@ -224,7 +224,7 @@
 
       <!-- Editable threshold -->
       <div>
-        <label class="block text-sm font-medium">Soglia</label>
+        <label class="block text-sm font-medium">Threshold</label>
         <input id="chartThreshold" type="number" step="0.1" class="w-full border rounded px-2 py-1" />
       </div>
     </div>
@@ -959,7 +959,7 @@ const DEVICE_KEY = "device_id_v1";
       const unit  = UNITS[pollutant] || '';
 
       const dsMeasured = {
-        label: `${pollutant} (misurato)`,
+        label: `${pollutant} (measured)`,
         data: measuredAgg,
         borderWidth: 3,
         borderColor: CH_BLUE_MEASURED,
@@ -973,20 +973,20 @@ const DEVICE_KEY = "device_id_v1";
 
       if (showPred && predictedAgg.length){
         const dsPredLower = {
-          label: `${pollutant} (previsto — limite inf)`,
+          label: `${pollutant} (forecast — lower bound)`,
           data: band.lower,
           borderWidth: 0, pointRadius: 0, fill: false, hidden: true,
           metaPollutant: pollutant, order: 5
         };
         const dsPredUpper = {
-          label: `${pollutant} (previsto — incertezza)`,
+          label: `${pollutant} (forecast — uncertainty)`,
           data: band.upper,
           borderWidth: 0, pointRadius: 0, fill: { target: "-1" },
           backgroundColor: CH_BLUE_BAND,
           metaPollutant: pollutant, order: 6
         };
         const dsPred = {
-          label: `${pollutant} (previsto)`,
+          label: `${pollutant} (forecast)`,
           data: predictedAgg,
           borderWidth: 2, borderDash: [8,6], borderColor: CH_BLUE_PREDICTED,
           pointRadius: 0, metaPollutant: pollutant, order: 10
@@ -997,7 +997,7 @@ const DEVICE_KEY = "device_id_v1";
       if (peaks.length){
         datasets.push({
           type: 'scatter',
-          label: `${pollutant} — picchi`,
+          label: `${pollutant} — peaks`,
           data: peaks,
           pointRadius: 4, pointHoverRadius: 6,
           pointBackgroundColor: 'rgba(220, 38, 38, 0.9)',
