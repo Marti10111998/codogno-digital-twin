@@ -1642,138 +1642,57 @@ await viewer.zoomTo(
         grip.addEventListener('touchstart', onDown, { passive:false });
       });
     })();
-    // === Adjacent placement + no-overlap for panels ===
-(function panelLayoutHelpers(){
-  const GAP = 12;       // space between panels
-  const PAD = 8;        // viewport padding
+    // === Place UHI legend once, to the LEFT of the Codogno panel (no auto-nudging) ===
+(function placeLegendOnce(){
+  const GAP = 12; // space between the two panels
+  const PAD = 8;  // viewport padding
 
-  function rectOf(el){
+  function rect(el){
     const r = el.getBoundingClientRect();
     return { left:r.left + window.scrollX, top:r.top + window.scrollY, width:r.width, height:r.height };
   }
-  function clampToViewport(pos, size){
-    const maxL = window.innerWidth  + window.scrollX - size.width  - PAD;
-    const maxT = window.innerHeight + window.scrollY - size.height - PAD;
-    return {
-      left: Math.max(PAD + window.scrollX, Math.min(pos.left, maxL)),
-      top:  Math.max(PAD + window.scrollY, Math.min(pos.top,  maxT)),
-    };
+  function clamp(left, top, w, h){
+    const minL = window.scrollX + PAD;
+    const minT = window.scrollY + PAD;
+    const maxL = window.scrollX + window.innerWidth  - w - PAD;
+    const maxT = window.scrollY + window.innerHeight - h - PAD;
+    return [ Math.max(minL, Math.min(left, maxL)), Math.max(minT, Math.min(top, maxT)) ];
   }
   function setLT(el, left, top){
-    el.style.left = Math.round(left) + 'px';
-    el.style.top  = Math.round(top)  + 'px';
-    el.style.right = '';
-    el.style.bottom = '';
-  }
-  function overlaps(a, b){
-    return !(a.left + a.width  <= b.left ||
-             b.left + b.width  <= a.left ||
-             a.top  + a.height <= b.top  ||
-             b.top  + b.height <= a.top);
-  }
-  function nudgeOff(el, others){
-    // Nudge the moved element minimally until it doesn't overlap with others
-    const maxIters = 200;
-    let iter = 0;
-    while (iter++ < maxIters) {
-      const r = rectOf(el);
-      const hit = others.find(o => o !== el && overlaps(r, rectOf(o)));
-      if (!hit) break;
-      const hr = rectOf(hit);
-
-      // Compute minimal push direction
-      const pushRight = (hr.left + hr.width + GAP) - r.left;      // move this to the right of hit
-      const pushDown  = (hr.top  + hr.height + GAP) - r.top;      // move this below hit
-      // choose smaller displacement axis for a gentle nudge
-      if (pushRight < pushDown) {
-        setLT(el, r.left + pushRight, r.top);
-      } else {
-        setLT(el, r.left, r.top + pushDown);
-      }
-
-      // clamp to viewport
-      const newR = rectOf(el);
-      const clamped = clampToViewport({ left:newR.left, top:newR.top }, { width:newR.width, height:newR.height });
-      setLT(el, clamped.left, clamped.top);
-    }
+    el.style.left = Math.round(left) + "px";
+    el.style.top  = Math.round(top)  + "px";
+    el.style.right = "";
+    el.style.bottom = "";
   }
 
-  // Place B next to A (prefer right; fall back left; then below) and keep on-screen.
-  function placeAdjacent(A, B){
-    // Ensure B is visible (legend might be hidden until first render)
-    B.classList.remove('hidden');
-
-    // Clear any fixed right/top so left/top take over
-    B.style.right = ''; B.style.bottom = '';
-
-    const ar = rectOf(A);
-    const br = rectOf(B);
-
-    // Try to the right
-    let left = ar.left + ar.width + GAP;
-    let top  = ar.top;
-
-    // If it would go off-screen, try to the left
-    if (left + br.width + PAD > window.innerWidth + window.scrollX) {
-      left = ar.left - br.width - GAP;
-    }
-    // If still not good, place below
-    if (left < PAD + window.scrollX) {
-      left = ar.left;
-      top  = ar.top + ar.height + GAP;
-    }
-
-    // Clamp and apply
-    const clamped = clampToViewport({ left, top }, { width: br.width, height: br.height });
-    setLT(B, clamped.left, clamped.top);
-  }
-
-  // Run once on startup
-  window.addEventListener('load', ()=>{
-    const control = document.getElementById('controlPanel');
-    const legend  = document.getElementById('uhiLegendRight');
-    if (control && legend) {
-      // Make sure legend has a size before measuring
-      legend.classList.remove('hidden');
-      // Defer one frame so layout is up to date
-      requestAnimationFrame(()=> placeAdjacent(control, legend));
-    }
-  });
-
-  // After any drag ends, prevent overlaps among all panels
-  // We hook into the existing drag code by listening on mouseup/touchend globally.
-  function allPanels(){
-    return [
-      '#controlPanel', '#uhiLegendRight', '#pollutionPanel', '#pollutionChartPanel', '#ictPanel'
-    ].map(sel => document.querySelector(sel)).filter(Boolean);
-  }
-  function onDragEndFix(){
-    const panels = allPanels();
-    // Gently resolve overlaps, newest (last moved) first
-    // Heuristic: nudge each panel away from others
-    panels.forEach(p => nudgeOff(p, panels));
-  }
-  window.addEventListener('mouseup', onDragEndFix, { passive:true });
-  window.addEventListener('touchend', onDragEndFix, { passive:true });
-
-  // Also, when the control panel is moved, keep the legend *initially* next to it
-  // but do not "dock": if the user has manually dragged the legend far away, we don't snap it back.
-  (function followOnFirstMove(){
-    const control = document.getElementById('controlPanel');
-    const legend  = document.getElementById('uhiLegendRight');
+  window.addEventListener("load", ()=>{
+    const control = document.getElementById("controlPanel");
+    const legend  = document.getElementById("uhiLegendRight");
     if (!control || !legend) return;
 
-    let hasUserMovedLegend = false;
-    legend.addEventListener('mousedown', ()=> { hasUserMovedLegend = true; }, { passive:true });
-    legend.addEventListener('touchstart', ()=> { hasUserMovedLegend = true; }, { passive:true });
+    legend.classList.remove("hidden");     // ensure it has real size
+    legend.style.right = ""; legend.style.bottom = "";
 
-    // Observe style changes to controlPanel (position updates during drag)
-    const mo = new MutationObserver(()=>{
-      if (!hasUserMovedLegend) placeAdjacent(control, legend);
+    // Defer one frame so widths/heights are correct
+    requestAnimationFrame(()=>{
+      const ar = rect(control);
+      const br = rect(legend);
+
+      // Prefer LEFT of the Codogno panel
+      let left = ar.left - br.width - GAP;
+      let top  = ar.top;
+
+      // Fallback: if that would be off-screen left, place it to the RIGHT instead
+      if (left < window.scrollX + PAD) {
+        left = ar.left + ar.width + GAP;
+      }
+
+      const [L, T] = clamp(left, top, br.width, br.height);
+      setLT(legend, L, T);
     });
-    mo.observe(control, { attributes:true, attributeFilter:['style'] });
-  })();
+  });
 })();
+
 
   </script>
 </body>
