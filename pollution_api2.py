@@ -135,6 +135,121 @@ def predict_now(w: Weather):
 # --------------------------
 # Entry point for local run
 # --------------------------
+
+# ==== STORAGE & CRON: add this block to pollution_api2.py ====
+import sqlite3, time
+
+# Persistent DB path (on Render we'll point this to /var/data/data.db)
+DB_PATH = os.getenv("DB_PATH", "data.db")
+
+# Optional weather for /cron
+LAT = float(os.getenv("LAT", "45.165"))
+LON = float(os.getenv("LON", "9.703"))
+OWM_KEY = os.getenv("OPENWEATHER_API_KEY", "")
+
+# The same pollutant names your models serve:
+POLLUTANTS = TARGETS  # ["O3","CO","NO2","NO","NH3"]
+
+def _db():
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
+
+def _init_db():
+    con = _db()
+    con.execute("CREATE TABLE IF NOT EXISTS readings (ts INTEGER PRIMARY KEY)")
+    # add columns if missing
+    have = {r["name"] for r in con.execute("PRAGMA table_info(readings)").fetchall()}
+    for p in POLLUTANTS:
+        if p not in have:
+            con.execute(f"ALTER TABLE readings ADD COLUMN {p} REAL")
+    con.execute("CREATE TABLE IF NOT EXISTS devices (device TEXT PRIMARY KEY, last_seen_ts INTEGER)")
+    con.commit(); con.close()
+
+_init_db()
+
+def _upsert_row(ts:int, kv:dict):
+    con = _db()
+    con.execute("INSERT OR IGNORE INTO readings (ts) VALUES (?)", (ts,))
+    sets, vals = [], []
+    for k,v in kv.items():
+        if k in POLLUTANTS and isinstance(v,(int,float)):
+            sets.append(f"{k}=?"); vals.append(float(v))
+    if sets:
+        vals.append(ts)
+        con.execute(f"UPDATE readings SET {', '.join(sets)} WHERE ts=?", vals)
+    con.commit(); con.close()
+
+def _row_to_obj(row: sqlite3.Row) -> dict:
+    o = {"ts": int(row["ts"])}
+    for p in POLLUTANTS:
+        if p in row.keys() and row[p] is not None:
+            o[p] = float(row[p])
+    return o
+
+@app.post("/ingest")
+def ingest(payload: dict):
+    """
+    Body: {"device":"abc","rows":[{"ts":<ms>,"pollutant":"O3","value":88.2}, ...]}
+    This matches your front-end sync format.
+    """
+    device = payload.get("device") or "anon"
+    rows = payload.get("rows") or []
+    now = int(time.time()*1000)
+    con = _db()
+    con.execute("INSERT OR REPLACE INTO devices (device, last_seen_ts) VALUES (?,?)", (device, now))
+    con.commit(); con.close()
+    for r in rows:
+        ts  = int(r.get("ts", now))
+        pol = r.get("pollutant")
+        val = r.get("value")
+        if pol in POLLUTANTS and isinstance(val,(int,float)):
+            _upsert_row(ts, {pol: float(val)})
+    return {"ok": True}
+
+@app.get("/history")
+def history(days: int = 7):
+    since = int(time.time()*1000) - int(days)*24*3600*1000
+    con = _db()
+    cur = con.execute("SELECT * FROM readings WHERE ts>=? ORDER BY ts ASC", (since,))
+    out = [_row_to_obj(r) for r in cur.fetchall()]
+    con.close()
+    return out
+
+@app.get("/latest")
+def latest():
+    con = _db()
+    cur = con.execute("SELECT * FROM readings ORDER BY ts DESC LIMIT 1")
+    row = cur.fetchone()
+    con.close()
+    return _row_to_obj(row) if row else {}
+
+def _fetch_weather():
+    # If no key, use safe defaults; still lets cron store rows
+    if not OWM_KEY:
+        return dict(Temperature=28.0, Humidity=50.0, Precipitation=0.0, WindSpeed_m_s=1.5)
+    url = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&units=metric&appid={OWM_KEY}"
+    r = requests.get(url, timeout=10); r.raise_for_status()
+    j = r.json()
+    return dict(
+        Temperature     = float(j.get("main",{}).get("temp", 28.0)),
+        Humidity        = float(j.get("main",{}).get("humidity", 50.0)),
+        Precipitation   = float((j.get("rain",{}) or {}).get("1h", 0.0)),
+        WindSpeed_m_s   = float(j.get("wind",{}).get("speed", 1.5))
+    )
+
+@app.get("/cron")
+def cron():
+    # Called by a scheduler every 10 minutes. Predicts + stores a row.
+    w = _fetch_weather()
+    X = features_to_row(Weather(**w))
+    preds = predict_row(X)
+    ts = int(time.time()*1000)
+    _upsert_row(ts, preds)
+    return {"stored": {"ts": ts, **preds}}
+# ==== END STORAGE & CRON block ====
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("pollution_api2:app", host="0.0.0.0", port=8000, reload=True)
