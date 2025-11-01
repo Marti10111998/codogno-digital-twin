@@ -281,7 +281,13 @@
     Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjODA1Mzg0My0zMDBjLTQ4MDEtODlmOC01OTc4M2QyODllYWEiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NjA5NTUyMjJ9.G754yiSXNU-RMeD3mwyIH6W6sIU-dEwNrrdqOp8uCXk";
 
 // Optional backend (predict/backfill); app works without it
-const POLLUTION_API = "https://codogno-pollution.martinaivanova123.workers.dev";
+const POLLUTION_API = "https://codogno-digital-twin.onrender.com/";
+
+fetch(`${POLLUTION_API}/health`)
+  .then(r => r.json())
+  .then(j => console.log("✅ Connected to backend:", j))
+  .catch(e => console.error("❌ Cannot reach backend:", e));
+
 
 // ======== CLOUD SYNC SETTINGS (NEW) ========
 const CLOUD_SYNC_ENABLED = !!POLLUTION_API;
