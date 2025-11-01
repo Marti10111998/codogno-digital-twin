@@ -1,97 +1,101 @@
 # pollution_api2.py
 # -------------------------------------------------------------
 # FastAPI that serves predictions from RF models downloaded
-# automatically from Google Drive or Dropbox.
+# automatically from Google Drive (handles big files via gdown).
+# Also provides /history, /latest, /ingest, /cron for your UI.
 # -------------------------------------------------------------
 
 from __future__ import annotations
-import os, joblib, logging, requests
+import os, joblib, logging, requests, sqlite3, time
 from pathlib import Path
 from typing import Dict, List
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-# --------------------------
+# =========================
 # Config
-# --------------------------
-TARGETS: List[str] = ["O3", "CO", "NO2", "NO", "NH3"]
+# =========================
+TARGETS: List[str]  = ["O3", "CO", "NO2", "NO", "NH3"]
 FEATURES: List[str] = ["Temperature", "Humidity", "Precipitation", "WindSpeed_m_s"]
+
 MODEL_DIR = Path("models")
 MODEL_DIR.mkdir(exist_ok=True)
 
-# ❶ Put your direct download links here
+# ❶ Your direct-download Drive links (OK to keep as-is)
 MODEL_URLS = {
     "rf_CO_model.pkl":  "https://drive.google.com/uc?export=download&id=1ukLqBo8aMsf8Z9f1-bQlHI5C3fQ6JedU",
     "rf_NH3_model.pkl": "https://drive.google.com/uc?export=download&id=173i4y5fyfb3sVe663CYVbliCAcJAzUfu",
     "rf_NO_model.pkl":  "https://drive.google.com/uc?export=download&id=13HOvPrJk7a4oJnXbYr4jkB9txIFd0g4E",
     "rf_NO2_model.pkl": "https://drive.google.com/uc?export=download&id=1T1Yh17VYC_vcjwN0RuteZRpUNi1uANL9",
-    "rf_O3_model.pkl":  "https://drive.google.com/uc?export=download&id=1q7oKyiW73EtGmtzv1EZDJTw2GRaWjutV",  
+    "rf_O3_model.pkl":  "https://drive.google.com/uc?export=download&id=1q7oKyiW73EtGmtzv1EZDJTw2GRaWjutV",
 }
 
-
-OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "YOUR_OPENWEATHER_KEY")
-PRECIP_FEATURE_KIND = os.getenv("PRECIP_FEATURE_KIND", "PRESSURE_HPA").upper()
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
+LAT = float(os.getenv("LAT", "45.165"))
+LON = float(os.getenv("LON", "9.703"))
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger("pollution_api2")
 
-# --------------------------
-# Download helper
-# --------------------------
+# =========================
+# Download helper (Google Drive safe)
+# =========================
+import gdown
+
 def download_model(url: str, filename: str) -> Path:
-    """Download model from URL only if not present locally."""
+    """
+    Download model only if missing. Uses gdown to handle Drive confirm pages
+    and large files. Works with both 'file/d/<id>/view' and 'uc?id=' links.
+    """
     path = MODEL_DIR / filename
     if path.exists():
         return path
     log.info("⬇️  Downloading %s ...", filename)
     try:
-        r = requests.get(url, stream=True, timeout=300)
-        r.raise_for_status()
-        with open(path, "wb") as f:
-            for chunk in r.iter_content(1024 * 1024):
-                if chunk:
-                    f.write(chunk)
-        log.info("✅ Saved %s", filename)
+        gdown.download(url=url, output=str(path), quiet=False, fuzzy=True)
+        if not path.exists() or path.stat().st_size < 10_000:
+            raise RuntimeError("Downloaded file looks too small; check the link & sharing.")
+        log.info("✅ Saved %s (%.1f MB)", filename, path.stat().st_size / 1_000_000)
     except Exception as e:
         log.error("❌ Failed to download %s: %s", filename, e)
         raise
     return path
 
-# --------------------------
+# =========================
 # Model loading
-# --------------------------
+# =========================
 def load_models() -> Dict[str, object]:
     models = {}
     for target in TARGETS:
         fname = f"rf_{target}_model.pkl"
         url = MODEL_URLS.get(fname)
         if not url:
-            raise FileNotFoundError(f"No URL for {fname}. Please set MODEL_URLS.")
+            raise FileNotFoundError(f"No URL for {fname}. Set it in MODEL_URLS.")
         pkl_path = download_model(url, fname)
-        models[target] = joblib.load(pkl_path)
+        models[target] = joblib.load(pkl_path)  # requires scikit-learn installed
         log.info("Loaded %s", fname)
     return models
 
 MODELS = load_models()
 
-# --------------------------
+# =========================
 # FastAPI setup
-# --------------------------
-app = FastAPI(title="Codogno Pollution API (Cloud Models)", version="3.0")
+# =========================
+app = FastAPI(title="Codogno Pollution API (Cloud Models)", version="3.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
 
-# --------------------------
+# =========================
 # Schemas
-# --------------------------
+# =========================
 class Weather(BaseModel):
     Temperature: float = Field(..., description="Air temperature in °C")
     Humidity: float = Field(..., ge=0, le=100, description="Relative humidity %")
-    Precipitation: float = Field(..., description="Pressure hPa or rain mm")
+    Precipitation: float = Field(..., description="Rain (mm) or pressure proxy")
     WindSpeed_m_s: float = Field(..., ge=0, description="Wind speed m/s")
 
     @field_validator("Temperature", "Humidity", "Precipitation", "WindSpeed_m_s")
@@ -108,9 +112,9 @@ class Prediction(BaseModel):
     NO: float
     NH3: float
 
-# --------------------------
+# =========================
 # Core logic
-# --------------------------
+# =========================
 def features_to_row(w: Weather) -> np.ndarray:
     return np.array([[w.Temperature, w.Humidity, w.Precipitation, w.WindSpeed_m_s]], dtype=float)
 
@@ -120,9 +124,9 @@ def predict_row(X: np.ndarray) -> Dict[str, float]:
         out[t] = float(model.predict(X)[0])
     return out
 
-# --------------------------
-# Routes
-# --------------------------
+# =========================
+# Basic routes
+# =========================
 @app.get("/health")
 def health():
     return {"ok": True, "targets": TARGETS, "features": FEATURES}
@@ -132,22 +136,10 @@ def predict_now(w: Weather):
     X = features_to_row(w)
     return predict_row(X)
 
-# --------------------------
-# Entry point for local run
-# --------------------------
-
-# ==== STORAGE & CRON: add this block to pollution_api2.py ====
-import sqlite3, time
-
-# Persistent DB path (on Render we'll point this to /var/data/data.db)
+# ============================================================
+# Storage + Backfill + Cron (what your UI expects)
+# ============================================================
 DB_PATH = os.getenv("DB_PATH", "data.db")
-
-# Optional weather for /cron
-LAT = float(os.getenv("LAT", "45.165"))
-LON = float(os.getenv("LON", "9.703"))
-OWM_KEY = os.getenv("OPENWEATHER_API_KEY", "")
-
-# The same pollutant names your models serve:
 POLLUTANTS = TARGETS  # ["O3","CO","NO2","NO","NH3"]
 
 def _db():
@@ -191,10 +183,10 @@ def _row_to_obj(row: sqlite3.Row) -> dict:
 def ingest(payload: dict):
     """
     Body: {"device":"abc","rows":[{"ts":<ms>,"pollutant":"O3","value":88.2}, ...]}
-    This matches your front-end sync format.
+    Matches your front-end sync format.
     """
-    device = payload.get("device") or "anon"
-    rows = payload.get("rows") or []
+    device = (payload or {}).get("device") or "anon"
+    rows = (payload or {}).get("rows") or []
     now = int(time.time()*1000)
     con = _db()
     con.execute("INSERT OR REPLACE INTO devices (device, last_seen_ts) VALUES (?,?)", (device, now))
@@ -224,11 +216,11 @@ def latest():
     con.close()
     return _row_to_obj(row) if row else {}
 
-def _fetch_weather():
-    # If no key, use safe defaults; still lets cron store rows
-    if not OWM_KEY:
+def _fetch_weather() -> dict:
+    # Safe defaults if no key set (still stores rows)
+    if not OPENWEATHER_API_KEY:
         return dict(Temperature=28.0, Humidity=50.0, Precipitation=0.0, WindSpeed_m_s=1.5)
-    url = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&units=metric&appid={OWM_KEY}"
+    url = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&units=metric&appid={OPENWEATHER_API_KEY}"
     r = requests.get(url, timeout=10); r.raise_for_status()
     j = r.json()
     return dict(
@@ -240,16 +232,18 @@ def _fetch_weather():
 
 @app.get("/cron")
 def cron():
-    # Called by a scheduler every 10 minutes. Predicts + stores a row.
+    """Scheduler calls this every 10 minutes to store a fresh row."""
     w = _fetch_weather()
     X = features_to_row(Weather(**w))
     preds = predict_row(X)
     ts = int(time.time()*1000)
     _upsert_row(ts, preds)
     return {"stored": {"ts": ts, **preds}}
-# ==== END STORAGE & CRON block ====
 
-
+# =========================
+# Local run
+# =========================
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("pollution_api2:app", host="0.0.0.0", port=8000, reload=True)
+
