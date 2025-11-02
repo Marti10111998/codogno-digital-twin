@@ -224,7 +224,7 @@
 
       <!-- Editable threshold -->
       <div>
-        <label class="block text-sm font-medium">Threshold</label>
+        <label class="block text-sm font-medium">Soglia</label>
         <input id="chartThreshold" type="number" step="0.1" class="w-full border rounded px-2 py-1" />
       </div>
     </div>
@@ -244,7 +244,7 @@
     <div class="drag-handle -mt-1 -mx-1 mb-2 px-1 py-1 text-[11px] text-gray-500 rounded cursor-move select-none">⠿ Drag</div>
 
     <div class="flex items-center justify-between">
-      <div class="text-lg font-semibold">System Health</div>
+      <div class="text-lg font-semibold">ICT — System Health</div>
       <div id="ictStamp" class="text-xs text-gray-500">—</div>
     </div>
 
@@ -439,7 +439,7 @@ const DEVICE_KEY = "device_id_v1";
         const a = Math.max(1,k)-1, b = Math.min(pos.length-1,k);
         const w = (t - pos[a]) / Math.max(1e-6,(pos[b]-pos[a]));
         const c = [0,1,2].map(j=>Math.round( rgb[a][j] + (rgb[b][j]-rgb[a][j])*w ));
-        out.push(#${c.map(v=>v.toString(16).padStart(2,'0')).join('')});
+        out.push(`#${c.map(v=>v.toString(16).padStart(2,'0')).join('')}`);
       }
       return out;
     }
@@ -465,7 +465,7 @@ const DEVICE_KEY = "device_id_v1";
       const lowers = [minVal].concat(breaksAsc.slice(0, -1));
       let html = "";
       for (let i = lowers.length - 1; i >= 0; i--){
-        html += <div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>;
+        html += `<div class="row"><div class="sw" style="background:${colors[i]}"></div><span>&ge; ${fmt(lowers[i])}</span></div>`;
       }
       const right = document.getElementById("uhiLegendRight");
       const rows  = document.getElementById("uhiLegendRowsRight");
@@ -479,7 +479,7 @@ const DEVICE_KEY = "device_id_v1";
     // ==========================
     // Forecast worker (Holt-Winters)
     // ==========================
-    const workerCode = 
+    const workerCode = `
       self.onmessage = (e) => {
         const { kind, payload } = e.data || {};
         if (kind === "FORECAST") {
@@ -513,7 +513,7 @@ const DEVICE_KEY = "device_id_v1";
           postMessage({ kind:"PREDICTIONS", data: out, ts: Date.now() });
         }
       };
-    ;
+    `;
     const worker = new Worker(URL.createObjectURL(new Blob([workerCode], {type:'application/javascript'})));
     let latestPredictions = null;
     worker.onmessage = (e) => {
@@ -536,7 +536,7 @@ const DEVICE_KEY = "device_id_v1";
         WindSpeed_m_s: weather.wind
       };
       try {
-        const r = await fetch(${POLLUTION_API}/predict, {
+        const r = await fetch(`${POLLUTION_API}/predict`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(features)
@@ -574,8 +574,8 @@ const DEVICE_KEY = "device_id_v1";
     // Weather + UHI (realtime)
     // ==========================
     async function fetchUHIAndUpdate(){
-      const urbanURL = https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey};
-      const ruralURL = https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey};
+      const urbanURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&units=metric&appid=${weatherApiKey}`;
+      const ruralURL = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.603&units=metric&appid=${weatherApiKey}`;
 
       try {
         const [uRes, rRes] = await Promise.all([resilientFetch(urbanURL), resilientFetch(ruralURL)]);
@@ -887,7 +887,7 @@ const DEVICE_KEY = "device_id_v1";
             tooltip: { callbacks: { label: (tt)=>{
               const pol = tt.dataset.metaPollutant || '';
               const unit = UNITS[pol] || '';
-              return ${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}${unit ? ' ' + unit : ''};
+              return `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}${unit ? ' ' + unit : ''}`;
             } } },
             thresholdLine: { value: 0 },
             dayLines: { showLabels: false }
@@ -959,7 +959,7 @@ const DEVICE_KEY = "device_id_v1";
       const unit  = UNITS[pollutant] || '';
 
       const dsMeasured = {
-        label: ${pollutant} (measured),
+        label: `${pollutant} (misurato)`,
         data: measuredAgg,
         borderWidth: 3,
         borderColor: CH_BLUE_MEASURED,
@@ -973,20 +973,20 @@ const DEVICE_KEY = "device_id_v1";
 
       if (showPred && predictedAgg.length){
         const dsPredLower = {
-          label: ${pollutant} (forecast — lower bound),
+          label: `${pollutant} (previsto — limite inf)`,
           data: band.lower,
           borderWidth: 0, pointRadius: 0, fill: false, hidden: true,
           metaPollutant: pollutant, order: 5
         };
         const dsPredUpper = {
-          label: ${pollutant} (forecast — uncertainty),
+          label: `${pollutant} (previsto — incertezza)`,
           data: band.upper,
           borderWidth: 0, pointRadius: 0, fill: { target: "-1" },
           backgroundColor: CH_BLUE_BAND,
           metaPollutant: pollutant, order: 6
         };
         const dsPred = {
-          label: ${pollutant} (forecast),
+          label: `${pollutant} (previsto)`,
           data: predictedAgg,
           borderWidth: 2, borderDash: [8,6], borderColor: CH_BLUE_PREDICTED,
           pointRadius: 0, metaPollutant: pollutant, order: 10
@@ -997,7 +997,7 @@ const DEVICE_KEY = "device_id_v1";
       if (peaks.length){
         datasets.push({
           type: 'scatter',
-          label: ${pollutant} — peaks,
+          label: `${pollutant} — picchi`,
           data: peaks,
           pointRadius: 4, pointHoverRadius: 6,
           pointBackgroundColor: 'rgba(220, 38, 38, 0.9)',
@@ -1006,11 +1006,11 @@ const DEVICE_KEY = "device_id_v1";
       }
 
       chart.data.datasets = datasets;
-      chart.options.scales.y.title.text = ${pollutant} (${unit});
+      chart.options.scales.y.title.text = `${pollutant} (${unit})`;
       chart.options.plugins.thresholdLine.value = thr;
 
       document.getElementById("pollutionChartStatus").textContent =
-        ${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length};
+        `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
 
       chart.update();
 
@@ -1020,7 +1020,7 @@ const DEVICE_KEY = "device_id_v1";
 
     async function backfillHistory(days=7){
       try{
-        const r = await fetch(${POLLUTION_API}/history?days=${days}, { cache: "no-store" });
+        const r = await fetch(`${POLLUTION_API}/history?days=${days}`, { cache: "no-store" });
         if (!r.ok) throw new Error("history api error");
         const rows = await r.json();
         for (const row of rows){
@@ -1072,11 +1072,11 @@ const DEVICE_KEY = "device_id_v1";
                                                      : "bg-red-100 text-red-800";
       const entries = ["O3","NO2","NO","CO","NH3","Noise"].map(k=>{
         const v = (out && typeof out[k]==="number") ? out[k] : (out?.[k]?.slice?.(-1)[0] ?? 0);
-        return <div class="p-2 rounded-lg ${level(k, v)} flex justify-between items-center">
+        return `<div class="p-2 rounded-lg ${level(k, v)} flex justify-between items-center">
                   <span class="font-medium">${k}</span><span class="font-semibold">${(v||0).toFixed(2)}</span>
-                </div>;
+                </div>`;
       }).join("");
-      document.getElementById("pollutionOutput").innerHTML = <div class="space-y-2">${entries}</div>;
+      document.getElementById("pollutionOutput").innerHTML = `<div class="space-y-2">${entries}</div>`;
       document.getElementById("pollutionStamp").textContent = "Updated: " + new Date().toLocaleTimeString();
     }
 
@@ -1104,7 +1104,7 @@ const DEVICE_KEY = "device_id_v1";
           const payload = collectPointsSince(lastTs);
           if (!payload.length) return;
 
-          const r = await fetch(${POLLUTION_API}/ingest, {
+          const r = await fetch(`${POLLUTION_API}/ingest`, {
             method: "POST",
             headers: { "Content-Type":"application/json" },
             body: JSON.stringify({ device: getDeviceId(), rows: payload })
@@ -1156,7 +1156,7 @@ await viewer.zoomTo(
       buildings = dataSource.entities.values;
 
       buildings.forEach((building, i) => {
-        const name = Building ${i+1};
+        const name = `Building ${i+1}`;
         building.name = name;
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
 
@@ -1200,7 +1200,7 @@ await viewer.zoomTo(
           const name = picked.id.name ?? "Unknown";
           const label = usePred ? "Pred" : "Temp";
           const tNum = Number(tempVal);
-          tooltip.innerHTML = <strong>${name}</strong><br>Height: ${h} m<br>${label}: ${isFinite(tNum)?tNum.toFixed(2):"N/A"} °C;
+          tooltip.innerHTML = `<strong>${name}</strong><br>Height: ${h} m<br>${label}: ${isFinite(tNum)?tNum.toFixed(2):"N/A"} °C`;
           tooltip.style.left = (movement.endPosition.x + 15) + "px";
           tooltip.style.top  = (movement.endPosition.y + 15) + "px";
           tooltip.style.display = "block";
@@ -1230,7 +1230,7 @@ await viewer.zoomTo(
       const timeLabel  = document.getElementById("timeLabel");
       function setClockHour(h){
         timeSlider.value = h;
-        timeLabel.textContent = ${h}:00;
+        timeLabel.textContent = `${h}:00`;
         const base = new Date(); base.setHours(h, 0, 0, 0);
         viewer.clock.currentTime = Cesium.JulianDate.fromDate(base);
         updateStyles();
@@ -1257,7 +1257,7 @@ await viewer.zoomTo(
         const shouldDraw = !!(dotsToggle && dotsToggle.checked);
 
         try {
-          const file = ${timeOfDay}_heatpoints.json;
+          const file = `${timeOfDay}_heatpoints.json`;
           const response = await resilientFetch(file);
           const data = await response.json();
 
@@ -1320,17 +1320,17 @@ await viewer.zoomTo(
       });
       trafficStatus.textContent = "Traffic: starting…";
       document.body.appendChild(trafficStatus);
-      const setTrafficStatus = (msg)=>trafficStatus.textContent = Traffic: ${msg};
+      const setTrafficStatus = (msg)=>trafficStatus.textContent = `Traffic: ${msg}`;
 
       function addOrUpdateTrafficLayer(){
         const ts = Date.now();
         const provider = new Cesium.UrlTemplateImageryProvider({
-          url: https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key=${tomtomKey}&ts=${ts},
+          url: `https://api.tomtom.com/traffic/map/4/tile/flow/relative/{z}/{x}/{y}.png?key=${tomtomKey}&ts=${ts}`,
           maximumLevel: 20,
           tilingScheme: new Cesium.WebMercatorTilingScheme(),
           credit: "TomTom Traffic"
         });
-        provider.errorEvent.addEventListener(()=> setTrafficStatus(error));
+        provider.errorEvent.addEventListener(()=> setTrafficStatus(`error`));
         const newLayer = viewer.imageryLayers.addImageryProvider(provider);
         newLayer.alpha = 0.7;
 
@@ -1341,7 +1341,7 @@ await viewer.zoomTo(
         (function waitReady(){
           if (provider.ready) {
             const dt = ((performance.now()-started)/1000).toFixed(1);
-            setTrafficStatus(updated @ ${new Date().toLocaleTimeString()} (+${dt}s));
+            setTrafficStatus(`updated @ ${new Date().toLocaleTimeString()} (+${dt}s)`);
             viewer.scene.requestRender();
           } else {
             requestAnimationFrame(waitReady);
@@ -1422,14 +1422,14 @@ await viewer.zoomTo(
       const latEl    = document.getElementById("ictLatency");
 
       // 1) fetch latest (also measure latency)
-      const latestTimed = await timedFetch(${POLLUTION_API}/latest, { cache:"no-store" }).catch(()=>null);
+      const latestTimed = await timedFetch(`${POLLUTION_API}/latest`, { cache:"no-store" }).catch(()=>null);
       let latestJson = null, latencyMs = null;
       if (latestTimed && latestTimed.res.ok) {
         latestJson = await latestTimed.res.json();
         latencyMs = latestTimed.ms;
       }
       // 2) fetch 24h history (also measure latency)
-      const histTimed = await timedFetch(${POLLUTION_API}/history?days=1, { cache:"no-store" }).catch(()=>null);
+      const histTimed = await timedFetch(`${POLLUTION_API}/history?days=1`, { cache:"no-store" }).catch(()=>null);
       let history = [];
       if (histTimed && histTimed.res.ok) {
         history = await histTimed.res.json();
@@ -1438,7 +1438,7 @@ await viewer.zoomTo(
 
       // stamps
       const now = new Date();
-      stampEl.textContent = as of ${now.toLocaleTimeString()};
+      stampEl.textContent = `as of ${now.toLocaleTimeString()}`;
 
       // latest time
       const ts = Number(latestJson?.ts) || (history.length ? Number(history.at(-1).ts) : NaN);
@@ -1450,10 +1450,10 @@ await viewer.zoomTo(
       const actual = last24.reduce((s,p)=>s + Math.min(p.c, 6), 0);
       const expected = 24 * 6;
       const uptime = Math.round((actual/expected)*100);
-      upEl.textContent = ${Math.max(0, Math.min(100, uptime))}%;
+      upEl.textContent = `${Math.max(0, Math.min(100, uptime))}%`;
 
       // latency
-      latEl.textContent = latencyMs != null ? ${latencyMs} ms : "—";
+      latEl.textContent = latencyMs != null ? `${latencyMs} ms` : "—";
 
       // chart: bars = updates/hour, line = latency
       const chart = ensureIctChart();
@@ -1523,10 +1523,10 @@ await viewer.zoomTo(
         if (!el.querySelector('.panel-tools')) {
           const tools = document.createElement('div');
           tools.className = 'panel-tools';
-          tools.innerHTML = 
+          tools.innerHTML = `
             <div class="toolbtn" title="Collapse/Expand" data-act="toggle">−</div>
             <div class="toolbtn" title="Reset size" data-act="reset">⤺</div>
-          ;
+          `;
           el.appendChild(tools);
           tools.addEventListener('click', (e)=>{
             const btn = e.target.closest('.toolbtn'); if (!btn) return;
@@ -1642,58 +1642,6 @@ await viewer.zoomTo(
         grip.addEventListener('touchstart', onDown, { passive:false });
       });
     })();
-    // === Place UHI legend once, to the LEFT of the Codogno panel (no auto-nudging) ===
-(function placeLegendOnce(){
-  const GAP = 12; // space between the two panels
-  const PAD = 8;  // viewport padding
-
-  function rect(el){
-    const r = el.getBoundingClientRect();
-    return { left:r.left + window.scrollX, top:r.top + window.scrollY, width:r.width, height:r.height };
-  }
-  function clamp(left, top, w, h){
-    const minL = window.scrollX + PAD;
-    const minT = window.scrollY + PAD;
-    const maxL = window.scrollX + window.innerWidth  - w - PAD;
-    const maxT = window.scrollY + window.innerHeight - h - PAD;
-    return [ Math.max(minL, Math.min(left, maxL)), Math.max(minT, Math.min(top, maxT)) ];
-  }
-  function setLT(el, left, top){
-    el.style.left = Math.round(left) + "px";
-    el.style.top  = Math.round(top)  + "px";
-    el.style.right = "";
-    el.style.bottom = "";
-  }
-
-  window.addEventListener("load", ()=>{
-    const control = document.getElementById("controlPanel");
-    const legend  = document.getElementById("uhiLegendRight");
-    if (!control || !legend) return;
-
-    legend.classList.remove("hidden");     // ensure it has real size
-    legend.style.right = ""; legend.style.bottom = "";
-
-    // Defer one frame so widths/heights are correct
-    requestAnimationFrame(()=>{
-      const ar = rect(control);
-      const br = rect(legend);
-
-      // Prefer LEFT of the Codogno panel
-      let left = ar.left - br.width - GAP;
-      let top  = ar.top;
-
-      // Fallback: if that would be off-screen left, place it to the RIGHT instead
-      if (left < window.scrollX + PAD) {
-        left = ar.left + ar.width + GAP;
-      }
-
-      const [L, T] = clamp(left, top, br.width, br.height);
-      setLT(legend, L, T);
-    });
-  });
-})();
-
-
   </script>
 </body>
 </html>
