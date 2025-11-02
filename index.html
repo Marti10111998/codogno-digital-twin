@@ -224,7 +224,7 @@
 
       <!-- Editable threshold -->
       <div>
-        <label class="block text-sm font-medium">Threshold</label>
+        <label class="block text-sm font-medium">Soglia</label>
         <input id="chartThreshold" type="number" step="0.1" class="w-full border rounded px-2 py-1" />
       </div>
     </div>
@@ -244,7 +244,7 @@
     <div class="drag-handle -mt-1 -mx-1 mb-2 px-1 py-1 text-[11px] text-gray-500 rounded cursor-move select-none">⠿ Drag</div>
 
     <div class="flex items-center justify-between">
-      <div class="text-lg font-semibold">System Health</div>
+      <div class="text-lg font-semibold">ICT — System Health</div>
       <div id="ictStamp" class="text-xs text-gray-500">—</div>
     </div>
 
@@ -959,7 +959,7 @@ const DEVICE_KEY = "device_id_v1";
       const unit  = UNITS[pollutant] || '';
 
       const dsMeasured = {
-        label: `${pollutant} (measured)`,
+        label: `${pollutant} (misurato)`,
         data: measuredAgg,
         borderWidth: 3,
         borderColor: CH_BLUE_MEASURED,
@@ -973,20 +973,20 @@ const DEVICE_KEY = "device_id_v1";
 
       if (showPred && predictedAgg.length){
         const dsPredLower = {
-          label: `${pollutant} (forecast — lower bound)`,
+          label: `${pollutant} (previsto — limite inf)`,
           data: band.lower,
           borderWidth: 0, pointRadius: 0, fill: false, hidden: true,
           metaPollutant: pollutant, order: 5
         };
         const dsPredUpper = {
-          label: `${pollutant} (forecast — uncertainty)`,
+          label: `${pollutant} (previsto — incertezza)`,
           data: band.upper,
           borderWidth: 0, pointRadius: 0, fill: { target: "-1" },
           backgroundColor: CH_BLUE_BAND,
           metaPollutant: pollutant, order: 6
         };
         const dsPred = {
-          label: `${pollutant} (forecast)`,
+          label: `${pollutant} (previsto)`,
           data: predictedAgg,
           borderWidth: 2, borderDash: [8,6], borderColor: CH_BLUE_PREDICTED,
           pointRadius: 0, metaPollutant: pollutant, order: 10
@@ -997,7 +997,7 @@ const DEVICE_KEY = "device_id_v1";
       if (peaks.length){
         datasets.push({
           type: 'scatter',
-          label: `${pollutant} — peaks`,
+          label: `${pollutant} — picchi`,
           data: peaks,
           pointRadius: 4, pointHoverRadius: 6,
           pointBackgroundColor: 'rgba(220, 38, 38, 0.9)',
@@ -1642,58 +1642,6 @@ await viewer.zoomTo(
         grip.addEventListener('touchstart', onDown, { passive:false });
       });
     })();
-    // === Place UHI legend once, to the LEFT of the Codogno panel (no auto-nudging) ===
-(function placeLegendOnce(){
-  const GAP = 12; // space between the two panels
-  const PAD = 8;  // viewport padding
-
-  function rect(el){
-    const r = el.getBoundingClientRect();
-    return { left:r.left + window.scrollX, top:r.top + window.scrollY, width:r.width, height:r.height };
-  }
-  function clamp(left, top, w, h){
-    const minL = window.scrollX + PAD;
-    const minT = window.scrollY + PAD;
-    const maxL = window.scrollX + window.innerWidth  - w - PAD;
-    const maxT = window.scrollY + window.innerHeight - h - PAD;
-    return [ Math.max(minL, Math.min(left, maxL)), Math.max(minT, Math.min(top, maxT)) ];
-  }
-  function setLT(el, left, top){
-    el.style.left = Math.round(left) + "px";
-    el.style.top  = Math.round(top)  + "px";
-    el.style.right = "";
-    el.style.bottom = "";
-  }
-
-  window.addEventListener("load", ()=>{
-    const control = document.getElementById("controlPanel");
-    const legend  = document.getElementById("uhiLegendRight");
-    if (!control || !legend) return;
-
-    legend.classList.remove("hidden");     // ensure it has real size
-    legend.style.right = ""; legend.style.bottom = "";
-
-    // Defer one frame so widths/heights are correct
-    requestAnimationFrame(()=>{
-      const ar = rect(control);
-      const br = rect(legend);
-
-      // Prefer LEFT of the Codogno panel
-      let left = ar.left - br.width - GAP;
-      let top  = ar.top;
-
-      // Fallback: if that would be off-screen left, place it to the RIGHT instead
-      if (left < window.scrollX + PAD) {
-        left = ar.left + ar.width + GAP;
-      }
-
-      const [L, T] = clamp(left, top, br.width, br.height);
-      setLT(legend, L, T);
-    });
-  });
-})();
-
-
   </script>
 </body>
 </html>
