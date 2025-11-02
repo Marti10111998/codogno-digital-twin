@@ -145,13 +145,13 @@
         </select>
 
         <label class="inline-flex items-center mt-2">
-          <input type="checkbox" id="heatmapDotsToggle" class="mr-2" />
+          <input type="checkbox" id="heatmapDotsToggle" class="mr-2" checked />
           Show Heatmap Dots
         </label>
       </div>
 
       <div class="col-span-2">
-        <label class="inline-flex items-center"><input type="checkbox" id="liveTrafficToggle" class="mr-2" /> Live Traffic (TomTom)</label>
+        <label class="inline-flex items-center"><input type="checkbox" id="liveTrafficToggle" class="mr-2" checked /> Live Traffic (TomTom)</label>
         <select id="trafficRefresh" class="w-full border rounded px-2 py-1 mt-2">
           <option value="15" selected>Refresh: 15s</option>
           <option value="30">Refresh: 30s</option>
@@ -1125,13 +1125,6 @@ const DEVICE_KEY = "device_id_v1";
       loadTsStore();
 
       const viewerOpts = { baseLayerPicker:true, timeline:false, animation:false, shadows:true };
-      // Show Codogno from above as the default overview (Home button too)
-Cesium.Camera.DEFAULT_VIEW_RECTANGLE = Cesium.Rectangle.fromDegrees(
-  9.65, 45.13,   // west, south
-  9.76, 45.20    // east, north
-);
-Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5; // how wide to frame inside that rectangle
-
       viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
       viewer.scene.globe.depthTestAgainstTerrain = true;
       viewer.scene.requestRenderMode = true;
@@ -1143,16 +1136,6 @@ Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5; // how wide to frame inside that rectan
       const buildingSelector = document.getElementById("buildingSelector");
       const dataSource = await Cesium.GeoJsonDataSource.load("codogno_buildings_with_heights.geojson", { clampToGround:false });
       viewer.dataSources.add(dataSource);
-      // Frame all buildings in a gentle bird’s-eye
-await viewer.zoomTo(
-  dataSource,
-  new Cesium.HeadingPitchRange(
-    Cesium.Math.toRadians(180),  // 180° = looking north from far south
-    Cesium.Math.toRadians(-40),  // smaller tilt → almost flat view
-    2500                         // farther back for a wider, higher view
-  )
-);
-
       buildings = dataSource.entities.values;
 
       buildings.forEach((building, i) => {
@@ -1187,7 +1170,12 @@ await viewer.zoomTo(
 
       setInterval(()=>{ pruneOldData(); saveTsStore(); }, 5*60*1000);
 
-  
+      // Camera
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 1200),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 }
+      });
+
       // Tooltip on hover
       const tooltip = document.getElementById("tooltip");
       viewer.screenSpaceEventHandler.setInputAction((movement) => {
@@ -1362,13 +1350,7 @@ await viewer.zoomTo(
       }
       liveTrafficToggle.addEventListener("change", (e)=> e.target.checked ? beginTrafficUpdates() : stopTrafficUpdates());
       trafficRefresh.addEventListener("change", ()=> { if (liveTrafficToggle.checked) beginTrafficUpdates(); });
-
-      // Only start traffic if the toggle is on
-      if (liveTrafficToggle && liveTrafficToggle.checked) {
-        beginTrafficUpdates();
-        } else {
-        stopTrafficUpdates();
-      }
+      beginTrafficUpdates();
     }
 
     // ======== ICT / Ops telemetry ========
