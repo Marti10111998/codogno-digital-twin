@@ -811,7 +811,7 @@ const DEVICE_KEY = "device_id_v1";
         const y = scales.y.getPixelForValue(opts.value);
         if (!isFinite(y) || y < chartArea.top || y > chartArea.bottom) return;
         ctx.save();
-        ctx.strokeStyle = 'green';
+        ctx.strokeStyle = 'red';
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(chartArea.left, y);
