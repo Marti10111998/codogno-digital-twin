@@ -889,7 +889,7 @@ const DEVICE_KEY = "device_id_v1";
               const unit = UNITS[pol] || '';
               return `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}${unit ? ' ' + unit : ''}`;
             } } },
-            thresholdLine: { value: 0 },
+            thresholdLine: { value: 0, color: '#f59e0b' },
             dayLines: { showLabels: false }
           },
           scales: {
