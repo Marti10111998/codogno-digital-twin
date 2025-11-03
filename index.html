@@ -883,15 +883,26 @@ const DEVICE_KEY = "device_id_v1";
           animation: false,
           interaction: { mode: "index", intersect: false },
           plugins: {
-            legend: { display: true, position: 'top' },
-            tooltip: { callbacks: { label: (tt)=>{
-              const pol = tt.dataset.metaPollutant || '';
-              const unit = UNITS[pol] || '';
-              return `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}${unit ? ' ' + unit : ''}`;
-            } } },
-            thresholdLine: { value: 0 },
-            dayLines: { showLabels: false }
-          },
+  legend: {
+    display: true,
+    position: 'top',
+    labels: {
+      // hide datasets that set skipLegend=true or have empty text
+      filter: (item, data) => {
+        const ds = data?.datasets?.[item.datasetIndex];
+        return ds && !ds.skipLegend && item.text;
+      }
+    }
+  },
+  tooltip: { callbacks: { label: (tt)=>{
+    const pol = tt.dataset.metaPollutant || '';
+    const unit = UNITS[pol] || '';
+    return `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}${unit ? ' ' + unit : ''}`;
+  } } },
+  thresholdLine: { value: 0 },
+  // turn on day labels along the bottom of the chart
+  dayLines: { showLabels: true }
+},
           scales: {
             x: { type: "time" },
             y: { title: { display: true, text: "concentration (µg/m³ or ppm)" } }
