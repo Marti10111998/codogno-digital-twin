@@ -889,15 +889,12 @@ const thresholdPluginV2 = {
           animation: false,
           interaction: { mode: "index", intersect: false },
           plugins: {
-            legend: { display: true, position: 'top' },
-            tooltip: { callbacks: { label: (tt)=>{
-              const pol = tt.dataset.metaPollutant || '';
-              const unit = UNITS[pol] || '';
-              return `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}${unit ? ' ' + unit : ''}`;
-            } } },
-            thresholdLine: { value: 0, color: '#f59e0b' },
-            dayLines: { showLabels: false }
-          },
+  legend: { display: true, position: 'top' },
+  tooltip: { /* … */ },
+  thresholdLineV2: { value: 0, color: '#f59e0b', width: 2 }, // <— new id here
+  dayLines: { showLabels: false }
+},
+
           scales: {
             x: { type: "time" },
             y: { title: { display: true, text: "concentration (µg/m³ or ppm)" } }
