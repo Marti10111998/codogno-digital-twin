@@ -823,43 +823,48 @@ const DEVICE_KEY = "device_id_v1";
 
     // Vertical day separators
     const dayLinesPlugin = {
-      id: 'dayLines',
-      beforeDatasetsDraw(chart, args, opts) {
-        const { ctx, chartArea, scales } = chart;
-        const x = scales.x;
-        if (!x || x.type !== 'time') return;
+  id: 'dayLines',
+  beforeDatasetsDraw(chart, args, opts) {
+    const { ctx, chartArea, scales } = chart;
+    const x = scales.x;
+    if (!x || x.type !== 'time') return;
 
-        const start = x.getValueForPixel(chartArea.left);
-        const end   = x.getValueForPixel(chartArea.right);
-        if (!isFinite(start) || !isFinite(end)) return;
+    const start = x.getValueForPixel(chartArea.left);
+    const end   = x.getValueForPixel(chartArea.right);
+    if (!isFinite(start) || !isFinite(end)) return;
 
-        const d0 = new Date(start);
-        d0.setHours(0,0,0,0);
-        if (d0.getTime() < start) d0.setDate(d0.getDate() + 1);
+    const d0 = new Date(start);
+    d0.setHours(0,0,0,0);
+    if (d0.getTime() < start) d0.setDate(d0.getDate() + 1);
 
-        ctx.save();
-        ctx.setLineDash([4,4]);
-        ctx.lineWidth = 1;
+    ctx.save();
+    ctx.setLineDash([4,4]);
+    ctx.lineWidth = 1;
 
-        for (let t = d0.getTime(); t <= end; t += 24*3600*1000) {
-          const xp = x.getPixelForValue(t);
-          ctx.strokeStyle = 'rgba(0,0,0,0.18)';
-          ctx.beginPath();
-          ctx.moveTo(xp, chartArea.top);
-          ctx.lineTo(xp, chartArea.bottom);
-          ctx.stroke();
+    for (let t = d0.getTime(); t <= end; t += 24*3600*1000) {
+      const xp = x.getPixelForValue(t);
 
-          if (opts?.showLabels) {
-            const lab = new Date(t).toLocaleDateString();
-            ctx.fillStyle = 'rgba(0,0,0,0.55)';
-            ctx.font = '10px system-ui, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(lab, xp, chartArea.top + 10);
-          }
-        }
-        ctx.restore();
+      // vertical day separator
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+      ctx.beginPath();
+      ctx.moveTo(xp, chartArea.top);
+      ctx.lineTo(xp, chartArea.bottom);
+      ctx.stroke();
+
+      if (opts?.showLabels) {
+        const lab = new Date(t).toLocaleDateString();
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        ctx.font = '10px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        // draw the date label just above the x-axis baseline
+        ctx.fillText(lab, xp, chartArea.bottom - 4);
       }
-    };
+    }
+    ctx.restore();
+  }
+};
+
 
     Chart.register(thresholdPlugin);
     Chart.register(dayLinesPlugin);
@@ -983,27 +988,29 @@ const DEVICE_KEY = "device_id_v1";
       const datasets = [dsMeasured];
 
       if (showPred && predictedAgg.length){
-        const dsPredLower = {
-          label: `${pollutant} (forecast — lower bound)`,
-          data: band.lower,
-          borderWidth: 0, pointRadius: 0, fill: false, hidden: true,
-          metaPollutant: pollutant, order: 5
-        };
-        const dsPredUpper = {
-          label: `${pollutant} (forecast — uncertainty)`,
-          data: band.upper,
-          borderWidth: 0, pointRadius: 0, fill: { target: "-1" },
-          backgroundColor: CH_BLUE_BAND,
-          metaPollutant: pollutant, order: 6
-        };
-        const dsPred = {
-          label: `${pollutant} (forecast)`,
-          data: predictedAgg,
-          borderWidth: 2, borderDash: [8,6], borderColor: CH_BLUE_PREDICTED,
-          pointRadius: 0, metaPollutant: pollutant, order: 10
-        };
-        datasets.push(dsPredLower, dsPredUpper, dsPred);
-      }
+  // keep lower series (for the fill target) but hide it from the legend
+  const dsPredLower = {
+    label: "",
+    skipLegend: true,
+    data: band.lower,
+    borderWidth: 0, pointRadius: 0, fill: false,
+    metaPollutant: pollutant, order: 5
+  };
+  const dsPredUpper = {
+    label: `${pollutant} (forecast — uncertainty)`,
+    data: band.upper,
+    borderWidth: 0, pointRadius: 0, fill: { target: "-1" },
+    backgroundColor: CH_BLUE_BAND,
+    metaPollutant: pollutant, order: 6
+  };
+  const dsPred = {
+    label: `${pollutant} (forecast)`,
+    data: predictedAgg,
+    borderWidth: 2, borderDash: [8,6], borderColor: CH_BLUE_PREDICTED,
+    pointRadius: 0, metaPollutant: pollutant, order: 10
+  };
+  datasets.push(dsPredLower, dsPredUpper, dsPred);
+}
 
       if (peaks.length){
         datasets.push({
