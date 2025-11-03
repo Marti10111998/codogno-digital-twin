@@ -1007,7 +1007,8 @@ const DEVICE_KEY = "device_id_v1";
 
       chart.data.datasets = datasets;
       chart.options.scales.y.title.text = `${pollutant} (${unit})`;
-      chart.options.plugins.thresholdLine.value = thr;
+      chart.options.plugins.thresholdLine.color = '#f59e0b';
+
 
       document.getElementById("pollutionChartStatus").textContent =
         `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
