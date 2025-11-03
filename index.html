@@ -804,22 +804,28 @@ const DEVICE_KEY = "device_id_v1";
     const THRESHOLDS = { O3:100, NO2:40, NO:50, CO:10, NH3:2, Noise:65 };
 
     // Threshold line plugin
-    const thresholdPlugin = {
-      id: 'thresholdLine',
-      afterDatasetsDraw(chart, args, opts) {
-        const {ctx, chartArea, scales} = chart;
-        const y = scales.y.getPixelForValue(opts.value);
-        if (!isFinite(y) || y < chartArea.top || y > chartArea.bottom) return;
-        ctx.save();
-        ctx.strokeStyle = 'orange';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(chartArea.left, y);
-        ctx.lineTo(chartArea.right, y);
-        ctx.stroke();
-        ctx.restore();
-      }
-    };
+// Threshold line plugin (V2, configurable)
+const thresholdPluginV2 = {
+  id: 'thresholdLineV2',
+  beforeDatasetsDraw(chart, args, opts) {
+    const { ctx, chartArea, scales } = chart;
+    const yScale = scales.y;
+    if (!opts || !yScale || !Number.isFinite(opts.value)) return;
+
+    const y = yScale.getPixelForValue(opts.value);
+    if (!Number.isFinite(y) || y < chartArea.top || y > chartArea.bottom) return;
+
+    ctx.save();
+    ctx.setLineDash(opts.dash || []);           // allow dashed if you want
+    ctx.lineWidth   = opts.width ?? 2;
+    ctx.strokeStyle = opts.color || '#f59e0b';  // default orange/amber
+    ctx.beginPath();
+    ctx.moveTo(chartArea.left, y);
+    ctx.lineTo(chartArea.right, y);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
 
     // Vertical day separators
     const dayLinesPlugin = {
