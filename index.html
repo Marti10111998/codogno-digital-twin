@@ -807,7 +807,7 @@ const DEVICE_KEY = "device_id_v1";
 // Threshold line plugin (V2, configurable)
 const thresholdPluginV2 = {
   id: 'thresholdLineV2',
-  beforeDatasetsDraw(chart, args, opts) {
+  afterDatasetsDraw(chart, _args, opts) {           // ⟵ draw last, on top
     const { ctx, chartArea, scales } = chart;
     const yScale = scales.y;
     if (!opts || !yScale || !Number.isFinite(opts.value)) return;
@@ -816,9 +816,10 @@ const thresholdPluginV2 = {
     if (!Number.isFinite(y) || y < chartArea.top || y > chartArea.bottom) return;
 
     ctx.save();
-    ctx.setLineDash(opts.dash || []);           // allow dashed if you want
-    ctx.lineWidth   = opts.width ?? 2;
-    ctx.strokeStyle = opts.color || '#f59e0b';  // default orange/amber
+    ctx.setLineDash([]);                             // ⟵ force solid
+    ctx.globalCompositeOperation = 'source-over';    // ⟵ paint over fills
+    ctx.lineWidth   = opts.width ?? 3;
+    ctx.strokeStyle = opts.color || '#ff8c00';       // ⟵ vivid orange
     ctx.beginPath();
     ctx.moveTo(chartArea.left, y);
     ctx.lineTo(chartArea.right, y);
@@ -826,6 +827,7 @@ const thresholdPluginV2 = {
     ctx.restore();
   }
 };
+
 
     // Vertical day separators
     const dayLinesPlugin = {
@@ -866,6 +868,11 @@ const thresholdPluginV2 = {
         ctx.restore();
       }
     };
+
+    // Kill any legacy plugin that used the old id ("thresholdLine")
+const noopOldThreshold = { id: 'thresholdLine', beforeDatasetsDraw(){} };
+Chart.register(noopOldThreshold);
+
 
     Chart.register(thresholdPluginV2);
     Chart.register(dayLinesPlugin);
