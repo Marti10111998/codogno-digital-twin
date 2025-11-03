@@ -867,7 +867,7 @@ const thresholdPluginV2 = {
       }
     };
 
-    Chart.register(thresholdPlugin);
+    Chart.register(thresholdPluginV2);
     Chart.register(dayLinesPlugin);
 
     // ---- chart colors (blue theme) ----
@@ -1010,7 +1010,10 @@ const thresholdPluginV2 = {
 
       chart.data.datasets = datasets;
       chart.options.scales.y.title.text = `${pollutant} (${unit})`;
-      chart.options.plugins.thresholdLine.color = '#f59e0b';
+      chart.options.plugins.thresholdLineV2.value = thr;      // set the y-value
+      chart.options.plugins.thresholdLineV2.color = '#f59e0b'; // keep it orange
+      chart.options.plugins.thresholdLineV2.width = 2;         // (optional) thickness
+
 
 
       document.getElementById("pollutionChartStatus").textContent =
