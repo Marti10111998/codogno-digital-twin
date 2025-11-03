@@ -804,30 +804,22 @@ const DEVICE_KEY = "device_id_v1";
     const THRESHOLDS = { O3:100, NO2:40, NO:50, CO:10, NH3:2, Noise:65 };
 
     // Threshold line plugin
-// Threshold line plugin (V2, configurable)
-const thresholdPluginV2 = {
-  id: 'thresholdLineV2',
-  afterDatasetsDraw(chart, _args, opts) {           // ⟵ draw last, on top
-    const { ctx, chartArea, scales } = chart;
-    const yScale = scales.y;
-    if (!opts || !yScale || !Number.isFinite(opts.value)) return;
-
-    const y = yScale.getPixelForValue(opts.value);
-    if (!Number.isFinite(y) || y < chartArea.top || y > chartArea.bottom) return;
-
-    ctx.save();
-    ctx.setLineDash([]);                             // ⟵ force solid
-    ctx.globalCompositeOperation = 'source-over';    // ⟵ paint over fills
-    ctx.lineWidth   = opts.width ?? 3;
-    ctx.strokeStyle = opts.color || '#ff8c00';       // ⟵ vivid orange
-    ctx.beginPath();
-    ctx.moveTo(chartArea.left, y);
-    ctx.lineTo(chartArea.right, y);
-    ctx.stroke();
-    ctx.restore();
-  }
-};
-
+    const thresholdPlugin = {
+      id: 'thresholdLine',
+      afterDatasetsDraw(chart, args, opts) {
+        const {ctx, chartArea, scales} = chart;
+        const y = scales.y.getPixelForValue(opts.value);
+        if (!isFinite(y) || y < chartArea.top || y > chartArea.bottom) return;
+        ctx.save();
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, y);
+        ctx.lineTo(chartArea.right, y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    };
 
     // Vertical day separators
     const dayLinesPlugin = {
@@ -869,12 +861,7 @@ const thresholdPluginV2 = {
       }
     };
 
-    // Kill any legacy plugin that used the old id ("thresholdLine")
-const noopOldThreshold = { id: 'thresholdLine', beforeDatasetsDraw(){} };
-Chart.register(noopOldThreshold);
-
-
-    Chart.register(thresholdPluginV2);
+    Chart.register(thresholdPlugin);
     Chart.register(dayLinesPlugin);
 
     // ---- chart colors (blue theme) ----
@@ -897,11 +884,14 @@ Chart.register(noopOldThreshold);
           interaction: { mode: "index", intersect: false },
           plugins: {
             legend: { display: true, position: 'top' },
-            tooltip: { /* … */ },
-            thresholdLineV2: { value: 0, color: '#f59e0b', width: 2 }, // <— new id here
-              dayLines: { showLabels: false }
+            tooltip: { callbacks: { label: (tt)=>{
+              const pol = tt.dataset.metaPollutant || '';
+              const unit = UNITS[pol] || '';
+              return `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(2)}${unit ? ' ' + unit : ''}`;
+            } } },
+            thresholdLine: { value: 0 },
+            dayLines: { showLabels: false }
           },
-
           scales: {
             x: { type: "time" },
             y: { title: { display: true, text: "concentration (µg/m³ or ppm)" } }
@@ -1017,11 +1007,7 @@ Chart.register(noopOldThreshold);
 
       chart.data.datasets = datasets;
       chart.options.scales.y.title.text = `${pollutant} (${unit})`;
-      chart.options.plugins.thresholdLineV2.value = thr;      // set the y-value
-      chart.options.plugins.thresholdLineV2.color = '#f59e0b'; // keep it orange
-      chart.options.plugins.thresholdLineV2.width = 2;         // (optional) thickness
-
-
+      chart.options.plugins.thresholdLine.value = thr;
 
       document.getElementById("pollutionChartStatus").textContent =
         `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
