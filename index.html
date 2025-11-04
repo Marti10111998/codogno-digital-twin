@@ -339,6 +339,27 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
     const tomtomKey     = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";
     Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjODA1Mzg0My0zMDBjLTQ4MDEtODlmOC01OTc4M2QyODllYWEiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NjA5NTUyMjJ9.G754yiSXNU-RMeD3mwyIH6W6sIU-dEwNrrdqOp8uCXk";
 
+// ——— osmtogeojson loader (UMD or ESM, avoids race with <script> tag)
+async function getOsmToGeoJSON() {
+  // already provided by the <script> tag?
+  if (window.osmtogeojson) return window.osmtogeojson;
+
+  // try ESM build (works inside type="module")
+  try {
+    const m = await import('https://unpkg.com/osmtogeojson@3.0.0?module');
+    return m.default || m.osmtogeojson || m;
+  } catch (e) {
+    console.warn('ESM import failed; falling back to UMD', e);
+  }
+
+  // give the UMD script a moment to finish
+  await new Promise(r => setTimeout(r, 50));
+  if (window.osmtogeojson) return window.osmtogeojson;
+
+  throw new Error('osmtogeojson library failed to load');
+}
+
+
 // ============ OSM Green Spaces ============
 
 let greenDs = null; // Cesium GeoJsonDataSource for green layer
@@ -391,18 +412,27 @@ try {
 } catch (e) {
   console.error("Overpass fetch failed:", e);
   alert("Could not load OSM green spaces right now.");
+  const t = document.getElementById('greenToggle');
+  if (t) t.checked = false;
   return;
 }
 
 
-  // 3) Convert to GeoJSON (osmtogeojson is loaded from CDN)
-  const ogj = window.osmtogeojson;            // <- get the global
-if (!ogj) {
-  console.error("osmtogeojson not loaded");
-  alert("OSM converter library failed to load.");
+
+  // 3) Convert to GeoJSON (robust UMD/ESM loader)
+let geo;
+try {
+  const ogj = await getOsmToGeoJSON();
+  geo = ogj(data, { polygonFeatures: {} });
+} catch (e) {
+  console.error('osmtogeojson not loaded', e);
+  alert('OSM converter library failed to load.');
+  // keep the UI in sync if conversion failed
+  const t = document.getElementById('greenToggle');
+  if (t) t.checked = false;
   return;
 }
-let geo = ogj(data, { polygonFeatures: { /* …same options… */ }});
+
 
 
   // 4) If a previous layer exists, remove it
