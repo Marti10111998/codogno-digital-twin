@@ -13,11 +13,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
 
-  <!-- Convert Overpass JSON -> GeoJSON in the browser -->
-<script src="https://unpkg.com/osmtogeojson@3.0.0/osmtogeojson.js"></script>
-
-
-
   <style>
 
     /* === Compact UI overrides === */
@@ -122,14 +117,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
     <div class="drag-handle -mt-1 -mx-1 mb-2 px-1 py-1 text-[11px] text-gray-500 rounded cursor-move select-none">
       ⠿ Drag panel
     </div>
-
-    <div class="col-span-2">
-  <label class="inline-flex items-center">
-    <input type="checkbox" id="greenToggle" class="mr-2" />
-    Show Green Spaces (OSM)
-  </label>
-</div>
-
 
     <div class="text-lg font-semibold">Codogno Digital Twin</div>
 
@@ -338,218 +325,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
     const weatherApiKey = "2d6c23f739fdc7ba90b8754fd02dae9c";
     const tomtomKey     = "j1Z1JoCDAq3ia7s4XaLTTd8Ip6G3nzZ5";
     Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjODA1Mzg0My0zMDBjLTQ4MDEtODlmOC01OTc4M2QyODllYWEiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NjA5NTUyMjJ9.G754yiSXNU-RMeD3mwyIH6W6sIU-dEwNrrdqOp8uCXk";
-
-// ——— osmtogeojson loader (UMD or ESM, avoids race with <script> tag)
-async function getOsmToGeoJSON() {
-  // already provided by the <script> tag?
-  if (window.osmtogeojson) return window.osmtogeojson;
-
-  // try ESM build (works inside type="module")
-  try {
-    const m = await import('https://unpkg.com/osmtogeojson@3.0.0?module');
-    return m.default || m.osmtogeojson || m;
-  } catch (e) {
-    console.warn('ESM import failed; falling back to UMD', e);
-  }
-
-  // give the UMD script a moment to finish
-  await new Promise(r => setTimeout(r, 50));
-  if (window.osmtogeojson) return window.osmtogeojson;
-
-  throw new Error('osmtogeojson library failed to load');
-}
-
-// ——— osmtogeojson loader: tries window → ESM (jsDelivr, unpkg) → UMD (jsDelivr, unpkg) → v2 fallback
-async function getOsmToGeoJSON() {
-  // 0) global already there?
-  if (window.osmtogeojson) return window.osmtogeojson;
-
-  // 1) Try ESM wrappers (these CDNs convert UMD to ESM automatically)
-  const esmUrls = [
-    'https://cdn.jsdelivr.net/npm/osmtogeojson@3.0.0/+esm',
-    'https://unpkg.com/osmtogeojson@3.0.0?module'
-  ];
-  for (const url of esmUrls) {
-    try {
-      const m = await import(url);
-      const fn = m?.default || m?.osmtogeojson || m;
-      if (typeof fn === 'function') return fn;
-    } catch (_) {}
-  }
-
-  // 2) Try injecting UMD script tags (3.x)
-  const umdUrls = [
-    'https://cdn.jsdelivr.net/npm/osmtogeojson@3.0.0/osmtogeojson.min.js',
-    'https://cdn.jsdelivr.net/npm/osmtogeojson@3.0.0/osmtogeojson.js',
-    'https://unpkg.com/osmtogeojson@3.0.0/osmtogeojson.js'
-  ];
-  for (const url of umdUrls) {
-    try {
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = url; s.async = true; s.onload = resolve; s.onerror = reject;
-        document.head.appendChild(s);
-      });
-      if (window.osmtogeojson) return window.osmtogeojson;
-    } catch (_) {}
-  }
-
-  // 3) Last-ditch: older stable 2.x (widely mirrored)
-  const v2Urls = [
-    'https://cdn.jsdelivr.net/npm/osmtogeojson@2.2.12/osmtogeojson.min.js',
-    'https://unpkg.com/osmtogeojson@2.2.12/osmtogeojson.js'
-  ];
-  for (const url of v2Urls) {
-    try {
-      await new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = url; s.async = true; s.onload = resolve; s.onerror = reject;
-        document.head.appendChild(s);
-      });
-      if (window.osmtogeojson) return window.osmtogeojson;
-    } catch (_) {}
-  }
-
-  throw new Error('osmtogeojson could not be loaded from any CDN');
-}
-
-
-// ============ OSM Green Spaces ============
-
-let greenDs = null; // Cesium GeoJsonDataSource for green layer
-
-// Codogno bbox (south,west,north,east) — tweak if needed
-const OSM_BBOX = [45.12, 9.62, 45.21, 9.78];
-
-// Overpass QL to fetch green-related features
-function buildOverpassQuery([s, w, n, e]) {
-  // ways + relations (multipolygons) with geometry
-  return `
-[out:json][timeout:25];
-(
-  way["leisure"="park"](${s},${w},${n},${e});
-  relation["leisure"="park"](${s},${w},${n},${e});
-
-  way["landuse"="grass"](${s},${w},${n},${e});
-  relation["landuse"="grass"](${s},${w},${n},${e});
-
-  way["landuse"="forest"](${s},${w},${n},${e});
-  relation["landuse"="forest"](${s},${w},${n},${e});
-
-  way["natural"="wood"](${s},${w},${n},${e});
-  relation["natural"="wood"](${s},${w},${n},${e});
-
-  way["natural"="tree_row"](${s},${w},${n},${e});
-);
-out body geom;
-`;
-}
-
-// Fetch OSM -> convert to GeoJSON -> load into Cesium
-// Fetch OSM → convert to GeoJSON → style → add to Cesium
-async function loadGreenSpaces() {
-  // 1) Build Overpass query
-  const query = buildOverpassQuery(OSM_BBOX);
-
-  // 2) POST to Overpass (primary + fallback)
-  let data;
-  try {
-    const primary  = 'https://overpass-api.de/api/interpreter';
-    let r = await fetch(primary, { method: 'POST', body: query }).catch(() => null);
-    if (!r || !r.ok) {
-      const fallback = 'https://overpass.kumi.systems/api/interpreter';
-      r = await fetch(fallback, { method: 'POST', body: query });
-    }
-    if (!r.ok) throw new Error('Overpass error');
-    data = await r.json();
-  } catch (e) {
-    console.error('Overpass fetch failed:', e);
-    alert('Could not load OSM green spaces right now.');
-    const t = document.getElementById('greenToggle'); if (t) t.checked = false;
-    return;
-  }
-
-  // 3) Convert to GeoJSON (robust loader; works with UMD/ESM and multiple CDNs)
-  let geo;
-  try {
-    const ogj = await getOsmToGeoJSON();
-    // NOTE: v2 and v3 accept the same function signature
-    geo = ogj(data, { polygonFeatures: {} });
-  } catch (e) {
-    console.error('osmtogeojson not loaded:', e);
-    alert('OSM converter library failed to load.');
-    const t = document.getElementById('greenToggle'); if (t) t.checked = false;
-    return;
-  }
-
-  // 4) Remove previous layer if present
-  if (greenDs) {
-    viewer.dataSources.remove(greenDs, true);
-    greenDs = null;
-  }
-
-  // 5) Load GeoJSON into Cesium
-  greenDs = await Cesium.GeoJsonDataSource.load(geo, {
-    clampToGround: true,
-    stroke: Cesium.Color.fromCssColorString('#14532d'),
-    fill:   Cesium.Color.fromCssColorString('rgba(16,185,129,0.35)'),
-    strokeWidth: 1.5
-  });
-  viewer.dataSources.add(greenDs);
-
-  // 6) Style by feature type
-  const ents = greenDs.entities.values;
-  for (const ent of ents) {
-    const props   = ent.properties?.getValue?.(Cesium.JulianDate.now()) || ent.properties || {};
-    const leisure = props.leisure;
-    const landuse = props.landuse;
-    const natural = props.natural;
-
-    if (ent.polygon) {
-      let fill   = Cesium.Color.fromCssColorString('rgba(16,185,129,0.35)');
-      let stroke = Cesium.Color.fromCssColorString('#14532d');
-
-      if (leisure === 'park') {
-        fill   = Cesium.Color.fromCssColorString('rgba(34,197,94,0.35)');
-        stroke = Cesium.Color.fromCssColorString('#166534');
-      }
-      if (landuse === 'forest' || natural === 'wood') {
-        fill   = Cesium.Color.fromCssColorString('rgba(5,150,105,0.35)');
-        stroke = Cesium.Color.fromCssColorString('#064e3b');
-      }
-      if (landuse === 'grass') {
-        fill   = Cesium.Color.fromCssColorString('rgba(52,211,153,0.30)');
-        stroke = Cesium.Color.fromCssColorString('#0f766e');
-      }
-
-      ent.polygon.material                 = fill;
-      ent.polygon.outline                  = true;
-      ent.polygon.outlineColor             = stroke;
-      ent.polygon.extrudedHeight           = 0;
-      ent.polygon.height                   = 0;
-      ent.polygon.heightReference          = Cesium.HeightReference.CLAMP_TO_GROUND;
-    }
-
-    if (ent.polyline) {
-      ent.polyline.width          = 3;
-      ent.polyline.material       = Cesium.Color.fromCssColorString('#22c55e');
-      ent.polyline.clampToGround  = true;
-    }
-  }
-
-  viewer.scene.requestRender();
-}
-
-
-// Remove layer (helper)
-function removeGreenSpaces() {
-  if (greenDs) {
-    viewer.dataSources.remove(greenDs, true);
-    greenDs = null;
-    viewer.scene.requestRender();
-  }
-}
-
 
 // Optional backend (predict/backfill); app works without it
 const POLLUTION_API = "https://tuning-logical-nuclear-doctor.trycloudflare.com";
@@ -1496,16 +1271,6 @@ await viewer.zoomTo(
         } else {
           tooltip.style.display = "none";
         }
-
-        // inside your existing MOUSE_MOVE handler, before drawing the tooltip:
-if (picked?.id && picked.id.properties && !picked.id.polygon?.extrudedHeight) {
-  const p = picked.id.properties;
-  const name = p.name?.getValue?.() || p.name || "Green space";
-  const kind = p.leisure || p.landuse || p.natural || "";
-  tooltip.innerHTML = `<strong>${name}</strong><br>${kind}`;
-}
-
-
       }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
       // UI bindings
@@ -1779,19 +1544,6 @@ if (picked?.id && picked.id.properties && !picked.id.polygon?.extrudedHeight) {
     // call on startup & refresh every minute
     refreshICT();
     setInterval(refreshICT, 60_000);
-
-    // === Green spaces toggle ===
-const greenToggle = document.getElementById("greenToggle");
-if (greenToggle) {
-  greenToggle.addEventListener("change", () => {
-    if (greenToggle.checked) {
-      loadGreenSpaces();
-    } else {
-      removeGreenSpaces();
-    }
-  });
-}
-
 
     // ==========================
     // Kickoff
