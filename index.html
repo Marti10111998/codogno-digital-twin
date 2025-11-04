@@ -359,6 +359,60 @@ async function getOsmToGeoJSON() {
   throw new Error('osmtogeojson library failed to load');
 }
 
+// ——— osmtogeojson loader: tries window → ESM (jsDelivr, unpkg) → UMD (jsDelivr, unpkg) → v2 fallback
+async function getOsmToGeoJSON() {
+  // 0) global already there?
+  if (window.osmtogeojson) return window.osmtogeojson;
+
+  // 1) Try ESM wrappers (these CDNs convert UMD to ESM automatically)
+  const esmUrls = [
+    'https://cdn.jsdelivr.net/npm/osmtogeojson@3.0.0/+esm',
+    'https://unpkg.com/osmtogeojson@3.0.0?module'
+  ];
+  for (const url of esmUrls) {
+    try {
+      const m = await import(url);
+      const fn = m?.default || m?.osmtogeojson || m;
+      if (typeof fn === 'function') return fn;
+    } catch (_) {}
+  }
+
+  // 2) Try injecting UMD script tags (3.x)
+  const umdUrls = [
+    'https://cdn.jsdelivr.net/npm/osmtogeojson@3.0.0/osmtogeojson.min.js',
+    'https://cdn.jsdelivr.net/npm/osmtogeojson@3.0.0/osmtogeojson.js',
+    'https://unpkg.com/osmtogeojson@3.0.0/osmtogeojson.js'
+  ];
+  for (const url of umdUrls) {
+    try {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = url; s.async = true; s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+      if (window.osmtogeojson) return window.osmtogeojson;
+    } catch (_) {}
+  }
+
+  // 3) Last-ditch: older stable 2.x (widely mirrored)
+  const v2Urls = [
+    'https://cdn.jsdelivr.net/npm/osmtogeojson@2.2.12/osmtogeojson.min.js',
+    'https://unpkg.com/osmtogeojson@2.2.12/osmtogeojson.js'
+  ];
+  for (const url of v2Urls) {
+    try {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = url; s.async = true; s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+      if (window.osmtogeojson) return window.osmtogeojson;
+    } catch (_) {}
+  }
+
+  throw new Error('osmtogeojson could not be loaded from any CDN');
+}
+
 
 // ============ OSM Green Spaces ============
 
@@ -392,50 +446,43 @@ out body geom;
 }
 
 // Fetch OSM -> convert to GeoJSON -> load into Cesium
+// Fetch OSM → convert to GeoJSON → style → add to Cesium
 async function loadGreenSpaces() {
-  // 1) build the Overpass request
-const query = buildOverpassQuery(OSM_BBOX);
+  // 1) Build Overpass query
+  const query = buildOverpassQuery(OSM_BBOX);
 
-// 2) POST query with fallback endpoint
-let data;
-try {
-  const primary = "https://overpass-api.de/api/interpreter";
-  let r = await fetch(primary, { method: "POST", body: query }).catch(() => null);
-
-  if (!r || !r.ok) {
-    const fallback = "https://overpass.kumi.systems/api/interpreter";
-    r = await fetch(fallback, { method: "POST", body: query });
+  // 2) POST to Overpass (primary + fallback)
+  let data;
+  try {
+    const primary  = 'https://overpass-api.de/api/interpreter';
+    let r = await fetch(primary, { method: 'POST', body: query }).catch(() => null);
+    if (!r || !r.ok) {
+      const fallback = 'https://overpass.kumi.systems/api/interpreter';
+      r = await fetch(fallback, { method: 'POST', body: query });
+    }
+    if (!r.ok) throw new Error('Overpass error');
+    data = await r.json();
+  } catch (e) {
+    console.error('Overpass fetch failed:', e);
+    alert('Could not load OSM green spaces right now.');
+    const t = document.getElementById('greenToggle'); if (t) t.checked = false;
+    return;
   }
 
-  if (!r.ok) throw new Error("Overpass error");
-  data = await r.json();
-} catch (e) {
-  console.error("Overpass fetch failed:", e);
-  alert("Could not load OSM green spaces right now.");
-  const t = document.getElementById('greenToggle');
-  if (t) t.checked = false;
-  return;
-}
+  // 3) Convert to GeoJSON (robust loader; works with UMD/ESM and multiple CDNs)
+  let geo;
+  try {
+    const ogj = await getOsmToGeoJSON();
+    // NOTE: v2 and v3 accept the same function signature
+    geo = ogj(data, { polygonFeatures: {} });
+  } catch (e) {
+    console.error('osmtogeojson not loaded:', e);
+    alert('OSM converter library failed to load.');
+    const t = document.getElementById('greenToggle'); if (t) t.checked = false;
+    return;
+  }
 
-
-
-  // 3) Convert to GeoJSON (robust UMD/ESM loader)
-let geo;
-try {
-  const ogj = await getOsmToGeoJSON();
-  geo = ogj(data, { polygonFeatures: {} });
-} catch (e) {
-  console.error('osmtogeojson not loaded', e);
-  alert('OSM converter library failed to load.');
-  // keep the UI in sync if conversion failed
-  const t = document.getElementById('greenToggle');
-  if (t) t.checked = false;
-  return;
-}
-
-
-
-  // 4) If a previous layer exists, remove it
+  // 4) Remove previous layer if present
   if (greenDs) {
     viewer.dataSources.remove(greenDs, true);
     greenDs = null;
@@ -444,56 +491,55 @@ try {
   // 5) Load GeoJSON into Cesium
   greenDs = await Cesium.GeoJsonDataSource.load(geo, {
     clampToGround: true,
-    stroke: Cesium.Color.fromCssColorString("#14532d"), // dark-green outlines
-    fill: Cesium.Color.fromCssColorString("rgba(16,185,129,0.35)"), // emerald fill
+    stroke: Cesium.Color.fromCssColorString('#14532d'),
+    fill:   Cesium.Color.fromCssColorString('rgba(16,185,129,0.35)'),
     strokeWidth: 1.5
   });
   viewer.dataSources.add(greenDs);
 
-  // 6) Style by feature type (park vs forest vs grass) + tree_row as lines
+  // 6) Style by feature type
   const ents = greenDs.entities.values;
   for (const ent of ents) {
-    const props = ent.properties?.getValue?.(Cesium.JulianDate.now()) || ent.properties || {};
+    const props   = ent.properties?.getValue?.(Cesium.JulianDate.now()) || ent.properties || {};
     const leisure = props.leisure;
     const landuse = props.landuse;
     const natural = props.natural;
 
-    // Polygons (parks/forests/grass/wood)
     if (ent.polygon) {
-      let fill = Cesium.Color.fromCssColorString("rgba(16,185,129,0.35)"); // default green
-      let stroke = Cesium.Color.fromCssColorString("#14532d");
+      let fill   = Cesium.Color.fromCssColorString('rgba(16,185,129,0.35)');
+      let stroke = Cesium.Color.fromCssColorString('#14532d');
 
-      if (leisure === "park") {
-        fill = Cesium.Color.fromCssColorString("rgba(34,197,94,0.35)");  // slightly brighter
-        stroke = Cesium.Color.fromCssColorString("#166534");
+      if (leisure === 'park') {
+        fill   = Cesium.Color.fromCssColorString('rgba(34,197,94,0.35)');
+        stroke = Cesium.Color.fromCssColorString('#166534');
       }
-      if (landuse === "forest" || natural === "wood") {
-        fill = Cesium.Color.fromCssColorString("rgba(5,150,105,0.35)");  // deeper green
-        stroke = Cesium.Color.fromCssColorString("#064e3b");
+      if (landuse === 'forest' || natural === 'wood') {
+        fill   = Cesium.Color.fromCssColorString('rgba(5,150,105,0.35)');
+        stroke = Cesium.Color.fromCssColorString('#064e3b');
       }
-      if (landuse === "grass") {
-        fill = Cesium.Color.fromCssColorString("rgba(52,211,153,0.30)"); // light mint
-        stroke = Cesium.Color.fromCssColorString("#0f766e");
+      if (landuse === 'grass') {
+        fill   = Cesium.Color.fromCssColorString('rgba(52,211,153,0.30)');
+        stroke = Cesium.Color.fromCssColorString('#0f766e');
       }
 
-      ent.polygon.material = fill;
-      ent.polygon.outline = true;
-      ent.polygon.outlineColor = stroke;
-      ent.polygon.extrudedHeight = 0; // keep flat
-      ent.polygon.height = 0;
-      ent.polygon.heightReference = Cesium.HeightReference.CLAMP_TO_GROUND;
+      ent.polygon.material                 = fill;
+      ent.polygon.outline                  = true;
+      ent.polygon.outlineColor             = stroke;
+      ent.polygon.extrudedHeight           = 0;
+      ent.polygon.height                   = 0;
+      ent.polygon.heightReference          = Cesium.HeightReference.CLAMP_TO_GROUND;
     }
 
-    // Lines (tree rows)
     if (ent.polyline) {
-      ent.polyline.width = 3;
-      ent.polyline.material = Cesium.Color.fromCssColorString("#22c55e"); // green line
-      ent.polyline.clampToGround = true;
+      ent.polyline.width          = 3;
+      ent.polyline.material       = Cesium.Color.fromCssColorString('#22c55e');
+      ent.polyline.clampToGround  = true;
     }
   }
 
   viewer.scene.requestRender();
 }
+
 
 // Remove layer (helper)
 function removeGreenSpaces() {
