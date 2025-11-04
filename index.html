@@ -16,8 +16,6 @@
   <!-- Convert Overpass JSON -> GeoJSON in the browser -->
 <script src="https://unpkg.com/osmtogeojson@3.0.0/osmtogeojson.js"></script>
 
-  <!-- Convert Overpass JSON -> GeoJSON in the browser -->
-<script src="https://unpkg.com/osmtogeojson@3.0.0/osmtogeojson.js"></script>
 
 
   <style>
@@ -375,35 +373,37 @@ out body geom;
 // Fetch OSM -> convert to GeoJSON -> load into Cesium
 async function loadGreenSpaces() {
   // 1) build the Overpass request
-  const query = buildOverpassQuery(OSM_BBOX);
-  const overpassUrl = "https://overpass-api.de/api/interpreter";
+const query = buildOverpassQuery(OSM_BBOX);
 
-  // 2) POST query
-  let data;
-  try {
-    const r = await fetch(overpassUrl, { method: "POST", body: query });
-    if (!r.ok) throw new Error("Overpass error");
-    data = await r.json();
-  } catch (e) {
-    console.error("Overpass fetch failed:", e);
-    alert("Could not load OSM green spaces right now.");
-    return;
+// 2) POST query with fallback endpoint
+let data;
+try {
+  const primary = "https://overpass-api.de/api/interpreter";
+  let r = await fetch(primary, { method: "POST", body: query }).catch(() => null);
+
+  if (!r || !r.ok) {
+    const fallback = "https://overpass.kumi.systems/api/interpreter";
+    r = await fetch(fallback, { method: "POST", body: query });
   }
 
+  if (!r.ok) throw new Error("Overpass error");
+  data = await r.json();
+} catch (e) {
+  console.error("Overpass fetch failed:", e);
+  alert("Could not load OSM green spaces right now.");
+  return;
+}
+
+
   // 3) Convert to GeoJSON (osmtogeojson is loaded from CDN)
-  let geo = osmtogeojson(data, { polygonFeatures: {
-      // treat these as polygons when closed
-      "leisure": {
-        "park": true
-      },
-      "landuse": {
-        "grass": true,
-        "forest": true
-      },
-      "natural": {
-        "wood": true
-      }
-    }});
+  const ogj = window.osmtogeojson;            // <- get the global
+if (!ogj) {
+  console.error("osmtogeojson not loaded");
+  alert("OSM converter library failed to load.");
+  return;
+}
+let geo = ogj(data, { polygonFeatures: { /* …same options… */ }});
+
 
   // 4) If a previous layer exists, remove it
   if (greenDs) {
