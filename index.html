@@ -327,12 +327,20 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
     Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjODA1Mzg0My0zMDBjLTQ4MDEtODlmOC01OTc4M2QyODllYWEiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NjA5NTUyMjJ9.G754yiSXNU-RMeD3mwyIH6W6sIU-dEwNrrdqOp8uCXk";
 
 // Optional backend (predict/backfill); app works without it
-function resolveApiUrl(){
+// Optional backend (predict/backfill); app works without it
+function resolveApiUrl() {
   const qs = new URL(location.href).searchParams.get("api");
-  if (qs) { localStorage.setItem("pollution_api_url", qs); return qs; }
-  return localStorage.getItem("pollution_api_url") || "";
+  if (qs) {
+    localStorage.setItem("pollution_api_url", qs);
+    return qs;
+  }
+  return localStorage.getItem("pollution_api_url") || "https://attributes-plates-brave-pittsburgh.trycloudflare.com";
 }
+
 const POLLUTION_API = resolveApiUrl();
+const CLOUD_SYNC_ENABLED = !!POLLUTION_API;
+
+console.log("✅ Using backend API:", POLLUTION_API);
 
 // ======== CLOUD SYNC SETTINGS (NEW) ========
 const CLOUD_SYNC_ENABLED = !!POLLUTION_API;
