@@ -1,0 +1,69 @@
+Codogno Digital Twin Non-Commercial, No-Project License v1.0
+Copyright (c) 2025 Your Full Name. All rights reserved.
+
+1. Definitions
+
+"Software" means the Codogno Digital Twin platform and all associated source code, binaries, documentation, configuration files, and other materials provided by the Copyright Holder.
+
+"Copyright Holder" means Martina Krasimirova Ivanova.
+
+"Non-Commercial Use" means use that is not intended for or directed toward commercial advantage or monetary compensation and is not part of any funded project, grant, tender, contract, or other institutionally supported activity.
+
+"Funded Project or Institutional Project" means any project or activity that:
+(a) receives or is intended to receive funding from public, private, or mixed sources (including but not limited to EU, national, regional, or municipal programs); or
+(b) is carried out within a consortium, contract, or formal collaboration between institutions, companies, or organizations.
+
+"Derivative Work" means any work that is based on or derived from the Software, including but not limited to modifications, translations, adaptations, extensions, or integrations.
+
+2. Grant of Rights
+
+Subject to the terms of this License, the Copyright Holder grants you a limited, non-exclusive, non-transferable, revocable license to:
+
+(a) use the Software for personal, non-commercial research, evaluation, and academic study;  
+(b) run the Software on your own systems for the purposes described in (a);  
+(c) create Derivative Works for your own personal, non-commercial research and academic purposes only.
+
+3. Restrictions
+
+You may NOT, under any circumstances, without prior written permission from the Copyright Holder:
+
+(a) use the Software or any Derivative Work, in whole or in part, in connection with any Funded Project or Institutional Project, including but not limited to:
+    - preparation or submission of grant applications, project proposals, or tenders;
+    - execution of funded research or innovation projects (including EU-funded projects and consortia);
+    - services provided under contract to third parties;
+(b) use the Software or any Derivative Work for any Commercial purpose, including but not limited to:
+    - providing services to clients;
+    - integrating the Software into commercial products or platforms;
+    - any activity directly or indirectly generating monetary compensation;
+(c) redistribute, sublicense, or make the Software or any Derivative Work available to third parties, except as explicitly permitted in Section 4;
+(d) remove, alter, or obscure any copyright, authorship, or license notices included with the Software.
+
+4. Limited Redistribution
+
+You may share the Software or Derivative Works with individual collaborators for Non-Commercial Use only, provided that:
+
+(a) you provide them with a copy of this License;  
+(b) they agree to be bound by the terms of this License; and  
+(c) no Commercial, Funded Project, or Institutional Project use is made without prior written permission from the Copyright Holder.
+
+You may not redistribute the Software or Derivative Works under any other license or under terms that are more permissive than this License.
+
+5. Attribution
+
+Any public use of results, demonstrations, or publications that directly rely on the Software or Derivative Works must provide appropriate academic and technical attribution to the Copyright Holder, including citation of the Software and its author(s).
+
+6. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+7. Termination
+
+Any breach of the terms of this License automatically and immediately terminates your rights under this License. Upon termination, you must cease all use of the Software and any Derivative Works and destroy all copies in your possession or control.
+
+8. Contact for Permissions
+
+For Commercial use, or use in any Funded Project or Institutional Project, you must obtain prior written permission from the Copyright Holder.
+
+Contact: martina.ivanova@polimi.it
+
+End of License.
