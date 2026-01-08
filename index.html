@@ -181,24 +181,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
         </div>
       </div>
 
-      <div class="space-y-2">
-  <label class="inline-flex items-center">
-    <input type="checkbox" id="no2MeanToggle" class="mr-2" checked />
-    NO₂ Mean
-  </label>
-
-  <label class="inline-flex items-center">
-    <input type="checkbox" id="no2StdToggle" class="mr-2" />
-    NO₂ Std Dev
-  </label>
-
-  <label class="inline-flex items-center">
-    <input type="checkbox" id="no2ThirdToggle" class="mr-2" />
-    NO₂ Layer 3
-  </label>
-</div>
-
-
       <div>
         <label class="inline-flex items-center"><input type="checkbox" id="heatToggle" checked class="mr-2" /> Show Heat Colors</label>
       </div>
@@ -486,107 +468,6 @@ const DEVICE_KEY = "device_id_v1";
       UHI_MIN = Math.floor(min * POW) / POW;
       UHI_MAX = Math.ceil (max * POW) / POW;
     }
-
-    // =======================================================
-// ARPA LOMBARDIA — NO₂ (LO + CR) → Cesium Raster Overlay
-// =======================================================
-
-// ---- DATA SOURCE (single URL, no transforms) ----
-const ARPA_NO2_URL =
-  "https://www.dati.lombardia.it/resource/nicp-bhqi.json" +
-  "?$where=provincia IN ('LO','CR') AND nometiposensore LIKE '%NO2%'" +
-  "&$limit=5000";
-
-// ---- MAP BOUNDS (Codogno + Cremona area) ----
-const ARPA_NO2_BOUNDS = Cesium.Rectangle.fromDegrees(
-  9.40, 45.00,   // west, south
-  10.30, 45.50   // east, north
-);
-
-// ---- INTERNAL STATE ----
-let arpaNo2Layer = null;
-let arpaNo2Canvas = null;
-
-// ---- VALUE → COLOR (simple, readable ramp) ----
-function no2ToColor(v) {
-  if (v < 20) return [ 34,197, 94,180]; // green
-  if (v < 40) return [250,204, 21,180]; // yellow
-  if (v < 60) return [249,115, 22,190]; // orange
-  return             [220, 38, 38,200]; // red
-}
-
-// ---- BUILD CANVAS FROM ARPA POINTS ----
-function buildNo2Canvas(rows) {
-  const W = 512, H = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext("2d");
-
-  ctx.clearRect(0, 0, W, H);
-
-  for (const r of rows) {
-    const lat = Number(r.lat);
-    const lon = Number(r.lng);
-    const val = Number(r.valore);
-
-    if (!isFinite(lat) || !isFinite(lon) || !isFinite(val)) continue;
-
-    const x = (lon - 9.40) / (10.30 - 9.40) * W;
-    const y = H - (lat - 45.00) / (45.50 - 45.00) * H;
-
-    const [rr, gg, bb, aa] = no2ToColor(val);
-    ctx.fillStyle = `rgba(${rr},${gg},${bb},${aa / 255})`;
-    ctx.beginPath();
-    ctx.arc(x, y, 8, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  return canvas;
-}
-
-// ---- REFRESH LAYER (fetch → rebuild → swap) ----
-async function refreshArpaNo2Layer(viewer) {
-  try {
-    const res = await fetch(ARPA_NO2_URL, { cache: "no-store" });
-    if (!res.ok) throw new Error("ARPA fetch failed");
-
-    const rows = await res.json();
-    arpaNo2Canvas = buildNo2Canvas(rows);
-
-    const provider = new Cesium.SingleTileImageryProvider({
-      url: arpaNo2Canvas,
-      rectangle: ARPA_NO2_BOUNDS
-    });
-
-    if (arpaNo2Layer) {
-      viewer.imageryLayers.remove(arpaNo2Layer, false);
-    }
-
-    arpaNo2Layer = viewer.imageryLayers.addImageryProvider(provider);
-    arpaNo2Layer.alpha = 0.7;
-    arpaNo2Layer.show = document.getElementById("no2ThirdToggle")?.checked ?? false;
-
-    viewer.scene.requestRender();
-
-  } catch (e) {
-    console.warn("ARPA NO2 update failed:", e);
-  }
-}
-
-// ---- TOGGLE WIRING ----
-function wireArpaNo2Toggle(viewer) {
-  const toggle = document.getElementById("no2ThirdToggle");
-  if (!toggle) return;
-
-  toggle.addEventListener("change", () => {
-    if (arpaNo2Layer) {
-      arpaNo2Layer.show = toggle.checked;
-      viewer.scene.requestRender();
-    }
-  });
-}
-
 
     // ==========================
     // Discrete palettes & helpers
@@ -1327,62 +1208,6 @@ Cesium.Camera.DEFAULT_VIEW_RECTANGLE = Cesium.Rectangle.fromDegrees(
 Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5; // how wide to frame inside that rectangle
 
       viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
-// === NO2 PNG OVERLAY (Single tile) ===
-const NO2_BOUNDS = Cesium.Rectangle.fromDegrees(
-  9.667680594753449,   // west
-  45.147760062338406,  // south
-  9.72894372077443,    // east
-  45.1914497632346     // north
-);
-
-// Mean layer
-const no2MeanProvider = new Cesium.SingleTileImageryProvider({
-  url: "overlays/1codogno_no2_mean_dynamic.png",
-  rectangle: NO2_BOUNDS
-});
-const no2MeanLayer = viewer.imageryLayers.addImageryProvider(no2MeanProvider);
-no2MeanLayer.alpha = 0.75;
-no2MeanLayer.show  = true;
-
-// Std-dev layer
-const no2StdProvider = new Cesium.SingleTileImageryProvider({
-  url: "overlays/1codogno_no2_std_dynamic.png",
-  rectangle: NO2_BOUNDS
-});
-const no2StdLayer = viewer.imageryLayers.addImageryProvider(no2StdProvider);
-no2StdLayer.alpha = 0.75;
-no2StdLayer.show  = false;
-// --- ARPA dynamic NO2 layer (LO+CR) ---
-arpaWireNo2ThirdToggle();
-
-// Start hidden; user enables via "NO₂ Layer 3"
-if (arpaNo2Layer) arpaNo2Layer.show = false;
-
-// First load + periodic refresh
-try {
-  await arpaRefreshNo2Layer(NO2_BOUNDS);
-
-  // Respect toggle initial state
-  const tgl = document.getElementById("no2ThirdToggle");
-  if (tgl && arpaNo2Layer) arpaNo2Layer.show = !!tgl.checked;
-
-  setInterval(() => {
-    arpaRefreshNo2Layer(NO2_BOUNDS).catch(err => console.warn("ARPA refresh failed:", err));
-  }, ARPA_REFRESH_MS);
-} catch (e) {
-  console.warn("ARPA NO2 init failed:", e);
-}
-// === NO₂ UI TOGGLES ===
-document.getElementById("no2MeanToggle").addEventListener("change", (e) => {
-  no2MeanLayer.show = e.target.checked;
-  viewer.scene.requestRender();
-});
-
-document.getElementById("no2StdToggle").addEventListener("change", (e) => {
-  no2StdLayer.show = e.target.checked;
-  viewer.scene.requestRender();
-});
-
       viewer.scene.globe.depthTestAgainstTerrain = true;
       viewer.scene.requestRenderMode = true;
       viewer.scene.maximumRenderTimeChange = 1/30;
