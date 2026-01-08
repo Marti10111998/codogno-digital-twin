@@ -181,6 +181,24 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
         </div>
       </div>
 
+      <div class="space-y-2">
+  <label class="inline-flex items-center">
+    <input type="checkbox" id="no2MeanToggle" class="mr-2" checked />
+    NO₂ Mean
+  </label>
+
+  <label class="inline-flex items-center">
+    <input type="checkbox" id="no2StdToggle" class="mr-2" />
+    NO₂ Std Dev
+  </label>
+
+  <label class="inline-flex items-center">
+    <input type="checkbox" id="no2ThirdToggle" class="mr-2" />
+    NO₂ Layer 3
+  </label>
+</div>
+
+
       <div>
         <label class="inline-flex items-center"><input type="checkbox" id="heatToggle" checked class="mr-2" /> Show Heat Colors</label>
       </div>
@@ -1208,11 +1226,51 @@ Cesium.Camera.DEFAULT_VIEW_RECTANGLE = Cesium.Rectangle.fromDegrees(
 Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5; // how wide to frame inside that rectangle
 
       viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
+      // === NO2 PNG OVERLAY (Single tile) ===
+const NO2_BOUNDS = Cesium.Rectangle.fromDegrees(
+  9.667680594753449,   // west
+  45.147760062338406,  // south
+  9.72894372077443,    // east
+  45.1914497632346     // north
+);
+
+// Mean layer
+const no2MeanProvider = new Cesium.SingleTileImageryProvider({
+  url: "overlays/1codogno_no2_mean_dynamic.png", // <-- update path
+  rectangle: NO2_BOUNDS
+});
+const no2MeanLayer = viewer.imageryLayers.addImageryProvider(no2MeanProvider);
+no2MeanLayer.alpha = 0.75;     // transparency
+no2MeanLayer.show  = true;
+
+// Std-dev layer (optional)
+const no2StdProvider = new Cesium.SingleTileImageryProvider({
+  url: "overlays/1codogno_no2_std_dynamic.png", // <-- update path
+  rectangle: NO2_BOUNDS
+});
+const no2StdLayer = viewer.imageryLayers.addImageryProvider(no2StdProvider);
+no2StdLayer.alpha = 0.75;
+no2StdLayer.show  = false;     // start hidden
+
+// === NO₂ UI TOGGLES ===
+document.getElementById("no2MeanToggle").addEventListener("change", (e) => {
+  no2MeanLayer.show = e.target.checked;
+  viewer.scene.requestRender();
+});
+
+document.getElementById("no2StdToggle").addEventListener("change", (e) => {
+  no2StdLayer.show = e.target.checked;
+  viewer.scene.requestRender();
+});
+
+
       viewer.scene.globe.depthTestAgainstTerrain = true;
       viewer.scene.requestRenderMode = true;
       viewer.scene.maximumRenderTimeChange = 1/30;
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
+
+      
 
       // Load buildings
       const buildingSelector = document.getElementById("buildingSelector");
