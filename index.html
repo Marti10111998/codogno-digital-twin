@@ -1240,8 +1240,11 @@ await viewer.zoomTo(
       buildings = dataSource.entities.values;
 
       buildings.forEach((building, i) => {
-        const name = `Building ${i+1}`;
-        building.name = name;
+        const stableId = building.properties?.id?.getValue?.() ?? `codogno-building-${i+1}`;
+building.name = stableId;
+building.properties.addProperty("stable_id");
+building.properties.stable_id = stableId;
+
         const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
 
         if (building.polygon) {
