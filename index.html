@@ -1458,111 +1458,143 @@ building.properties.stable_id = stableId;
       }
     }
 
-    // ======== ICT / Ops telemetry ========
-    let ictChart = null;
+// ======== ICT / Ops telemetry (API health via /health + local pings) ========
+let ictChart = null;
 
-    function bucketByHour(rows) {
-      const map = new Map();
-      for (const r of rows) {
-        const d = new Date(Number(r.ts));
-        d.setMinutes(0,0,0);
-        const k = d.getTime();
-        map.set(k, (map.get(k) || 0) + 1);
-      }
-      return [...map.entries()].sort((a,b)=>a[0]-b[0]).map(([t,c])=>({ t, c }));
+const ICT_STORE_KEY = "ict_health_samples_v1";
+const ICT_RETENTION_HRS = 24;
+
+function loadIctSamples(){
+  try {
+    const raw = localStorage.getItem(ICT_STORE_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+function saveIctSamples(samples){
+  try { localStorage.setItem(ICT_STORE_KEY, JSON.stringify(samples)); } catch {}
+}
+
+function pruneIctSamples(samples){
+  const cutoff = Date.now() - ICT_RETENTION_HRS * 3600 * 1000;
+  return samples.filter(s => Number.isFinite(s.ts) && s.ts >= cutoff);
+}
+
+function bucketByHourHealth(samples){
+  // buckets: per hour success count
+  const map = new Map();
+  for (const s of samples){
+    const d = new Date(Number(s.ts));
+    d.setMinutes(0,0,0);
+    const key = d.getTime();
+    const b = map.get(key) || { t:key, ok:0, n:0, latSum:0, latN:0 };
+    b.n += 1;
+    if (s.ok) b.ok += 1;
+    if (Number.isFinite(s.ms)) { b.latSum += s.ms; b.latN += 1; }
+    map.set(key, b);
+  }
+  return [...map.values()].sort((a,b)=>a.t-b.t);
+}
+
+async function timedFetch(url, init){
+  const t0 = performance.now();
+  const res = await fetch(url, init);
+  const t1 = performance.now();
+  return { res, ms: Math.max(0, Math.round(t1 - t0)) };
+}
+
+function ensureIctChart(){
+  if (ictChart) return ictChart;
+  const ctx = document.getElementById("ictChart").getContext("2d");
+  ictChart = new Chart(ctx, {
+    type: "bar",
+    data: { labels: [], datasets: [] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      animation: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { type: "time", time: { unit: "hour" } },
+        y: { title: { display:true, text:"ok pings/hour" }, beginAtZero:true, suggestedMax:60 },
+        y1:{ title: { display:true, text:"latency (ms)" }, position:"right", beginAtZero:true, grid:{ drawOnChartArea:false } }
+      },
+      plugins: { legend: { display: true, position: "top" } },
+      elements: { point: { radius: 0 }, line: { tension: 0.25 } }
     }
+  });
+  return ictChart;
+}
 
-    async function timedFetch(url, init){
-      const t0 = performance.now();
-      const res = await fetch(url, init);
-      const t1 = performance.now();
-      return { res, ms: Math.max(0, Math.round(t1 - t0)) };
+async function refreshICT(){
+  const stampEl  = document.getElementById("ictStamp");
+  const upEl     = document.getElementById("ictUptime");
+  const latestEl = document.getElementById("ictLatest");
+  const latEl    = document.getElementById("ictLatency");
+
+  const now = new Date();
+  stampEl.textContent = `as of ${now.toLocaleTimeString()}`;
+
+  // Ping the current API (ngrok) health endpoint
+  const url = `${POLLUTION_API}/health`;
+  let ok = false, latencyMs = null;
+
+  try{
+    const t = await timedFetch(url, { cache:"no-store" });
+    latencyMs = t.ms;
+    ok = !!t.res.ok;
+  }catch(e){
+    ok = false;
+    latencyMs = null;
+  }
+
+  // Store sample locally
+  let samples = pruneIctSamples(loadIctSamples());
+  samples.push({ ts: Date.now(), ok, ms: latencyMs });
+  samples = pruneIctSamples(samples);
+  saveIctSamples(samples);
+
+  // Latest update = last OK ping
+  const lastOk = [...samples].reverse().find(s => s.ok);
+  latestEl.textContent = lastOk ? new Date(lastOk.ts).toLocaleTimeString() : "offline";
+
+  // Latency tile
+  latEl.textContent = ok && latencyMs != null ? `${latencyMs} ms` : "offline";
+
+  // Uptime % over last 24h based on local samples
+  // expected = 1 ping per minute (because we refresh every 60s)
+  const expected = ICT_RETENTION_HRS * 60;
+  const okCount = samples.filter(s => s.ok).length;
+  const uptime = expected ? Math.round((okCount / expected) * 100) : 0;
+  upEl.textContent = `${Math.max(0, Math.min(100, uptime))}%`;
+
+  // Chart: bars = OK pings/hour; line = avg latency/hour
+  const hourly = bucketByHourHealth(samples).slice(-24);
+  const chart = ensureIctChart();
+
+  chart.data.labels = hourly.map(b => b.t);
+
+  chart.data.datasets = [
+    {
+      type: "bar",
+      label: "OK pings/hour",
+      data: hourly.map(b => ({ x:b.t, y:b.ok })),
+      borderWidth: 0
+    },
+    {
+      type: "line",
+      label: "Avg latency (ms)",
+      yAxisID: "y1",
+      data: hourly.map(b => ({ x:b.t, y: b.latN ? Math.round(b.latSum / b.latN) : 0 })),
+      borderWidth: 2,
+      pointRadius: 0
     }
+  ];
 
-    function ensureIctChart(){
-      if (ictChart) return ictChart;
-      const ctx = document.getElementById("ictChart").getContext("2d");
-      ictChart = new Chart(ctx, {
-        type: "bar",
-        data: { labels: [], datasets: [] },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          parsing: false,
-          interaction: { mode: "index", intersect: false },
-          scales: {
-            x: { type: "time", time: { unit: "hour" } },
-            y: { title: { display:true, text:"updates/hour" }, beginAtZero:true, suggestedMax:8 },
-            y1:{ title: { display:true, text:"latency (ms)" }, position:"right", beginAtZero:true, grid:{ drawOnChartArea:false } }
-          },
-          plugins: { legend: { display: true, position: "top" } },
-          elements: { point: { radius: 0 }, line: { tension: 0.25 } }
-        }
-      });
-      return ictChart;
-    }
-
-    async function refreshICT(){
-      const stampEl  = document.getElementById("ictStamp");
-      const upEl     = document.getElementById("ictUptime");
-      const latestEl = document.getElementById("ictLatest");
-      const latEl    = document.getElementById("ictLatency");
-
-      // 1) fetch latest (also measure latency)
-      const latestTimed = await timedFetch(`${POLLUTION_API}/latest`, { cache:"no-store" }).catch(()=>null);
-      let latestJson = null, latencyMs = null;
-      if (latestTimed && latestTimed.res.ok) {
-        latestJson = await latestTimed.res.json();
-        latencyMs = latestTimed.ms;
-      }
-      // 2) fetch 24h history (also measure latency)
-      const histTimed = await timedFetch(`${POLLUTION_API}/history?days=1`, { cache:"no-store" }).catch(()=>null);
-      let history = [];
-      if (histTimed && histTimed.res.ok) {
-        history = await histTimed.res.json();
-        latencyMs = Math.max(latencyMs ?? 0, histTimed.ms);
-      }
-
-      // stamps
-      const now = new Date();
-      stampEl.textContent = `as of ${now.toLocaleTimeString()}`;
-
-      // latest time
-      const ts = Number(latestJson?.ts) || (history.length ? Number(history.at(-1).ts) : NaN);
-      latestEl.textContent = Number.isFinite(ts) ? new Date(ts).toLocaleTimeString() : "—";
-
-      // uptime over last 24h
-      const perHour = bucketByHour(history);
-      const last24 = perHour.slice(-24);
-      const actual = last24.reduce((s,p)=>s + Math.min(p.c, 6), 0);
-      const expected = 24 * 6;
-      const uptime = Math.round((actual/expected)*100);
-      upEl.textContent = `${Math.max(0, Math.min(100, uptime))}%`;
-
-      // latency
-      latEl.textContent = latencyMs != null ? `${latencyMs} ms` : "—";
-
-      // chart: bars = updates/hour, line = latency
-      const chart = ensureIctChart();
-      chart.data.labels = last24.map(p=>p.t);
-      chart.data.datasets = [
-        {
-          type: "bar",
-          label: "Updates/hour",
-          data: last24.map(p=>({ x:p.t, y:p.c })),
-          borderWidth: 0
-        },
-        {
-          type: "line",
-          label: "API latency (ms)",
-          yAxisID: "y1",
-          data: last24.map(p=>({ x:p.t, y: latencyMs || 0 })),
-          borderWidth: 2,
-          pointRadius: 0
-        }
-      ];
-      chart.update();
-    }
+  chart.update();
+}
 
     // call on startup & refresh every minute
     refreshICT();
