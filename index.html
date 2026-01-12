@@ -266,7 +266,7 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
         </select>
       </div>
       <div>
-        <label class="block text sm font-medium">Forecast</label>
+        <label class="block text-sm font-medium">Forecast</label>
         <select id="chartHorizon" class="w-full border rounded px-2 py-1">
           <option value="0">Off</option>
           <option value="24">Next 24 hours</option>
@@ -378,13 +378,20 @@ const DEVICE_KEY = "device_id_v1";
     // Utility
     // ==========================
     async function resilientFetch(url, tries=3, base=500){
-      for (let i=0;i<tries;i++){
-        const r = await fetch(url, { cache: "no-store" });
-        if (r.ok) return r;
-        await new Promise(res => setTimeout(res, base * 2**i + Math.random()*200));
-      }
-      throw new Error("fetch failed: " + url);
+  let lastErr = null;
+  for (let i=0;i<tries;i++){
+    try{
+      const r = await fetch(url, { cache: "no-store" });
+      if (r.ok) return r;
+      lastErr = new Error(`fetch not ok (${r.status}): ${url}`);
+    }catch(e){
+      lastErr = e;
     }
+    await new Promise(res => setTimeout(res, base * 2**i + Math.random()*200));
+  }
+  throw new Error("fetch failed: " + url + (lastErr ? " :: " + lastErr.message : ""));
+}
+
     const clamp01 = (x)=>Math.max(0,Math.min(1,x));
     const lerp = (a,b,t)=>a + (b-a)*t;
 
@@ -668,7 +675,8 @@ const DEVICE_KEY = "device_id_v1";
         for (const building of buildings) {
           const height = parseFloat(building.properties?.height?.getValue?.() ?? building.properties?.height) || 10;
           const simTemp = computeUHI(urbanTemp, height, lastWeather.wind, lastWeather.clouds);
-          building.properties.addProperty("sim_uhi", simTemp);
+          building.properties.addProperty("sim_uhi");
+          building.properties.sim_uhi = simTemp;
         }
 
         requestForecast();
@@ -724,7 +732,8 @@ const DEVICE_KEY = "device_id_v1";
           const uhi = computeUHI(predUrban[i], height, wind, clouds);
           prop.addSample(Cesium.JulianDate.fromDate(t), uhi);
         }
-        b.properties.addProperty("pred_uhi", prop);
+        b.properties.addProperty("pred_uhi");
+        b.properties.pred_uhi = prop;
       }
       viewer.scene.requestRender();
     }
@@ -1269,7 +1278,7 @@ await viewer.zoomTo(
         const picked = viewer.scene.pick(movement.endPosition);
         if (picked && picked.id && picked.id.properties) {
           const props = picked.id.properties;
-          const usePred = document.getElementById("predictionToggle").checked;
+          const usePred = document.getElementById("predictionToggle")?.checked ?? true;
           const tempVal = getEntityTemp(picked.id);
           const h = props?.height?.getValue?.() ?? props?.height ?? "N/A";
           const name = picked.id.name ?? "Unknown";
@@ -1787,7 +1796,6 @@ await viewer.zoomTo(
    © 2025 Martina Ivanova — All rights reserved.  
   Non-commercial research use only.  
   Funded or institutional project use requires prior written permission.
-</footer>
 </footer>
 </body>
 </html>
