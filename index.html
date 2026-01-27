@@ -115,6 +115,128 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
       border-right:2px solid rgba(0,0,0,.25); border-bottom:2px solid rgba(0,0,0,.25);
       cursor:nwse-resize; opacity:.6;
     }
+/* ===========================
+   CLEAN PANEL DESIGN SYSTEM
+   =========================== */
+:root{
+  --panel-bg: rgba(255,255,255,.92);
+  --panel-border: rgba(15, 23, 42, .10);     /* slate-ish */
+  --panel-shadow: 0 10px 25px rgba(0,0,0,.12);
+  --panel-radius: 14px;
+  --panel-pad: 12px;
+  --panel-gap: 10px;
+  --panel-title: 14px;
+  --panel-sub: 11px;
+}
+
+/* Make every panel consistent */
+.ui-panel{
+  position:absolute;
+  z-index:10;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
+  font-family: system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  backdrop-filter: blur(6px);
+  overflow: hidden; /* important: keeps header corners perfect */
+}
+
+/* Standard header bar */
+.ui-panel__header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 10px 10px;
+  border-bottom: 1px solid rgba(15,23,42,.08);
+  background: linear-gradient(to bottom, rgba(255,255,255,.85), rgba(255,255,255,.65));
+}
+
+/* Title + subtitle */
+.ui-panel__title{
+  font-size: var(--panel-title);
+  font-weight: 700;
+  color: rgba(15,23,42,.92);
+  line-height: 1.1;
+}
+.ui-panel__subtitle{
+  font-size: var(--panel-sub);
+  color: rgba(15,23,42,.55);
+  margin-top: 2px;
+}
+
+/* Body spacing */
+.ui-panel__body{
+  padding: var(--panel-pad);
+  display: flex;
+  flex-direction: column;
+  gap: var(--panel-gap);
+}
+
+/* Section label inside panel */
+.ui-section-title{
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(15,23,42,.75);
+  letter-spacing: .2px;
+  margin-top: 2px;
+}
+
+/* Make inputs look consistent */
+.ui-panel select,
+.ui-panel input[type="number"],
+.ui-panel input[type="text"]{
+  border-radius: 10px;
+  border: 1px solid rgba(15,23,42,.15);
+  padding: 6px 8px;
+  outline: none;
+}
+.ui-panel select:focus,
+.ui-panel input[type="number"]:focus,
+.ui-panel input[type="text"]:focus{
+  border-color: rgba(37,99,235,.55);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+}
+
+/* Checkbox rows tidy */
+.ui-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.ui-row label{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+/* Smaller, cleaner drag handle: header is the handle */
+.drag-handle{
+  cursor: move;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Your existing collapse logic uses .panel-body.
+   We’ll map it to ui-panel__body so your JS keeps working. */
+.panel-body{ /* keep compatibility */ }
+
+/* Tool buttons (your enhancePanels creates these) */
+.panel .panel-tools .toolbtn{
+  width:24px;
+  height:24px;
+  line-height:24px;
+  border-radius: 10px;
+  background: rgba(15,23,42,.05);
+  border: 1px solid rgba(15,23,42,.10);
+}
+
+/* Optional: make chart panels less tall looking */
+canvas { display:block; }
+
+
   </style>
 </head>
 
@@ -123,38 +245,46 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 <body>
   <div id="cesiumContainer"></div>
 
-  <!-- Control Panel -->
-  <div id="controlPanel" class="absolute top-4 left-4 bg-white/90 p-4 rounded-xl shadow-lg w-80 space-y-4 z-10 font-sans">
-    <div class="drag-handle -mt-1 -mx-1 mb-2 px-1 py-1 text-[11px] text-gray-500 rounded cursor-move select-none">
-      ⠿ Drag panel
+  <!-- =========================
+     CLEAN PANELS (COPY/PASTE)
+     ========================= -->
+
+<!-- Control Panel -->
+<div id="controlPanel" class="ui-panel top-4 left-4 w-80">
+  <div class="ui-panel__header drag-handle">
+    <div>
+      <div class="ui-panel__title">Codogno Digital Twin</div>
+      <div class="ui-panel__subtitle">Visual controls</div>
+    </div>
+  </div>
+
+  <div class="ui-panel__body panel-body">
+    <div class="ui-section-title">Buildings</div>
+    <div>
+      <label class="block text-sm font-medium">Select Building</label>
+      <select id="buildingSelector" class="w-full">
+        <option value="">-- All Buildings --</option>
+      </select>
     </div>
 
-    <div class="text-lg font-semibold">Codogno Digital Twin</div>
-
+    <div class="ui-section-title">Colors</div>
     <div class="grid grid-cols-2 gap-3">
-      <div class="col-span-2">
-        <label class="block font-medium">Select Building</label>
-        <select id="buildingSelector" class="w-full border rounded px-2 py-1">
-          <option value="">-- All Buildings --</option>
-        </select>
+      <div>
+        <label class="block text-sm font-medium">Base Color</label>
+        <input type="color" id="colorPicker" class="w-full h-9 rounded-lg border" value="#cccccc" />
       </div>
 
       <div>
-        <label class="block font-medium">Base Color</label>
-        <input type="color" id="colorPicker" class="w-full" value="#cccccc" />
-      </div>
-
-      <div>
-        <label class="block font-medium">Color Mode</label>
-        <select id="colorMode" class="w-full border rounded px-2 py-1">
+        <label class="block text-sm font-medium">Color Mode</label>
+        <select id="colorMode" class="w-full">
           <option value="continuous">Continuous</option>
           <option value="quantile" selected>Quantile (discrete)</option>
         </select>
       </div>
 
       <div class="col-span-2">
-        <label class="block font-medium">Palette</label>
-        <select id="palette" class="w-full border rounded px-2 py-1">
+        <label class="block text-sm font-medium">Palette</label>
+        <select id="palette" class="w-full">
           <option value="bluered">Blue→Red</option>
           <option value="spectral" selected>Spectral</option>
           <option value="viridis">Viridis</option>
@@ -162,16 +292,331 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
       </div>
 
       <div class="col-span-2">
-        <label class="block font-medium">Color Bins (diversity)</label>
+        <label class="block text-sm font-medium">Color Bins (diversity)</label>
         <input type="range" id="binCount" min="8" max="32" step="1" value="20" class="w-full" />
-        <div class="text-xs text-gray-600 mt-1">Bins: <span id="binCountLabel">20</span></div>
+        <div class="text-xs text-slate-500 mt-1">Bins: <span id="binCountLabel">20</span></div>
+      </div>
+    </div>
+
+    <div class="ui-section-title">Overlays</div>
+    <div class="ui-row">
+      <label class="text-sm"><input type="checkbox" id="heatToggle" checked /> Show Heat Colors</label>
+    </div>
+    <div class="ui-row">
+      <label class="text-sm"><input type="checkbox" id="haloToggle" checked /> Temperature Halo (UHI)</label>
+    </div>
+    <div class="text-xs text-slate-500 -mt-2">Uses avg building UHI at current mode (pred/measured)</div>
+
+    <div class="ui-section-title">Lighting</div>
+    <div class="ui-row">
+      <label class="text-sm"><input type="checkbox" id="shadowToggle" checked /> Enable Shadows</label>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2">
+      <label class="text-sm"><input type="checkbox" id="sunOverrideToggle" /> Manual Sun</label>
+      <select id="sunHour" class="w-full text-sm">
+        <option value="6">06:00</option>
+        <option value="8">08:00</option>
+        <option value="10">10:00</option>
+        <option value="12" selected>12:00</option>
+        <option value="14">14:00</option>
+        <option value="16">16:00</option>
+        <option value="18">18:00</option>
+        <option value="20">20:00</option>
+      </select>
+    </div>
+    <div class="text-xs text-slate-500 -mt-2">Manual Sun changes lighting/shadows only.</div>
+
+    <div class="ui-section-title">Prediction</div>
+    <div class="ui-row">
+      <label class="text-sm"><input type="checkbox" id="predictionToggle" checked /> Show Predicted Heat</label>
+    </div>
+    <div id="modelBadge" class="text-xs text-slate-500 -mt-2">Forecast: Holt-Winters (Web Worker)</div>
+
+    <div class="ui-section-title">Traffic</div>
+    <div>
+      <label class="block text-sm font-medium">Traffic Heatmap Time</label>
+      <select id="heatmapTimeSelector" class="w-full">
+        <option value="morning">Morning</option>
+        <option value="lunch">Lunch</option>
+        <option value="evening">Evening</option>
+        <option value="night">Night</option>
+      </select>
+
+      <label class="mt-2 flex items-center gap-2 text-sm">
+        <input type="checkbox" id="heatmapDotsToggle" />
+        Show Heatmap Dots
+      </label>
+    </div>
+
+    <div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" id="liveTrafficToggle" />
+        Live Traffic (TomTom)
+      </label>
+      <select id="trafficRefresh" class="w-full mt-2">
+        <option value="15" selected>Refresh: 15s</option>
+        <option value="30">Refresh: 30s</option>
+        <option value="60">Refresh: 60s</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- Small tiles -->
+<div id="pollutionPanel" class="ui-panel bottom-4 right-4 w-72">
+  <div class="ui-panel__header drag-handle">
+    <div>
+      <div class="ui-panel__title">Pollution (now)</div>
+      <div class="ui-panel__subtitle">Predicted snapshot</div>
+    </div>
+  </div>
+  <div class="ui-panel__body panel-body">
+    <div id="pollutionOutput">Loading...</div>
+    <div id="pollutionStamp" class="text-xs text-slate-500">—</div>
+  </div>
+</div>
+
+<!-- Time-series chart -->
+<div id="pollutionChartPanel" class="ui-panel bottom-4 left-1/2 -translate-x-1/2 w-[900px]">
+  <div class="ui-panel__header drag-handle">
+    <div>
+      <div class="ui-panel__title">Pollution — Trends & Peaks</div>
+      <div class="ui-panel__subtitle" id="pollutionChartStatus">—</div>
+    </div>
+  </div>
+
+  <div class="ui-panel__body panel-body">
+    <div class="grid grid-cols-7 gap-3">
+      <div class="col-span-2">
+        <label class="block text-sm font-medium">Pollutant</label>
+        <select id="chartPollutant" class="w-full">
+          <option>O3</option><option>NO2</option><option>NO</option><option>CO</option><option>NH3</option><option>Noise</option>
+        </select>
+      </div>
+
+      <div class="col-span-2">
+        <label class="block text-sm font-medium">Granularity</label>
+        <select id="chartGranularity" class="w-full">
+          <option value="10m">10 minutes</option>
+          <option value="hour" selected>Hourly</option>
+          <option value="day">Daily</option>
+        </select>
       </div>
 
       <div>
-  <label class="inline-flex items-center">
-    <input type="checkbox" id="heatToggle" checked class="mr-2" /> Show Heat Colors
-  </label>
+        <label class="block text-sm font-medium">Days back</label>
+        <select id="chartDaysBack" class="w-full">
+          <option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium">Forecast</label>
+        <select id="chartHorizon" class="w-full">
+          <option value="0">Off</option>
+          <option value="24">Next 24 hours</option>
+          <option value="168" selected>Next 7 days</option>
+        </select>
+      </div>
+
+      <div class="flex items-end">
+        <label class="inline-flex items-center text-sm">
+          <input id="chartShowPred" type="checkbox" class="mr-2" checked /> Show Predicted
+        </label>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium">Threshold</label>
+        <input id="chartThreshold" type="number" step="0.1" class="w-full" />
+      </div>
+    </div>
+
+    <div>
+      <canvas id="pollutionChart" height="110"></canvas>
+    </div>
+
+    <div class="text-xs text-slate-500">
+      Tips: hover for exact values • peaks are highlighted • switch granularity for smoother trends.
+    </div>
+  </div>
 </div>
+
+<!-- ICT / Ops panel -->
+<div id="ictPanel" class="ui-panel top-4 right-4 w-[520px] z-20">
+  <div class="ui-panel__header drag-handle">
+    <div>
+      <div class="ui-panel__title">System Health</div>
+      <div class="ui-panel__subtitle" id="ictStamp">—</div>
+    </div>
+  </div>
+
+  <div class="ui-panel__body panel-body">
+    <div class="grid grid-cols-3 gap-3 text-sm">
+      <div class="p-3 rounded-xl bg-green-50 border border-green-200">
+        <div class="text-[11px] text-green-700">Uptime (24h)</div>
+        <div id="ictUptime" class="text-xl font-semibold text-green-800">—</div>
+      </div>
+      <div class="p-3 rounded-xl bg-blue-50 border border-blue-200">
+        <div class="text-[11px] text-blue-700">Latest update</div>
+        <div id="ictLatest" class="text-xl font-semibold text-blue-800">—</div>
+      </div>
+      <div class="p-3 rounded-xl bg-violet-50 border border-violet-200">
+        <div class="text-[11px] text-violet-700">API latency</div>
+        <div id="ictLatency" class="text-xl font-semibold text-violet-800">—</div>
+      </div>
+    </div>
+
+    <div>
+      <canvas id="ictChart" style="height:110px; width:100%;"></canvas>
+    </div>
+
+    <div class="text-xs text-slate-500">
+      Bars: updates/hour • Line: API latency (ms). Expected ~6 updates/hour with a 10-min cron.
+    </div>
+  </div>
+</div>
+
+<!-- Weather Forecast panel -->
+<div id="weatherPanel" class="ui-panel bottom-4 left-4 w-[520px]">
+  <div class="ui-panel__header drag-handle">
+    <div>
+      <div class="ui-panel__title">Weather — Next 7 days</div>
+      <div class="ui-panel__subtitle" id="weatherStamp">—</div>
+    </div>
+  </div>
+
+  <div class="ui-panel__body panel-body">
+    <div class="grid grid-cols-4 gap-3 text-sm">
+      <div class="p-3 rounded-xl bg-blue-50 border border-blue-200">
+        <div class="text-[11px] text-blue-700">Now temp</div>
+        <div id="w
+
+
+  <!-- Control Panel -->
+  <div id="controlPanel" class="ui-panel ui-panel--control top-4 left-4 w-80">
+  <div class="ui-panel__header drag-handle">
+    <div>
+      <div class="ui-panel__title">Codogno Digital Twin</div>
+      <div class="ui-panel__subtitle">Visual controls</div>
+    </div>
+    <!-- panel-tools will be injected by your enhancePanels() -->
+  </div>
+
+  <div class="ui-panel__body panel-body">
+    <div class="ui-section-title">Buildings</div>
+
+    <div>
+      <label class="block text-sm font-medium">Select Building</label>
+      <select id="buildingSelector" class="w-full">
+        <option value="">-- All Buildings --</option>
+      </select>
+    </div>
+
+    <div class="ui-section-title">Colors</div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-sm font-medium">Base Color</label>
+        <input type="color" id="colorPicker" class="w-full h-9 rounded-lg border" value="#cccccc" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium">Color Mode</label>
+        <select id="colorMode" class="w-full">
+          <option value="continuous">Continuous</option>
+          <option value="quantile" selected>Quantile (discrete)</option>
+        </select>
+      </div>
+
+      <div class="col-span-2">
+        <label class="block text-sm font-medium">Palette</label>
+        <select id="palette" class="w-full">
+          <option value="bluered">Blue→Red</option>
+          <option value="spectral" selected>Spectral</option>
+          <option value="viridis">Viridis</option>
+        </select>
+      </div>
+
+      <div class="col-span-2">
+        <label class="block text-sm font-medium">Color Bins (diversity)</label>
+        <input type="range" id="binCount" min="8" max="32" step="1" value="20" class="w-full" />
+        <div class="text-xs text-slate-500 mt-1">Bins: <span id="binCountLabel">20</span></div>
+      </div>
+    </div>
+
+    <div class="ui-section-title">Overlays</div>
+
+    <div class="ui-row">
+      <label><input type="checkbox" id="heatToggle" checked /> Show Heat Colors</label>
+    </div>
+
+    <div class="ui-row">
+      <label><input type="checkbox" id="haloToggle" checked /> Temperature Halo (UHI)</label>
+    </div>
+    <div class="text-xs text-slate-500 -mt-2">
+      Uses avg building UHI at current mode (pred/measured)
+    </div>
+
+    <div class="ui-section-title">Lighting</div>
+
+    <div class="ui-row">
+      <label><input type="checkbox" id="shadowToggle" checked /> Enable Shadows</label>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2">
+      <label class="text-sm"><input type="checkbox" id="sunOverrideToggle" /> Manual Sun</label>
+      <select id="sunHour" class="w-full text-sm">
+        <option value="6">06:00</option>
+        <option value="8">08:00</option>
+        <option value="10">10:00</option>
+        <option value="12" selected>12:00</option>
+        <option value="14">14:00</option>
+        <option value="16">16:00</option>
+        <option value="18">18:00</option>
+        <option value="20">20:00</option>
+      </select>
+    </div>
+    <div class="text-xs text-slate-500 -mt-2">Manual Sun changes lighting/shadows only.</div>
+
+    <div class="ui-section-title">Prediction</div>
+
+    <div class="ui-row">
+      <label><input type="checkbox" id="predictionToggle" checked /> Show Predicted Heat</label>
+    </div>
+    <div id="modelBadge" class="text-xs text-slate-500 -mt-2">Forecast: Holt-Winters (Web Worker)</div>
+
+    <div class="ui-section-title">Traffic</div>
+
+    <div>
+      <label class="block text-sm font-medium">Traffic Heatmap Time</label>
+      <select id="heatmapTimeSelector" class="w-full">
+        <option value="morning">Morning</option>
+        <option value="lunch">Lunch</option>
+        <option value="evening">Evening</option>
+        <option value="night">Night</option>
+      </select>
+
+      <label class="mt-2 flex items-center gap-2 text-sm">
+        <input type="checkbox" id="heatmapDotsToggle" />
+        Show Heatmap Dots
+      </label>
+    </div>
+
+    <div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" id="liveTrafficToggle" />
+        Live Traffic (TomTom)
+      </label>
+      <select id="trafficRefresh" class="w-full mt-2">
+        <option value="15" selected>Refresh: 15s</option>
+        <option value="30">Refresh: 30s</option>
+        <option value="60">Refresh: 60s</option>
+      </select>
+    </div>
+  </div>
+</div>
+
 
 <div>
   <label class="inline-flex items-center">
