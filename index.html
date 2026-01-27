@@ -1642,6 +1642,120 @@ async function refreshICT(){
     setInterval(refreshICT, 60_000);
 
     // ==========================
+// Weather Forecast (Open-Meteo) (NEW)
+// ==========================
+const CODOGNO = { lat: 45.165, lon: 9.703 }; // your town center
+let weatherChart = null;
+let latestWeatherForecast = null; // keep forecast in memory for halo updates
+
+function ensureWeatherChart(){
+  if (weatherChart) return weatherChart;
+  const ctx = document.getElementById("weatherChart").getContext("2d");
+
+  weatherChart = new Chart(ctx, {
+    data: { datasets: [] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      animation: false,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { type: "time", time: { unit: "day" } },
+        y: { position: "left", title: { display: true, text: "Temp (°C)" } },
+        y1:{ position: "right", title: { display: true, text: "Precip (mm)" }, beginAtZero:true, grid:{ drawOnChartArea:false } }
+      },
+      plugins: { legend: { display: true, position: "top" } },
+      elements: { point: { radius: 0 }, line: { tension: 0.25 } }
+    }
+  });
+
+  return weatherChart;
+}
+
+async function fetchOpenMeteoForecast(){
+  // Hourly: temp, humidity, precip, wind. Timezone forced to Europe/Rome.
+  const url =
+    `https://api.open-meteo.com/v1/forecast` +
+    `?latitude=${CODOGNO.lat}&longitude=${CODOGNO.lon}` +
+    `&hourly=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m` +
+    `&timezone=Europe%2FRome`;
+
+  const r = await fetch(url, { cache: "no-store" });
+  if (!r.ok) throw new Error("Open-Meteo fetch failed");
+  const j = await r.json();
+  latestWeatherForecast = j;
+  return j;
+}
+
+function renderWeatherPanel(forecastJson){
+  const stamp = document.getElementById("weatherStamp");
+  stamp.textContent = `updated ${new Date().toLocaleTimeString()}`;
+
+  const h = forecastJson?.hourly;
+  if (!h?.time?.length) return;
+
+  // Find “now” index: closest hourly time
+  const now = Date.now();
+  let iNow = 0;
+  for (let i=0;i<h.time.length;i++){
+    const t = new Date(h.time[i]).getTime();
+    if (t <= now) iNow = i; else break;
+  }
+
+  const nowTemp = h.temperature_2m?.[iNow];
+  const nowWind = h.wind_speed_10m?.[iNow];
+  const nowHum  = h.relative_humidity_2m?.[iNow];
+  const nowRain = h.precipitation?.[iNow];
+
+  document.getElementById("wNowTemp").textContent = Number.isFinite(nowTemp) ? `${nowTemp.toFixed(1)} °C` : "—";
+  document.getElementById("wNowWind").textContent = Number.isFinite(nowWind) ? `${nowWind.toFixed(1)} km/h` : "—";
+  document.getElementById("wNowHum").textContent  = Number.isFinite(nowHum)  ? `${nowHum.toFixed(0)} %` : "—";
+  document.getElementById("wNowRain").textContent = Number.isFinite(nowRain) ? `${nowRain.toFixed(1)} mm` : "—";
+
+  // Build chart points (hourly series)
+  const ptsTemp = [];
+  const ptsRain = [];
+  for (let i=0;i<h.time.length;i++){
+    const t = new Date(h.time[i]).getTime();
+    const temp = Number(h.temperature_2m?.[i]);
+    const rain = Number(h.precipitation?.[i]);
+    if (Number.isFinite(t) && Number.isFinite(temp)) ptsTemp.push({ x:t, y:temp });
+    if (Number.isFinite(t) && Number.isFinite(rain)) ptsRain.push({ x:t, y:rain });
+  }
+
+  const ch = ensureWeatherChart();
+  ch.data.datasets = [
+    {
+      type: "line",
+      label: "Temperature (°C)",
+      data: ptsTemp,
+      borderWidth: 2
+    },
+    {
+      type: "bar",
+      label: "Precipitation (mm)",
+      yAxisID: "y1",
+      data: ptsRain,
+      borderWidth: 0
+    }
+  ];
+  ch.update();
+}
+
+async function refreshWeatherForecast(){
+  try{
+    const j = await fetchOpenMeteoForecast();
+    renderWeatherPanel(j);
+    // also update halo if enabled
+    updateTemperatureHaloFromForecast();
+  }catch(e){
+    console.warn("Weather forecast error:", e);
+  }
+}
+
+
+    // ==========================
     // Kickoff
     // ==========================
     startCesiumApp();
