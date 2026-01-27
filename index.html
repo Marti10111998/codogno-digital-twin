@@ -1313,6 +1313,11 @@ building.properties.stable_id = stableId;
       await fetchUHIAndUpdate();
       setInterval(fetchUHIAndUpdate, 60_000);
 
+      // Weather forecast (Open-Meteo)
+await refreshWeatherForecast();
+setInterval(refreshWeatherForecast, 15 * 60_000); // every 15 minutes
+
+
       setInterval(()=>{ pruneOldData(); saveTsStore(); }, 5*60*1000);
 
   
@@ -1826,6 +1831,7 @@ function updateTemperatureHaloFromForecast(){
         { id:'#pollutionPanel',      handle:'.drag-handle' },
         { id:'#pollutionChartPanel', handle:'.drag-handle' },
         { id:'#ictPanel',            handle:'.drag-handle' },
+        { id:'#weatherPanel', handle:'.drag-handle' },
       ];
 
       PANELS.forEach(cfg=>{
