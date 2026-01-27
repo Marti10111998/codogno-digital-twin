@@ -134,6 +134,21 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   backdrop-filter: blur(8px);
 }
 
+/* === UHI LEGEND: force classic dark overlay style === */
+#uhiLegendRight{
+  background: rgba(0,0,0,0.6) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 6px 14px rgba(0,0,0,.25) !important;
+  backdrop-filter: blur(2px) !important;
+}
+
+/* prevent panel system from whitening the legend */
+#uhiLegendRight.panel{
+  background: rgba(0,0,0,0.6) !important;
+}
+
+
 /* Header that stays visible when collapsed (because enhancePanels hides .panel-body only) */
 .ui-header{
   display:flex;
