@@ -1830,38 +1830,6 @@ async function refreshWeatherForecast(){
   }
 }
 
-// ==========================
-// Temperature Halo (Ground overlay) (NEW)
-// ==========================
-let tempHaloEntity = null;
-
-// Simple blue→red mapping for temperature
-function tempToHaloColor(tempC){
-  // Clamp roughly between -5°C and 40°C
-  const t = Math.max(-5, Math.min(40, tempC));
-  const p = (t + 5) / 45; // 0..1
-  // Hue: 240 (blue) -> 0 (red)
-  const hue = (1 - p) * 240;
-  return Cesium.Color.fromHsl(hue/360, 1.0, 0.5, 0.25); // alpha inside here
-}
-
-function ensureTemperatureHalo(){
-  if (!viewer) return;
-  if (tempHaloEntity) return;
-
-  tempHaloEntity = viewer.entities.add({
-    id: "temp_halo",
-    position: Cesium.Cartesian3.fromDegrees(CODOGNO.lon, CODOGNO.lat, 0),
-    ellipse: {
-      semiMajorAxis: 1800.0, // meters (adjust as you like)
-      semiMinorAxis: 1800.0,
-      material: Cesium.Color.BLUE.withAlpha(0.25),
-      height: 0,
-      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-      outline: false
-    }
-  });
-}
 
 function updateTemperatureHaloFromForecast(){
   // Only works after viewer is created + forecast fetched
