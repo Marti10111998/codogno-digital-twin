@@ -180,11 +180,35 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   <div class="text-[11px] text-gray-600 mt-1">Uses avg building UHI at current mode (pred/measured)</div>
 </div>
 
-<div>
+<div class="col-span-2">
   <label class="inline-flex items-center">
     <input type="checkbox" id="shadowToggle" checked class="mr-2" /> Enable Shadows
   </label>
+
+  <div class="mt-2 grid grid-cols-2 gap-2">
+    <label class="inline-flex items-center text-sm">
+      <input type="checkbox" id="sunOverrideToggle" class="mr-2" />
+      Manual Sun
+    </label>
+
+    <select id="sunHour" class="w-full border rounded px-2 py-1 text-sm">
+      <option value="6">06:00</option>
+      <option value="8">08:00</option>
+      <option value="10">10:00</option>
+      <option value="12" selected>12:00</option>
+      <option value="14">14:00</option>
+      <option value="16">16:00</option>
+      <option value="18">18:00</option>
+      <option value="20">20:00</option>
+    </select>
+  </div>
+
+  <div class="text-[11px] text-gray-600 mt-1">
+    Manual Sun changes lighting/shadows only.
+  </div>
 </div>
+
+
 
       <div class="col-span-2">
         <label class="inline-flex items-center"><input type="checkbox" id="predictionToggle" checked class="mr-2" /> Show Predicted Heat</label>
