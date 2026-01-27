@@ -167,26 +167,25 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
         <div class="text-xs text-gray-600 mt-1">Bins: <span id="binCountLabel">20</span></div>
       </div>
 
-      <div class="col-span-2">
-        <label class="block font-medium">Time of Day</label>
-        <input type="range" id="timeSlider" min="0" max="24" step="1" value="12" class="w-full" />
-        <div class="text-sm text-gray-600 flex items-center justify-between">
-          <span id="timeLabel">12:00</span>
-          <div class="space-x-2">
-            <button data-mins="0"  class="snapBtn text-xs px-2 py-1 rounded bg-gray-100">Now</button>
-            <button data-mins="10" class="snapBtn text-xs px-2 py-1 rounded bg-gray-100">+10m</button>
-            <button data-mins="30" class="snapBtn text-xs px-2 py-1 rounded bg-gray-100">+30m</button>
-            <button data-mins="60" class="snapBtn text-xs px-2 py-1 rounded bg-gray-100">+60m</button>
-          </div>
-        </div>
-      </div>
+      <div>
+  <label class="inline-flex items-center">
+    <input type="checkbox" id="heatToggle" checked class="mr-2" /> Show Heat Colors
+  </label>
+</div>
 
-      <div>
-        <label class="inline-flex items-center"><input type="checkbox" id="heatToggle" checked class="mr-2" /> Show Heat Colors</label>
-      </div>
-      <div>
-        <label class="inline-flex items-center"><input type="checkbox" id="shadowToggle" checked class="mr-2" /> Enable Shadows</label>
-      </div>
+<div>
+  <label class="inline-flex items-center">
+    <input type="checkbox" id="haloToggle" checked class="mr-2" /> Temperature Halo (UHI)
+  </label>
+  <div class="text-[11px] text-gray-600 mt-1">Uses avg building UHI at current mode (pred/measured)</div>
+</div>
+
+<div>
+  <label class="inline-flex items-center">
+    <input type="checkbox" id="shadowToggle" checked class="mr-2" /> Enable Shadows
+  </label>
+</div>
+
       <div class="col-span-2">
         <label class="inline-flex items-center"><input type="checkbox" id="predictionToggle" checked class="mr-2" /> Show Predicted Heat</label>
         <div id="modelBadge" class="text-[11px] text-gray-600 mt-1">Forecast: Holt-Winters (Web Worker)</div>
@@ -782,6 +781,82 @@ const DEVICE_KEY = "device_id_v1";
     // ==========================
     // STYLES (continuous + discrete)
     // ==========================
+    // ==========================
+// UHI Halo (NEW): toggle + derived from buildings
+// ==========================
+let uhiHaloEntity = null;
+
+function ensureUhiHalo(){
+  if (!viewer) return;
+  if (uhiHaloEntity) return;
+
+  uhiHaloEntity = viewer.entities.add({
+    id: "uhi_halo",
+    position: Cesium.Cartesian3.fromDegrees(9.703, 45.165, 0), // center of Codogno (same as your weather point)
+    ellipse: {
+      semiMajorAxis: 2200.0,
+      semiMinorAxis: 2200.0,
+      material: Cesium.Color.BLUE.withAlpha(0.22),
+      height: 0,
+      heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+      outline: false
+    }
+  });
+}
+
+function removeUhiHalo(){
+  if (!viewer || !uhiHaloEntity) return;
+  viewer.entities.remove(uhiHaloEntity);
+  uhiHaloEntity = null;
+  viewer.scene.requestRender();
+}
+
+// Compute a single halo value from current building temps (predicted or sim based on your existing toggle)
+function computeAvgBuildingUHI(){
+  if (!buildings?.length) return null;
+  let sum = 0, n = 0;
+
+  for (const b of buildings){
+    const v = getEntityTemp(b); // <-- already respects predictionToggle
+    if (typeof v === "number" && isFinite(v)){
+      sum += v; n += 1;
+    }
+  }
+  if (!n) return null;
+  return sum / n;
+}
+
+function updateUhiHalo(){
+  if (!viewer) return;
+
+  const enabled = document.getElementById("haloToggle")?.checked ?? false;
+
+  if (!enabled){
+    removeUhiHalo();
+    return;
+  }
+
+  ensureUhiHalo();
+
+  const avg = computeAvgBuildingUHI();
+  if (avg == null) return;
+
+  // Use the SAME UHI color mapping you use for buildings (so it matches the legend palette)
+  // uhiToColor uses UHI_MIN/UHI_MAX — these are updated by computeCurrentUHIBounds()
+  const haloColor = uhiToColor(avg, 0.22); // alpha here
+
+  uhiHaloEntity.ellipse.material = haloColor;
+
+  // Optional: make halo size subtly react to spread (bigger if UHI higher)
+  const base = 1800.0;
+  const extra = Math.max(0, (avg - UHI_MIN)) * 120.0; // simple scaling
+  const r = Math.min(4200.0, base + extra);
+  uhiHaloEntity.ellipse.semiMajorAxis = r;
+  uhiHaloEntity.ellipse.semiMinorAxis = r;
+
+  viewer.scene.requestRender();
+}
+
     function updateStyles(){
       if (!viewer || !buildings?.length) return;
 
@@ -837,8 +912,12 @@ const DEVICE_KEY = "device_id_v1";
           building.polygon.material = color;
         }
       }
+            // Update the halo after styles/bounds are computed
+      updateUhiHalo();
+
       viewer.scene.requestRender();
     }
+
 
     // ==========================
     // Time-series chart wiring
@@ -1263,6 +1342,11 @@ Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5; // how wide to frame inside that rectan
       viewer.scene.maximumRenderTimeChange = 1/30;
       viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
       viewer.scene.globe.enableLighting = true;
+      // Improve shadow behavior (terrain/globe receives shadows)
+viewer.shadows = true;
+viewer.scene.shadowMap.enabled = true;
+viewer.scene.globe.shadows = Cesium.ShadowMode.ENABLED;
+
 
       // Load buildings
       const buildingSelector = document.getElementById("buildingSelector");
@@ -1295,6 +1379,8 @@ building.properties.stable_id = stableId;
           building.polygon.extrudedHeightReference = Cesium.HeightReference.RELATIVE_TO_GROUND;
           building.polygon.material = Cesium.Color.LIGHTGRAY.withAlpha(1.0);
           building.polygon.outline = false;
+          // Ensure extruded buildings actually cast/receive shadows
+          building.polygon.shadows = Cesium.ShadowMode.ENABLED;
         }
 
         const option = document.createElement("option");
@@ -1347,35 +1433,20 @@ setInterval(refreshWeatherForecast, 15 * 60_000); // every 15 minutes
       document.getElementById("buildingSelector").addEventListener("change", updateStyles);
       document.getElementById("heatToggle").addEventListener("change", updateStyles);
       document.getElementById("predictionToggle").addEventListener("change", updateStyles);
+      document.getElementById("haloToggle").addEventListener("change", updateStyles);
       document.getElementById("colorMode").addEventListener("change", updateStyles);
       document.getElementById("palette").addEventListener("change", updateStyles);
       document.getElementById("binCount").addEventListener("input", updateStyles);
 
       document.getElementById("shadowToggle").addEventListener("change", (e) => {
-        const enabled = e.target.checked;
-        viewer.shadows = enabled;
-        viewer.scene.shadowMap.enabled = enabled;
-        viewer.scene.requestRender();
-      });
+  const enabled = e.target.checked;
+  viewer.shadows = enabled;
+  viewer.scene.shadowMap.enabled = enabled;
+  viewer.scene.globe.shadows = enabled ? Cesium.ShadowMode.ENABLED : Cesium.ShadowMode.DISABLED;
+  viewer.scene.requestRender();
+});
 
-      // Time slider controls the Cesium clock
-      const timeSlider = document.getElementById("timeSlider");
-      const timeLabel  = document.getElementById("timeLabel");
-      function setClockHour(h){
-        timeSlider.value = h;
-        timeLabel.textContent = `${h}:00`;
-        const base = new Date(); base.setHours(h, 0, 0, 0);
-        viewer.clock.currentTime = Cesium.JulianDate.fromDate(base);
-        updateStyles();
-      }
-      timeSlider.addEventListener("input", ()=>setClockHour(parseInt(timeSlider.value)));
-      document.querySelectorAll(".snapBtn").forEach(btn => {
-        btn.addEventListener("click", ()=>{
-          const mins = parseInt(btn.dataset.mins);
-          const now = new Date(); const snap = new Date(now.getTime() + mins*60*1000);
-          setClockHour(snap.getHours());
-        });
-      });
+
 
       // ====== Traffic Heatmap dots (static) ======
       function clearHeatmap(){
