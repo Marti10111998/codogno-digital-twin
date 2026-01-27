@@ -1371,6 +1371,46 @@ viewer.shadows = true;
 viewer.scene.shadowMap.enabled = true;
 viewer.scene.globe.shadows = Cesium.ShadowMode.ENABLED;
 
+// ===== Manual Sun control (NEW) =====
+// Make sure lighting/shadows respond to clock changes
+viewer.clock.shouldAnimate = false; // we only change time when user changes dropdown
+viewer.scene.light = new Cesium.SunLight(); // ensure sun is the light source
+
+function applyShadowAndSun(){
+  const shadowsOn = document.getElementById("shadowToggle")?.checked ?? true;
+  const manualSun = document.getElementById("sunOverrideToggle")?.checked ?? false;
+  const hour      = parseInt(document.getElementById("sunHour")?.value || "12", 10);
+
+  // shadows on/off
+  viewer.shadows = shadowsOn;
+  viewer.scene.shadowMap.enabled = shadowsOn;
+  viewer.scene.globe.shadows = shadowsOn ? Cesium.ShadowMode.ENABLED : Cesium.ShadowMode.DISABLED;
+
+  // change sun position by changing Cesium clock time
+  const d = new Date();
+  if (manualSun) {
+    d.setHours(hour, 0, 0, 0);
+  } else {
+    // real "now"
+    const now = new Date();
+    d.setTime(now.getTime());
+  }
+
+  viewer.clock.currentTime = Cesium.JulianDate.fromDate(d);
+
+  // force a render (you use requestRenderMode)
+  viewer.scene.requestRender();
+}
+
+// Wire UI events (IMPORTANT)
+document.getElementById("shadowToggle")?.addEventListener("change", applyShadowAndSun);
+document.getElementById("sunOverrideToggle")?.addEventListener("change", applyShadowAndSun);
+document.getElementById("sunHour")?.addEventListener("change", applyShadowAndSun);
+
+// Apply once at startup
+applyShadowAndSun();
+
+
 
       // Load buildings
       const buildingSelector = document.getElementById("buildingSelector");
@@ -1462,13 +1502,7 @@ setInterval(refreshWeatherForecast, 15 * 60_000); // every 15 minutes
       document.getElementById("palette").addEventListener("change", updateStyles);
       document.getElementById("binCount").addEventListener("input", updateStyles);
 
-      document.getElementById("shadowToggle").addEventListener("change", (e) => {
-  const enabled = e.target.checked;
-  viewer.shadows = enabled;
-  viewer.scene.shadowMap.enabled = enabled;
-  viewer.scene.globe.shadows = enabled ? Cesium.ShadowMode.ENABLED : Cesium.ShadowMode.DISABLED;
-  viewer.scene.requestRender();
-});
+
 
 
 
