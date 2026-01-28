@@ -112,35 +112,77 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 
 /* ===== Professional panel system (drop-in) ===== */
 
+/* ===========================
+   THEME TOKENS (Light/Dark)
+   =========================== */
+
 :root{
-  --panel-bg: rgba(255,255,255,.92);
-  --panel-border: rgba(15,23,42,.12);
-  --panel-divider: rgba(15,23,42,.08);
-  --text-strong: rgba(15,23,42,.92);
-  --text-muted: rgba(15,23,42,.55);
+  /* shared */
   --focus: rgba(37,99,235,.35);
+
+  /* panel glass */
+  --panel-blur: 10px;
+  --panel-shadow: 0 12px 28px rgba(0,0,0,.14);
+
+  /* LIGHT (default) */
+  --panel-bg: rgba(255,255,255,.72);
+  --panel-border: rgba(15,23,42,.14);
+  --panel-divider: rgba(15,23,42,.10);
+
+  --text-strong: rgba(15,23,42,.92);
+  --text-muted: rgba(15,23,42,.60);
+
+  --control-bg: rgba(255,255,255,.80);
+  --control-border: rgba(15,23,42,.14);
+
+  --toolbtn-bg: rgba(15,23,42,.05);
+  --toolbtn-border: rgba(15,23,42,.10);
+
+  --panel-handle: rgba(15,23,42,.06);
+}
+
+/* DARK THEME */
+html[data-theme="dark"]{
+  --panel-bg: rgba(0,0,0,.45);
+  --panel-border: rgba(255,255,255,.16);
+  --panel-divider: rgba(255,255,255,.12);
+
+  --text-strong: rgba(255,255,255,.92);
+  --text-muted: rgba(255,255,255,.65);
+
+  --control-bg: rgba(0,0,0,.35);
+  --control-border: rgba(255,255,255,.16);
+
+  --toolbtn-bg: rgba(255,255,255,.08);
+  --toolbtn-border: rgba(255,255,255,.14);
+
+  --panel-handle: rgba(255,255,255,.08);
 }
 
 .panel{
   background: var(--panel-bg) !important;
   border: 1px solid var(--panel-border);
-  box-shadow: 0 12px 28px rgba(0,0,0,.14);
-  backdrop-filter: blur(8px);
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
 }
+
 
 /* === UHI LEGEND: force classic dark overlay style === */
+/* UHI legend uses the SAME panel system */
 #uhiLegendRight{
-  background: rgba(0,0,0,0.6) !important;
-  color: white !important;
-  border: none !important;
-  box-shadow: 0 6px 14px rgba(0,0,0,.25) !important;
-  backdrop-filter: blur(2px) !important;
+  color: var(--text-strong) !important;
 }
 
-/* prevent panel system from whitening the legend */
-#uhiLegendRight.panel{
-  background: rgba(0,0,0,0.6) !important;
+/* keep swatches readable in both themes */
+#uhiLegendRight .sw{
+  border: 1px solid rgba(255,255,255,.35);
 }
+html[data-theme="light"] #uhiLegendRight .sw{
+  border: 1px solid rgba(15,23,42,.22);
+}
+
+
 
 
 /* Header that stays visible when collapsed (because enhancePanels hides .panel-body only) */
@@ -152,7 +194,9 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   border-bottom: 1px solid var(--panel-divider);
   border-top-left-radius: 12px;
   border-top-right-radius: 12px;
+  background: var(--panel-handle); /* ✅ theme-aware header tint */
 }
+
 
 .ui-title{
   font-weight: 750;
@@ -197,12 +241,14 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 .panel input[type="number"],
 .panel input[type="text"]{
   width: 100%;
-  border: 1px solid rgba(15,23,42,.14);
+  border: 1px solid var(--control-border);     /* ✅ theme token */
   border-radius: 10px;
   padding: 6px 10px;
-  background: rgba(255,255,255,.96);
+  background: var(--control-bg);               /* ✅ theme token */
+  color: var(--text-strong);                   /* ✅ theme token */
   outline: none;
 }
+
 .panel select:focus,
 .panel input[type="number"]:focus,
 .panel input[type="text"]:focus{
@@ -225,10 +271,14 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 
 /* Make the tool buttons match the new style */
 .panel .toolbtn{
-  background: rgba(15,23,42,.05);
-  border: 1px solid rgba(15,23,42,.10);
+  background: var(--toolbtn-bg);
+  border: 1px solid var(--toolbtn-border);
+  color: var(--text-strong);
 }
-.panel .toolbtn:hover{ background: rgba(15,23,42,.08); }
+.panel .toolbtn:hover{
+  filter: brightness(1.1);
+}
+
 
 /* =========================================================
    Control panel: fit on one screen (smaller text + scroll)
@@ -563,26 +613,10 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
    Pollution tiles under UHI legend
    ============================ */
 
-#uhiPollutionBlock{
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255,255,255,.25);
-}
+.uhiSubTitle{ color: var(--text-muted); }
+.uhiStamp{ color: var(--text-muted); }
+#uhiPollutionBlock{ border-top: 1px solid var(--panel-divider); }
 
-.uhiSubTitle{
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  margin-bottom: 6px;
-  color: rgba(255,255,255,.85);
-}
-
-.uhiStamp{
-  font-size: 10px;
-  margin-top: 6px;
-  color: rgba(255,255,255,.65);
-}
 
 /* ============================
    Pollution tiles – danger coloring restored
@@ -657,6 +691,11 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
       <div class="ui-subtitle">Visualization controls</div>
     </div>
     <div style="margin-left:auto;" class="ui-subtitle">⠿ Drag</div>
+    <button id="themeToggle"
+  class="toolbtn"
+  style="margin-left:10px;"
+  title="Toggle theme"
+  type="button">☾</button>
   </div>
 
   <!-- Body (enhancePanels will keep this collapsible) -->
@@ -1232,6 +1271,29 @@ const DEVICE_KEY = "device_id_v1";
       for(let i=0;i<breaks.length;i++){ if(x <= breaks[i]) return hexToCesium(colors[i], alpha); }
       return hexToCesium(colors[colors.length-1], alpha);
     }
+
+    (function themeInit(){
+  const KEY = "cdt_theme_v1";
+  const html = document.documentElement;
+
+  // default: system
+  const saved = localStorage.getItem(KEY);
+  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const start = saved || (prefersDark ? "dark" : "light");
+
+  html.dataset.theme = start;
+
+  const btn = document.getElementById("themeToggle");
+  const paintIcon = () => { if (btn) btn.textContent = (html.dataset.theme === "dark" ? "☀" : "☾"); };
+  paintIcon();
+
+  btn?.addEventListener("click", ()=>{
+    html.dataset.theme = (html.dataset.theme === "dark" ? "light" : "dark");
+    localStorage.setItem(KEY, html.dataset.theme);
+    paintIcon();
+  });
+})();
+
 
     // ===== Legend helpers (RIGHT ONLY) =====
     function renderDiscreteLegends(breaksAsc, colors, minVal){
