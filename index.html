@@ -335,6 +335,10 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   max-width: 340px;
 }
 
+/* pill becomes draggable */
+#ictPill.dragging { opacity: .95; }
+
+
 .ictDot{
   width: 10px;
   height: 10px;
@@ -693,10 +697,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 // Optional backend (predict/backfill); app works without it
 const POLLUTION_API = "https://uneducative-eximiously-zada.ngrok-free.dev";
 
-// Add once (not inside refreshICT)
-document.getElementById("ictPill")?.addEventListener("click", () => {
-  window.open(`${POLLUTION_API}/health`, "_blank");
-});
 
 
 // ======== CLOUD SYNC SETTINGS (NEW) ========
@@ -2165,6 +2165,76 @@ async function refreshWeatherForecast(){
     console.warn("Weather forecast error:", e);
   }
 }
+
+// ===== Draggable ICT pill (no click) =====
+(function makeIctPillDraggable(){
+  const pill = document.getElementById("ictPill");
+  if (!pill) return;
+
+  // switch from fixed anchor to movable coordinates
+  pill.style.position = "fixed";
+  pill.style.left = "";
+  pill.style.top  = "";
+  // ensure it has explicit starting coords (based on current fixed top/right)
+  const r = pill.getBoundingClientRect();
+  pill.style.right = "auto";
+  pill.style.bottom = "auto";
+  pill.style.left = `${r.left}px`;
+  pill.style.top  = `${r.top}px`;
+
+  let dragging = false;
+  let startX = 0, startY = 0;
+  let startLeft = 0, startTop = 0;
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  const onDown = (ev) => {
+    // don't start drag from interactive controls (none inside pill, but safe)
+    if (ev.target.closest("input,select,textarea,button,label")) return;
+
+    dragging = true;
+    pill.classList.add("dragging");
+
+    const p = ev.touches ? ev.touches[0] : ev;
+    startX = p.clientX;
+    startY = p.clientY;
+
+    startLeft = parseFloat(pill.style.left) || r.left;
+    startTop  = parseFloat(pill.style.top)  || r.top;
+
+    ev.preventDefault();
+  };
+
+  const onMove = (ev) => {
+    if (!dragging) return;
+
+    const p = ev.touches ? ev.touches[0] : ev;
+    const dx = p.clientX - startX;
+    const dy = p.clientY - startY;
+
+    const rect = pill.getBoundingClientRect();
+    const nextLeft = clamp(startLeft + dx, 8, window.innerWidth  - rect.width  - 8);
+    const nextTop  = clamp(startTop  + dy, 8, window.innerHeight - rect.height - 8);
+
+    pill.style.left = `${nextLeft}px`;
+    pill.style.top  = `${nextTop}px`;
+
+    ev.preventDefault();
+  };
+
+  const onUp = () => {
+    dragging = false;
+    pill.classList.remove("dragging");
+  };
+
+  pill.addEventListener("mousedown", onDown);
+  pill.addEventListener("touchstart", onDown, { passive: false });
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("touchmove", onMove, { passive: false });
+  window.addEventListener("mouseup", onUp);
+  window.addEventListener("touchend", onUp);
+})();
+
 
 
 
