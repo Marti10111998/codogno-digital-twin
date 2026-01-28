@@ -739,6 +739,21 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   grid-row: 2;
 }
 
+/* Header: single-row layout */
+.ui-header{
+  display: grid;
+  grid-template-columns: 1fr auto; /* title | tools */
+  align-items: center;
+  gap: 12px;                       /* ⬅️ the “distance” you want */
+  padding: 10px 12px;
+}
+
+/* Tools stay in the same row, right side */
+.panel .panel-tools{
+  grid-column: 2;
+  display: flex;
+  gap: 6px;
+}
 
 
 /* Buttons styling (unchanged, just consistent) */
