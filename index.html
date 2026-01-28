@@ -141,8 +141,8 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   --panel-handle: rgba(15,23,42,.06);
 }
 
-/* DARK THEME */
-html[data-theme="dark"]{
+/* DARK THEME (PER-PANEL) */
+.panel[data-theme="dark"]{
   --panel-bg: rgba(0,0,0,.45);
   --panel-border: rgba(255,255,255,.16);
   --panel-divider: rgba(255,255,255,.12);
@@ -158,6 +158,7 @@ html[data-theme="dark"]{
 
   --panel-handle: rgba(255,255,255,.08);
 }
+
 
 .panel{
   background: var(--panel-bg) !important;
@@ -178,9 +179,10 @@ html[data-theme="dark"]{
 #uhiLegendRight .sw{
   border: 1px solid rgba(255,255,255,.35);
 }
-html[data-theme="light"] #uhiLegendRight .sw{
+.panel[data-theme="light"] #uhiLegendRight .sw{
   border: 1px solid rgba(15,23,42,.22);
 }
+
 
 
 
@@ -691,11 +693,7 @@ html[data-theme="light"] #uhiLegendRight .sw{
       <div class="ui-subtitle">Visualization controls</div>
     </div>
     <div style="margin-left:auto;" class="ui-subtitle">⠿ Drag</div>
-    <button id="themeToggle"
-  class="toolbtn"
-  style="margin-left:10px;"
-  title="Toggle theme"
-  type="button">☾</button>
+    
   </div>
 
   <!-- Body (enhancePanels will keep this collapsible) -->
@@ -1271,28 +1269,6 @@ const DEVICE_KEY = "device_id_v1";
       for(let i=0;i<breaks.length;i++){ if(x <= breaks[i]) return hexToCesium(colors[i], alpha); }
       return hexToCesium(colors[colors.length-1], alpha);
     }
-
-    (function themeInit(){
-  const KEY = "cdt_theme_v1";
-  const html = document.documentElement;
-
-  // default: system
-  const saved = localStorage.getItem(KEY);
-  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const start = saved || (prefersDark ? "dark" : "light");
-
-  html.dataset.theme = start;
-
-  const btn = document.getElementById("themeToggle");
-  const paintIcon = () => { if (btn) btn.textContent = (html.dataset.theme === "dark" ? "☀" : "☾"); };
-  paintIcon();
-
-  btn?.addEventListener("click", ()=>{
-    html.dataset.theme = (html.dataset.theme === "dark" ? "light" : "dark");
-    localStorage.setItem(KEY, html.dataset.theme);
-    paintIcon();
-  });
-})();
 
 
     // ===== Legend helpers (RIGHT ONLY) =====
@@ -2806,13 +2782,49 @@ setInterval(refreshICT, 60_000);
     // ==========================
     // Panels: drag + collapse + resize
     // ==========================
+
+// ==========================
+// Panels: drag + collapse + resize
+// ==========================
+
+// ✅ PASTE THIS WHOLE FUNCTION HERE (ABOVE enhancePanels)
+function initPanelThemes(panelEls){
+  const prefersDark =
+    window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+  for (const el of panelEls){
+    const id = el.id || el.getAttribute("data-panel-id") || "panel";
+    const KEY = `cdt_panel_theme_v1:${id}`;
+
+    let saved = null;
+    try { saved = localStorage.getItem(KEY); } catch {}
+    const start = saved || (prefersDark ? "dark" : "light");
+
+    el.dataset.theme = start;
+
+    el.__toggleTheme = () => {
+      el.dataset.theme = (el.dataset.theme === "dark" ? "light" : "dark");
+      try { localStorage.setItem(KEY, el.dataset.theme); } catch {}
+    };
+  }
+}
+
+
     (function enhancePanels(){
 const PANELS = [
   { id:'#controlPanel',   handle:'.drag-handle' },
   { id:'#uhiLegendRight', handle:'.drag-handle' },
-  // bottom-right stack panels are fixed-layout; don't auto-absolute them
+  { id:'#envPanel',       handle:'.drag-handle' },
+  { id:'#weatherPanel',   handle:'.drag-handle' },
 ];
 
+
+  // ✅ Init per-panel themes (once)
+  const panelEls = PANELS
+    .map(p => document.querySelector(p.id))
+    .filter(Boolean);
+
+  initPanelThemes(panelEls);
 
 
       PANELS.forEach(cfg=>{
@@ -2841,14 +2853,27 @@ const PANELS = [
           const tools = document.createElement('div');
           tools.className = 'panel-tools';
           tools.innerHTML = `
-            <div class="toolbtn" title="Collapse/Expand" data-act="toggle">−</div>
-            <div class="toolbtn" title="Reset size" data-act="reset">⤺</div>
-          `;
+  <div class="toolbtn" title="Toggle theme (this panel)" data-act="theme">☾</div>
+  <div class="toolbtn" title="Collapse/Expand" data-act="toggle">−</div>
+  <div class="toolbtn" title="Reset size" data-act="reset">⤺</div>
+`;
+
+// ✅ set icon based on current theme at startup
+const themeBtn = tools.querySelector('[data-act="theme"]');
+if (themeBtn) themeBtn.textContent = (el.dataset.theme === "dark" ? "☀" : "☾");
+
+
           el.appendChild(tools);
           tools.addEventListener('click', (e)=>{
             const btn = e.target.closest('.toolbtn'); if (!btn) return;
-            if (btn.dataset.act === 'toggle') el.classList.toggle('panel-collapsed');
-            if (btn.dataset.act === 'reset') { el.style.width=''; el.style.height=''; }
+            if (btn.dataset.act === 'theme') {
+  el.__toggleTheme?.();
+  // icon flip
+  btn.textContent = (el.dataset.theme === "dark" ? "☀" : "☾");
+}
+if (btn.dataset.act === 'toggle') el.classList.toggle('panel-collapsed');
+if (btn.dataset.act === 'reset') { el.style.width=''; el.style.height=''; }
+
           });
         }
 
@@ -2889,8 +2914,11 @@ const PANELS = [
         const grip = el.querySelector(cfg.handle);
         if (!grip) return;
 
-        el.style.position = 'absolute';
-        const state = { x:0, y:0, left:0, top:0, dragging:false };
+// ✅ Don't break bottom-right stack panels
+const inBrStack = el.closest("#brStack");
+if (!inBrStack) el.style.position = "absolute";
+
+const state = { x:0, y:0, left:0, top:0, dragging:false };
 
         const clampToViewport = (left, top, w, h)=>{
           const pad = 8;
