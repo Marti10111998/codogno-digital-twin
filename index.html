@@ -731,14 +731,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   grid-row: 1;
 }
 
-.ui-header{
-  display: grid;
-  grid-template-rows: auto auto;
-}
-.panel .panel-tools{
-  grid-row: 2;
-}
-
 /* Header: single-row layout */
 .ui-header{
   display: grid;
@@ -763,6 +755,33 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   line-height: 20px;
   border-radius: 7px;
   font-size: 11px;
+
+  /* Header: single row, classic layout */
+.ui-header{
+  position: relative;
+  display: flex;
+  align-items: flex-start;      /* title stays up */
+  gap: 6px;                     /* vertical distance inside title block */
+  padding: 10px 12px;
+  padding-right: 70px;          /* reserve space for buttons */
+}
+
+/* Title block keeps title + subtitle stacked */
+.ui-header > div:first-child{
+  display: flex;
+  flex-direction: column;
+  gap: 1px;                     /* distance between title & subtitle */
+}
+
+/* Buttons exactly like before: top-right */
+.panel .panel-tools{
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+}
+
 }
 
 /* ============================
