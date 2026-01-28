@@ -534,9 +534,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 .pollTile .v{ font-weight: 800; font-size: 12px; }
 .pollTile .u{ font-size: 10px; opacity: .75; margin-left: 6px; }
 
-/* keep chart from stealing too much height */
-#envPanel canvas#pollutionChart{ max-height: 170px !important; }
-
 
 /* Make env panel content scroll inside the panel */
 #envPanel .ui-body{
@@ -560,7 +557,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 
 
 /* Smaller chart area so it doesn't grow the panel */
-#envPanel canvas#pollutionChart{ max-height: 160px !important; }
 #envPanel canvas#wTrendChart{ max-height: 140px !important; }
 
 #ictPill{
@@ -619,7 +615,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 }
 
 /* Keep charts compact inside bottom-right */
-#envPanel canvas#pollutionChart{ max-height: 160px !important; }
 #weatherPanel canvas#wTrendChart{ max-height: 140px !important; }
 
 /* Optional: make 7-day row wrap nicely in narrower widths */
@@ -799,6 +794,29 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 
 #envPanel canvas{
   max-height: none !important;
+}
+/* ===== Bigger Pollution chart (single source of truth) ===== */
+#envPanel .pollChartWrap{
+  height: 520px;           /* <-- increase this (e.g. 520–700) */
+}
+
+/* Let Chart.js fill the wrapper */
+#envPanel #pollutionChart{
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* Ensure no hidden caps apply */
+#envPanel canvas#pollutionChart{
+  max-height: none !important;
+}
+#envPanel{
+  height: 60vh;                 /* starting size */
+}
+#envPanel .pollChartWrap{
+  height: calc(100% - 210px);   /* chart grows/shrinks with panel */
+  min-height: 320px;
 }
 
 
