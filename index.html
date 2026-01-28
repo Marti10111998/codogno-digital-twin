@@ -731,28 +731,14 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   grid-row: 1;
 }
 
-/* Header: single row */
 .ui-header{
-  display: flex !important;
-  align-items: center;
-  gap: 10px;
-  position: relative;
-  padding: 10px 12px;
+  display: grid;
+  grid-template-rows: auto auto;
 }
-
-/* Tools pinned top-right INSIDE header */
 .panel .panel-tools{
-  position: absolute !important;
-  top: 8px;
-  right: 10px;
-  display: flex;
-  gap: 6px;
+  grid-row: 2;
 }
 
-/* Give header right padding so title doesn't collide with buttons */
-.ui-header{
-  padding-right: 70px;
-}
 
 
 /* Buttons styling (unchanged, just consistent) */
