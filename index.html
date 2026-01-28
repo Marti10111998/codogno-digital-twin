@@ -30,7 +30,7 @@
 html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. */
 
 /* Panels: tighter padding/rounding + narrower widths */
-#controlPanel, #pollutionPanel, #pollutionChartPanel, #ictPanel {
+#controlPanel, #pollutionPanel, #pollutionChartPanel {
   padding: 12px !important;
   border-radius: 10px !important;
   line-height: 1.25;
@@ -38,13 +38,11 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 /*#controlPanel        { width: 16rem !important; }  /* ~256px (was w-80 / 320px) */
 #pollutionPanel      { width: 13rem !important; }  /* ~208px (was w-72 / 288px) */
 #pollutionChartPanel { width: 760px !important; }  /* (was 900px) */
-#ictPanel { width: 380px !important; padding: 10px !important; }
 
 /* Drag handles & headings smaller */
 .drag-handle { font-size: 10px !important; padding: 2px 4px !important; }
 #controlPanel .text-lg,
 #pollutionChartPanel .text-lg,
-#ictPanel .text-lg { font-size: 1rem !important; }  /* ~base size instead of large */
 
 /* Labels / helper text nudge down a bit */
 #controlPanel .font-medium { font-weight: 600; font-size: .9rem !important; }
@@ -2288,7 +2286,6 @@ function updateTemperatureHaloFromForecast(){
         { id:'#uhiLegendRight',      handle:'.drag-handle' },
         { id:'#pollutionPanel',      handle:'.drag-handle' },
         { id:'#pollutionChartPanel', handle:'.drag-handle' },
-        { id:'#ictPanel',            handle:'.drag-handle' },
         { id:'#weatherPanel', handle:'.drag-handle' },
       ];
 
