@@ -2588,9 +2588,9 @@ async function refreshWeatherForecast(){
       b.style.borderColor = on ? "rgba(37,99,235,.25)" : "rgba(15,23,42,.12)";
     });
 
-    // Charts often need a resize when shown after being hidden
-    if (id === "envTabPollution" && window.pollutionChart) pollutionChart.resize();
-    if (id === "envTabWeather"   && window.wTrendChart)    wTrendChart.resize();
+// Charts often need a resize when shown after being hidden
+if (id === "envTabPollution" && pollutionChart) pollutionChart.resize();
+if (id === "envTabWeather"   && wTrendChart)    wTrendChart.resize();
   }
 
   btns.forEach(b => b.addEventListener("click", ()=> setActive(b.dataset.tab)));
