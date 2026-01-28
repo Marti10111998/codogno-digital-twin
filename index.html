@@ -501,14 +501,16 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   .envGrid{ grid-template-columns: 1fr; }
 }
 
-/* ===== Pollution: chart + compact tiles next to it ===== */
-/* ===== Pollution: chart + tight tiles next to it ===== */
+/* Pollution layout: chart should use FULL width */
 .pollRow{
-  display: grid;
-  grid-template-columns: 1fr 160px; /* ✅ tighter tiles */
-  gap: 8px;
-  align-items: start;
+  display: block !important;   /* no second column */
 }
+
+/* Chart wrapper fills panel width */
+#envPanel .pollChartWrap{
+  width: 100% !important;
+}
+
 
 @media (max-width: 980px){
   .pollRow{
