@@ -773,12 +773,18 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
       </div>
     </div>
 
-    <!-- 7-day cards row -->
+<!-- 7-day cards row -->
 <div id="w7Row" class="mt-3 grid grid-cols-7 gap-2"></div>
 
-    <div class="mt-2 text-[12px] text-gray-600">
-      7-day outlook • Daily min/max temp • Precip sum • Uses timezone Europe/Rome
-    </div>
+<!-- Line graph (under cards) -->
+<div class="mt-3">
+  <canvas id="wTrendChart" height="90"></canvas>
+</div>
+
+<div class="mt-2 text-[12px] text-gray-600">
+  Next 48h temperature trend • 7-day outlook • Uses timezone Europe/Rome
+</div>
+
   </div> <!-- /.ui-body -->
 </div>   <!-- /#weatherPanel -->
 
@@ -2380,6 +2386,78 @@ function render7DayCards(forecastJson){
   row.innerHTML = html;
 }
 
+let wTrendChart = null;
+
+function ensureWeatherTrendChart(){
+  const canvas = document.getElementById("wTrendChart");
+  if (!canvas) return null;
+
+  const ctx = canvas.getContext("2d");
+  if (wTrendChart) return wTrendChart;
+
+  wTrendChart = new Chart(ctx, {
+    type: "line",
+    data: { datasets: [] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: true, position: "top" },
+        tooltip: {
+          callbacks: {
+            label: (tt) => `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(1)} °C`
+          }
+        }
+      },
+      scales: {
+        x: { type: "time", time: { unit: "hour" } },
+        y: { title: { display: true, text: "°C" } }
+      },
+      elements: { point: { radius: 0 }, line: { tension: 0.25 } }
+    }
+  });
+
+  return wTrendChart;
+}
+
+function renderWeatherTrendChart(forecastJson){
+  const ch = ensureWeatherTrendChart();
+  if (!ch) return;
+
+  const h = forecastJson?.hourly;
+  if (!h?.time?.length) return;
+
+  const now = Date.now();
+
+  // pick the "now" index (same logic as your panel)
+  let iNow = 0;
+  for (let i=0;i<h.time.length;i++){
+    const t = new Date(h.time[i]).getTime();
+    if (t <= now) iNow = i; else break;
+  }
+
+  // Next 48 hours of temps
+  const N = 48;
+  const pts = [];
+  for (let i=iNow; i<Math.min(h.time.length, iNow + N); i++){
+    const t = new Date(h.time[i]).getTime();
+    const v = Number(h.temperature_2m?.[i]);
+    if (Number.isFinite(t) && Number.isFinite(v)) pts.push({ x: t, y: v });
+  }
+
+  ch.data.datasets = [{
+    label: "Temperature (next 48h)",
+    data: pts,
+    borderWidth: 2,
+    backgroundColor: "transparent"
+  }];
+
+  ch.update();
+}
+
 
 function renderWeatherPanel(forecastJson){
   const stamp = document.getElementById("weatherStamp");
@@ -2408,6 +2486,7 @@ function renderWeatherPanel(forecastJson){
 
   // ✅ render the 7-day cards
   render7DayCards(forecastJson);
+  renderWeatherTrendChart(forecastJson);
 }
 
 async function refreshWeatherForecast(){
