@@ -693,6 +693,12 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 // Optional backend (predict/backfill); app works without it
 const POLLUTION_API = "https://uneducative-eximiously-zada.ngrok-free.dev";
 
+// Add once (not inside refreshICT)
+document.getElementById("ictPill")?.addEventListener("click", () => {
+  window.open(`${POLLUTION_API}/health`, "_blank");
+});
+
+
 // ======== CLOUD SYNC SETTINGS (NEW) ========
 const CLOUD_SYNC_ENABLED = !!POLLUTION_API;
 const SYNC_KEY = "pollution_is_sync_v1";
@@ -2000,8 +2006,6 @@ async function refreshICT(){
   const mainEl    = document.getElementById("ictPillMain");
   const subEl     = document.getElementById("ictPillSub");
 
-  document.getElementById("ictPill")?.addEventListener("click", ()=> window.open(`${POLLUTION_API}/health`, "_blank"));
-
 
   // If pill is missing, just bail silently
   if (!pill || !dotEl || !mainEl || !subEl) return;
@@ -2168,6 +2172,10 @@ async function refreshWeatherForecast(){
     // Kickoff
     // ==========================
     startCesiumApp();
+
+    // ✅ start ICT health polling (once + every 60s)
+refreshICT();
+setInterval(refreshICT, 60_000);
 
     // ==========================
     // Panels: drag + collapse + resize
