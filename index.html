@@ -110,6 +110,39 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
       cursor:nwse-resize; opacity:.6;
     }
 
+    /* Reserve space for top-right tool buttons */
+.ui-header{
+  position: relative;
+  padding-right: 86px; /* space for ☾ − ⤺ */
+}
+
+/* Align tools vertically to the header center */
+.panel .panel-tools{
+  top: 50%;
+  transform: translateY(-50%);
+  right: 10px;
+}
+
+/* Give the pollution chart a real, larger drawing area */
+#envPanel .pollChartWrap{
+  width: 100%;
+  height: 220px;      /* "full length" + more downward */
+  margin-top: 8px;
+}
+
+/* Let Chart.js fill the wrapper */
+#envPanel #pollutionChart{
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Remove the old cap (override it) */
+#envPanel canvas#pollutionChart{
+  max-height: none !important;
+}
+
+
+
 /* ===== Professional panel system (drop-in) ===== */
 
 /* ===========================
@@ -870,9 +903,10 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
       <!-- Chart + tiles -->
       <div class="pollRow">
         <div>
-          <div class="mt-2">
-            <canvas id="pollutionChart" height="120"></canvas>
-          </div>
+          <div class="pollChartWrap">
+  <canvas id="pollutionChart"></canvas>
+</div>
+
           <div class="mt-2 text-[12px] text-gray-600">
             Tips: hover for exact values • peaks highlighted • change granularity for smoother trends.
           </div>
@@ -2911,82 +2945,101 @@ if (btn.dataset.act === 'reset') { el.style.width=''; el.style.height=''; }
         }
 
         // dragging
-        const grip = el.querySelector(cfg.handle);
-        if (!grip) return;
-
-// ✅ Don't break bottom-right stack panels
-const inBrStack = el.closest("#brStack");
-if (!inBrStack) el.style.position = "absolute";
-
+const grip = el.querySelector(cfg.handle);
+if (!grip) return;
 const state = { x:0, y:0, left:0, top:0, dragging:false };
 
-        const clampToViewport = (left, top, w, h)=>{
-          const pad = 8;
-          const maxL = window.innerWidth  - w - pad;
-          const maxT = window.innerHeight - h - pad;
-          return [ Math.max(pad, Math.min(left, maxL)), Math.max(pad, Math.min(top,  maxT)) ];
-        };
+const clampToViewport = (left, top, w, h)=>{
+  const pad = 8;
+  const maxL = window.innerWidth  - w - pad;
+  const maxT = window.innerHeight - h - pad;
+  return [ Math.max(pad, Math.min(left, maxL)), Math.max(pad, Math.min(top,  maxT)) ];
+};
 
-        const onDown = (e)=>{
-          if (e.target.closest('input,select,textarea,button,label,.resize-handle,.panel-tools')) return;
+const undockIfStacked = ()=>{
+  const stack = el.closest("#brStack");
+  if (!stack) return;
 
-          const rect = el.getBoundingClientRect();
-          const scrollX = window.scrollX || 0;
-          const scrollY = window.scrollY || 0;
+  // capture current on-screen position
+  const rect = el.getBoundingClientRect();
+  const scrollX = window.scrollX || 0;
+  const scrollY = window.scrollY || 0;
 
-          el.classList.remove('-translate-x-1/2', 'left-1/2'); // let left/top take control
+  // move to body so it can freely move across viewport
+  document.body.appendChild(el);
 
-          if (!el.style.left) el.style.left = (rect.left + scrollX) + 'px';
-          if (!el.style.top)  el.style.top  = (rect.top  + scrollY) + 'px';
+  // now it must be absolutely positioned
+  el.style.position = "absolute";
+  el.style.left = (rect.left + scrollX) + "px";
+  el.style.top  = (rect.top  + scrollY) + "px";
+  el.style.right = "";
+  el.style.bottom = "";
+};
 
-          state.x = (e.touches ? e.touches[0].clientX : e.clientX);
-          state.y = (e.touches ? e.touches[0].clientY : e.clientY);
-          state.left = parseFloat(el.style.left) || rect.left + scrollX;
-          state.top  = parseFloat(el.style.top)  || rect.top  + scrollY;
-          state.dragging = true;
+const onDown = (e)=>{
+  if (e.target.closest('input,select,textarea,button,label,.resize-handle,.panel-tools')) return;
 
-          el.dataset.prevZ = el.style.zIndex || '';
-          el.style.zIndex = '10000';
-          el.classList.add('dragging');
+  undockIfStacked();
 
-          window.addEventListener('mousemove', onMove);
-          window.addEventListener('touchmove', onMove, { passive:false });
-          window.addEventListener('mouseup', onUp, { once:true });
-          window.addEventListener('touchend', onUp, { once:true });
-          e.preventDefault();
-        };
+  const rect = el.getBoundingClientRect();
+  const scrollX = window.scrollX || 0;
+  const scrollY = window.scrollY || 0;
 
-        const onMove = (e)=>{
-          if (!state.dragging) return;
-          const cx = (e.touches ? e.touches[0].clientX : e.clientX);
-          const cy = (e.touches ? e.touches[0].clientY : e.clientY);
-          const dx = cx - state.x;
-          const dy = cy - state.y;
+  el.classList.remove('-translate-x-1/2', 'left-1/2');
 
-          const rect = el.getBoundingClientRect();
-          let nextLeft = state.left + dx;
-          let nextTop  = state.top  + dy;
-          [nextLeft, nextTop] = clampToViewport(nextLeft, nextTop, rect.width, rect.height);
+  if (!el.style.left) el.style.left = (rect.left + scrollX) + 'px';
+  if (!el.style.top)  el.style.top  = (rect.top  + scrollY) + 'px';
 
-          el.style.left = nextLeft + 'px';
-          el.style.top  = nextTop  + 'px';
-          el.style.right = '';
-          el.style.bottom = '';
-          e.preventDefault();
-        };
+  state.x = (e.touches ? e.touches[0].clientX : e.clientX);
+  state.y = (e.touches ? e.touches[0].clientY : e.clientY);
+  state.left = parseFloat(el.style.left) || rect.left + scrollX;
+  state.top  = parseFloat(el.style.top)  || rect.top  + scrollY;
+  state.dragging = true;
 
-        const onUp = ()=>{
-          state.dragging = false;
-          el.classList.remove('dragging');
-          if (el.dataset.prevZ !== undefined) el.style.zIndex = el.dataset.prevZ;
-          window.removeEventListener('mousemove', onMove);
-          window.removeEventListener('touchmove', onMove);
-        };
+  el.dataset.prevZ = el.style.zIndex || '';
+  el.style.zIndex = '10000';
+  el.classList.add('dragging');
 
-        grip.addEventListener('mousedown', onDown);
-        grip.addEventListener('touchstart', onDown, { passive:false });
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('touchmove', onMove, { passive:false });
+  window.addEventListener('mouseup', onUp, { once:true });
+  window.addEventListener('touchend', onUp, { once:true });
+  e.preventDefault();
+};
+
+const onMove = (e)=>{
+  if (!state.dragging) return;
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+  const dx = cx - state.x;
+  const dy = cy - state.y;
+
+  const rect = el.getBoundingClientRect();
+  let nextLeft = state.left + dx;
+  let nextTop  = state.top  + dy;
+  [nextLeft, nextTop] = clampToViewport(nextLeft, nextTop, rect.width, rect.height);
+
+  el.style.left = nextLeft + 'px';
+  el.style.top  = nextTop  + 'px';
+  el.style.right = '';
+  el.style.bottom = '';
+  e.preventDefault();
+};
+
+const onUp = ()=>{
+  state.dragging = false;
+  el.classList.remove('dragging');
+  if (el.dataset.prevZ !== undefined) el.style.zIndex = el.dataset.prevZ;
+  window.removeEventListener('mousemove', onMove);
+  window.removeEventListener('touchmove', onMove);
+};
+
+grip.addEventListener('mousedown', onDown);
+grip.addEventListener('touchstart', onDown, { passive:false });
+
       });
     })();
+
     // === Place UHI legend once, to the LEFT of the Codogno panel (no auto-nudging) ===
 (function placeLegendOnce(){
   const GAP = 12; // space between the two panels
