@@ -375,97 +375,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   .ictPill{ max-width: 280px; }
 }
 
-/* ===== ICT expand panel ===== */
-.ictPill{
-  cursor: grab; /* still draggable */
-}
-.ictPill:active{
-  cursor: grabbing;
-}
-
-/* hidden helper already exists in your CSS, but keep it consistent */
-.hidden{ display:none; }
-
-.ictExpand{
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  width: 360px;
-  max-width: calc(100vw - 24px);
-
-  background: rgba(255,255,255,0.95);
-  border: 1px solid rgba(15,23,42,.12);
-  border-radius: 16px;
-  box-shadow: 0 16px 36px rgba(0,0,0,.18);
-  backdrop-filter: blur(10px);
-
-  padding: 10px 10px 12px 10px;
-  z-index: 40001;
-}
-
-.ictExpandHeader{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding: 4px 4px 10px 4px;
-  border-bottom: 1px solid rgba(15,23,42,.08);
-  margin-bottom: 10px;
-}
-.ictExpandTitle{
-  font-weight: 800;
-  font-size: 13px;
-  color: rgba(15,23,42,.92);
-}
-.ictCloseBtn{
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  border: 1px solid rgba(15,23,42,.12);
-  background: rgba(15,23,42,.04);
-  cursor: pointer;
-}
-
-.ictGrid{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.ictCard{
-  border: 1px solid rgba(15,23,42,.10);
-  border-radius: 14px;
-  padding: 10px;
-  background: rgba(255,255,255,.8);
-}
-.ictLabel{
-  font-size: 11px;
-  color: rgba(15,23,42,.55);
-}
-.ictValue{
-  margin-top: 4px;
-  font-size: 13px;
-  font-weight: 800;
-  color: rgba(15,23,42,.92);
-}
-
-.ictRawWrap{
-  margin-top: 10px;
-}
-.ictRaw{
-  margin:0;
-  padding: 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(15,23,42,.10);
-  background: rgba(15,23,42,.03);
-  max-height: 180px;
-  overflow: auto;
-  font-size: 11px;
-  line-height: 1.25;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-
 
   </style>
 </head>
@@ -723,45 +632,11 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 <!-- System Health (compact status pill) -->
 <div id="ictPill" class="ictPill">
   <span id="ictPillDot" class="ictDot"></span>
-
   <div class="ictPillText">
     <div id="ictPillMain" class="ictMain">API: —</div>
     <div id="ictPillSub" class="ictSub">—</div>
   </div>
-
-  <!-- Expandable details -->
-  <div id="ictExpand" class="ictExpand hidden">
-    <div class="ictExpandHeader">
-      <div class="ictExpandTitle">API System Health</div>
-      <button id="ictCloseBtn" class="ictCloseBtn" type="button" aria-label="Close">✕</button>
-    </div>
-
-    <div class="ictGrid">
-      <div class="ictCard">
-        <div class="ictLabel">Status</div>
-        <div id="ictStatusVal" class="ictValue">—</div>
-      </div>
-      <div class="ictCard">
-        <div class="ictLabel">Latency</div>
-        <div id="ictLatencyVal" class="ictValue">—</div>
-      </div>
-      <div class="ictCard">
-        <div class="ictLabel">Uptime (24h)</div>
-        <div id="ictUptimeVal" class="ictValue">—</div>
-      </div>
-      <div class="ictCard">
-        <div class="ictLabel">Last OK</div>
-        <div id="ictLastOkVal" class="ictValue">—</div>
-      </div>
-    </div>
-
-    <div class="ictRawWrap">
-      <div class="ictLabel" style="margin-bottom:6px;">/health response</div>
-      <pre id="ictRaw" class="ictRaw">—</pre>
-    </div>
-  </div>
 </div>
-
 
 
 <!-- Weather Forecast panel -->
@@ -2179,32 +2054,6 @@ async function refreshICT(){
   subEl.textContent = `Uptime(24h): ${uptimeClamped}% • last OK: ${lastOkText} • ${new Date().toLocaleTimeString()}`;
 }
 
-  // --- Fill expanded panel fields (if present)
-  const statusVal  = document.getElementById("ictStatusVal");
-  const latencyVal = document.getElementById("ictLatencyVal");
-  const uptimeVal  = document.getElementById("ictUptimeVal");
-  const lastOkVal  = document.getElementById("ictLastOkVal");
-  const rawEl      = document.getElementById("ictRaw");
-
-  if (statusVal)  statusVal.textContent  = ok ? "ONLINE" : "OFFLINE";
-  if (latencyVal) latencyVal.textContent = (latencyMs == null) ? "—" : `${latencyMs} ms`;
-  if (uptimeVal)  uptimeVal.textContent  = `${uptimeClamped}%`;
-  if (lastOkVal)  lastOkVal.textContent  = lastOkText;
-
-  // Try to show raw /health response (JSON/text)
-  if (rawEl) {
-    try{
-      // Re-fetch response body safely (because earlier you only used .ok)
-      const rr = await fetch(url, { cache:"no-store" });
-      const txt = await rr.text();
-      // prettify JSON if possible
-      try { rawEl.textContent = JSON.stringify(JSON.parse(txt), null, 2); }
-      catch { rawEl.textContent = txt || "—"; }
-    }catch{
-      rawEl.textContent = "—";
-    }
-  }
-
 
 // Weather Forecast (Open-Meteo) (NEW)
 // ==========================
@@ -2386,124 +2235,6 @@ async function refreshWeatherForecast(){
   window.addEventListener("touchend", onUp);
 })();
 
-// ===== ICT pill: draggable + expandable =====
-(function ictPillUI(){
-  const pill = document.getElementById("ictPill");
-  const expand = document.getElementById("ictExpand");
-  const closeBtn = document.getElementById("ictCloseBtn");
-
-  if (!pill || !expand) return;
-
-  // --- Expand/collapse helpers
-  const open = () => expand.classList.remove("hidden");
-  const close = () => expand.classList.add("hidden");
-  const toggle = () => expand.classList.toggle("hidden");
-
-  // Close button
-  closeBtn?.addEventListener("click", (e) => { e.stopPropagation(); close(); });
-
-  // Click outside closes
-  window.addEventListener("mousedown", (e) => {
-    if (expand.classList.contains("hidden")) return;
-    if (!pill.contains(e.target)) close();
-  });
-
-  // ESC closes
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") close();
-  });
-
-  // --- Draggable pill (with click vs drag threshold)
-  pill.style.position = "fixed";
-  pill.style.right = pill.style.right || "12px";
-  pill.style.top   = pill.style.top   || "12px";
-
-  let dragging = false;
-  let moved = false;
-  let startX = 0, startY = 0;
-  let startLeft = 0, startTop = 0;
-
-  // Ensure we use left/top for dragging (not right/top)
-  function normalizeToLeftTop(){
-    const r = pill.getBoundingClientRect();
-    pill.style.left = `${r.left}px`;
-    pill.style.top  = `${r.top}px`;
-    pill.style.right = "";
-    pill.style.bottom = "";
-  }
-
-  function clampToViewport(left, top){
-    const pad = 8;
-    const r = pill.getBoundingClientRect();
-    const maxL = window.innerWidth  - r.width  - pad;
-    const maxT = window.innerHeight - r.height - pad;
-    return [
-      Math.max(pad, Math.min(left, maxL)),
-      Math.max(pad, Math.min(top,  maxT)),
-    ];
-  }
-
-  const onDown = (ev) => {
-    // ignore clicks on controls inside expanded panel
-    if (ev.target.closest("button, a, input, select, textarea")) return;
-
-    normalizeToLeftTop();
-    dragging = true;
-    moved = false;
-
-    const p = ev.touches ? ev.touches[0] : ev;
-    startX = p.clientX;
-    startY = p.clientY;
-
-    startLeft = parseFloat(pill.style.left) || 0;
-    startTop  = parseFloat(pill.style.top)  || 0;
-
-    pill.style.zIndex = "50000";
-
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp, { once: true });
-    window.addEventListener("touchmove", onMove, { passive:false });
-    window.addEventListener("touchend", onUp, { once: true });
-
-    ev.preventDefault();
-  };
-
-  const onMove = (ev) => {
-    if (!dragging) return;
-    const p = ev.touches ? ev.touches[0] : ev;
-    const dx = p.clientX - startX;
-    const dy = p.clientY - startY;
-
-    // if user moves > 4px, treat as drag (not click)
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
-
-    let nextLeft = startLeft + dx;
-    let nextTop  = startTop  + dy;
-    [nextLeft, nextTop] = clampToViewport(nextLeft, nextTop);
-
-    pill.style.left = `${nextLeft}px`;
-    pill.style.top  = `${nextTop}px`;
-
-    ev.preventDefault();
-  };
-
-  const onUp = () => {
-    dragging = false;
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("touchmove", onMove);
-  };
-
-  pill.addEventListener("mousedown", onDown);
-  pill.addEventListener("touchstart", onDown, { passive:false });
-
-  // Click toggles only if it wasn't a drag
-  pill.addEventListener("click", (e) => {
-    if (moved) return;          // don’t toggle after drag
-    if (e.target.closest("#ictExpand")) return; // clicks inside panel won't toggle
-    toggle();
-  });
-
-})();
 
 
 
