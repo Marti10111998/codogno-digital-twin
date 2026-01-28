@@ -731,18 +731,29 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   grid-row: 1;
 }
 
-/* Tools live in row 2, aligned right */
-.panel .panel-tools{
-  position: static;               /* IMPORTANT: no absolute positioning */
-  grid-row: 2;
-
-  display: flex;
-  flex-direction: row;            /* side-by-side buttons */
-  justify-content: flex-end;      /* right aligned under title */
-  gap: 6px;
-
-  z-index: 10;
+/* Header: single row */
+.ui-header{
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  padding: 10px 12px;
 }
+
+/* Tools pinned top-right INSIDE header */
+.panel .panel-tools{
+  position: absolute !important;
+  top: 8px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+/* Give header right padding so title doesn't collide with buttons */
+.ui-header{
+  padding-right: 70px;
+}
+
 
 /* Buttons styling (unchanged, just consistent) */
 .panel .toolbtn{
