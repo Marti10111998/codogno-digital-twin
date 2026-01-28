@@ -29,12 +29,13 @@
 /* make all Tailwind rem-based sizes smaller */
 html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. */
 
-/* Panels: tighter padding/rounding + narrower widths */
-#controlPanel, #envPanel {
+/* Apply the same base panel tuning to BOTH bottom-right panels */
+#envPanel, #weatherPanel{
   padding: 12px !important;
   border-radius: 10px !important;
   line-height: 1.25;
 }
+
 
 
 /* Drag handles & headings smaller */
@@ -818,7 +819,20 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   height: calc(100% - 210px);   /* chart grows/shrinks with panel */
   min-height: 320px;
 }
+.drag-handle{ cursor: move; }
+.ui-header{ pointer-events: auto; }
 
+#envPanel{ height: 60vh; }              /* initial size; user can resize */
+#envPanel .pollChartWrap{
+  height: calc(100% - 260px);           /* chart grows with panel */
+  min-height: 320px;
+}
+#envPanel canvas#pollutionChart{
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  display: block;
+}
 
   </style>
 </head>
@@ -3085,7 +3099,7 @@ const undockIfStacked = ()=>{
 };
 
 const onDown = (e)=>{
-  if (e.target.closest('input,select,textarea,button,label,.resize-handle,.panel-tools')) return;
+if (e.target.closest('input,select,textarea,button,label,.resize-handle,.toolbtn')) return;
 
   undockIfStacked();
 
