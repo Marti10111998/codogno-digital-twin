@@ -402,6 +402,21 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   background: rgba(255,255,255,.75);
 }
 
+/* Env panel: compact + never cover the whole viewport */
+#envPanel{
+  width: clamp(340px, 52vw, 720px) !important;
+  max-height: 42vh !important;
+}
+
+/* Make env panel content scroll inside the panel */
+#envPanel .ui-body{
+  max-height: calc(42vh - 92px); /* header + tabs */
+  overflow: auto;
+}
+
+/* Smaller chart area so it doesn't grow the panel */
+#envPanel canvas#pollutionChart{ max-height: 160px !important; }
+#envPanel canvas#wTrendChart{ max-height: 140px !important; }
 
 
   </style>
@@ -574,7 +589,8 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   <!-- Small tiles -->
 <!-- Unified Environment Panel (Pollution + Weather) -->
 <div id="envPanel"
-     class="absolute bottom-4 left-1/2 -translate-x-1/2 w-[900px] z-10 font-sans rounded-xl panel">
+     class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 font-sans rounded-xl panel">
+
 
   <!-- Header / Drag handle -->
   <div class="drag-handle ui-header">
