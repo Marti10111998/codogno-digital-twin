@@ -559,6 +559,51 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   }
 }
 
+/* ============================
+   Pollution tiles under UHI legend
+   ============================ */
+
+#uhiPollutionBlock{
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.25);
+}
+
+.uhiSubTitle{
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  color: rgba(255,255,255,.85);
+}
+
+.uhiStamp{
+  font-size: 10px;
+  margin-top: 6px;
+  color: rgba(255,255,255,.65);
+}
+
+/* Override tile colors so they fit dark legend */
+#uhiLegendRight .pollTile{
+  background: rgba(255,255,255,.14) !important;
+  border: 1px solid rgba(255,255,255,.25);
+  color: white !important;
+}
+
+#uhiLegendRight .pollTile .k,
+#uhiLegendRight .pollTile .v,
+#uhiLegendRight .pollTile .u{
+  color: white !important;
+  opacity: .95;
+}
+
+/* Tighten tiles for legend context */
+#uhiLegendRight .pollTile{
+  padding: 5px 8px;
+  border-radius: 8px;
+}
+
 
   </style>
 </head>
@@ -720,10 +765,18 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 </div>
 
   <!-- UHI legend (TOP RIGHT) -->
-  <div id="uhiLegendRight" class="uhiLegendPanel hidden">
-    <div class="title drag-handle">Colors by UHI</div>
-    <div id="uhiLegendRowsRight"></div>
+<div id="uhiLegendRight" class="uhiLegendPanel hidden">
+  <div class="title drag-handle">Colors by UHI</div>
+  <div id="uhiLegendRowsRight"></div>
+
+  <!-- Pollution tiles UNDER the legend -->
+  <div id="uhiPollutionBlock">
+    <div class="uhiSubTitle">Air quality (now)</div>
+    <div id="pollutionOutput">Loading…</div>
+    <div id="pollutionStamp" class="uhiStamp">—</div>
   </div>
+</div>
+
 
   <div id="tooltip"></div>
 
@@ -751,11 +804,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
           <div class="mt-2 text-[12px] text-gray-600">
             Tips: hover for exact values • peaks highlighted • change granularity for smoother trends.
           </div>
-        </div>
-
-        <div>
-          <div id="pollutionOutput">Loading...</div>
-          <div id="pollutionStamp" class="ui-subtitle" style="margin-top:8px;">—</div>
         </div>
       </div>
 
