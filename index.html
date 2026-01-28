@@ -2408,14 +2408,41 @@ function ensureWeatherTrendChart(){
         legend: { display: true, position: "top" },
         tooltip: {
           callbacks: {
-            label: (tt) => `${tt.dataset.label}: ${Number(tt.parsed.y).toFixed(1)} °C`
+            label: (tt) => {
+  const v = Number(tt.parsed.y);
+  const u = tt.dataset.label.includes("Rain") ? "mm"
+          : tt.dataset.label.includes("Wind") ? "km/h"
+          : "°C";
+  return `${tt.dataset.label}: ${v.toFixed(1)} ${u}`;
+            }
+
           }
         }
       },
-      scales: {
-        x: { type: "time", time: { unit: "hour" } },
-        y: { title: { display: true, text: "°C" } }
-      },
+scales: {
+  x: { type: "time", time: { unit: "hour" } },
+
+  y: {                       // Temperature
+    title: { display: true, text: "°C" },
+    position: "left"
+  },
+
+  y1: {                      // Rain
+    title: { display: true, text: "mm" },
+    position: "right",
+    beginAtZero: true,
+    grid: { drawOnChartArea: false }
+  },
+
+  y2: {                      // Wind
+    title: { display: true, text: "km/h" },
+    position: "right",
+    beginAtZero: true,
+    grid: { drawOnChartArea: false },
+    ticks: { display: false } // optional: hides extra tick clutter
+  }
+},
+
       elements: { point: { radius: 0 }, line: { tension: 0.25 } }
     }
   });
@@ -2439,21 +2466,58 @@ function renderWeatherTrendChart(forecastJson){
     if (t <= now) iNow = i; else break;
   }
 
-  // Next 48 hours of temps
-  const N = 48;
-  const pts = [];
-  for (let i=iNow; i<Math.min(h.time.length, iNow + N); i++){
-    const t = new Date(h.time[i]).getTime();
-    const v = Number(h.temperature_2m?.[i]);
-    if (Number.isFinite(t) && Number.isFinite(v)) pts.push({ x: t, y: v });
-  }
+// Next 48 hours of trend points
+const N = 48;
+const ptsTemp = [];
+const ptsRain = [];
+const ptsWind = [];
 
-  ch.data.datasets = [{
-    label: "Temperature (next 48h)",
-    data: pts,
+for (let i=iNow; i<Math.min(h.time.length, iNow + N); i++){
+  const t = new Date(h.time[i]).getTime();
+
+  const temp = Number(h.temperature_2m?.[i]);
+  const rain = Number(h.precipitation?.[i]);
+  const wind = Number(h.wind_speed_10m?.[i]);
+
+  if (Number.isFinite(t) && Number.isFinite(temp)) ptsTemp.push({ x: t, y: temp });
+  if (Number.isFinite(t) && Number.isFinite(rain)) ptsRain.push({ x: t, y: rain });
+  if (Number.isFinite(t) && Number.isFinite(wind)) ptsWind.push({ x: t, y: wind });
+}
+
+
+ch.data.datasets = [
+  {
+    type: "line",
+    label: "Temperature (°C)",
+    data: ptsTemp,
     borderWidth: 2,
-    backgroundColor: "transparent"
-  }];
+    borderColor: "#dc2626",                 // red
+    backgroundColor: "rgba(220,38,38,0.12)",
+    pointRadius: 0,
+    yAxisID: "y"
+  },
+  {
+    type: "bar",
+    label: "Rain (mm)",
+    data: ptsRain,
+    yAxisID: "y1",
+    backgroundColor: "rgba(37,99,235,0.45)", // blue
+    borderColor: "#2563eb",
+    borderWidth: 0
+  },
+  {
+    type: "line",
+    label: "Wind (km/h)",
+    data: ptsWind,
+    borderWidth: 2,
+    borderColor: "#6b7280",                 // gray
+    backgroundColor: "rgba(107,114,128,0.12)",
+    pointRadius: 0,
+    borderDash: [6,4],
+    yAxisID: "y2"
+  }
+];
+
 
   ch.update();
 }
