@@ -584,19 +584,54 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   color: rgba(255,255,255,.65);
 }
 
-/* Override tile colors so they fit dark legend */
+/* ============================
+   Pollution tiles – danger coloring restored
+   ============================ */
+
+/* Base tile look (glass + border) */
 #uhiLegendRight .pollTile{
-  background: rgba(255,255,255,.14) !important;
-  border: 1px solid rgba(255,255,255,.25);
-  color: white !important;
+  border-radius: 10px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255,255,255,.28);
+  backdrop-filter: blur(6px);
 }
 
-#uhiLegendRight .pollTile .k,
-#uhiLegendRight .pollTile .v,
-#uhiLegendRight .pollTile .u{
-  color: white !important;
-  opacity: .95;
+/* SAFE */
+#uhiLegendRight .pollTile.bg-green-100{
+  background: rgba(34,197,94,.22) !important;
+  border-color: rgba(34,197,94,.45);
+  color: #dcfce7 !important;
 }
+
+/* WARNING */
+#uhiLegendRight .pollTile.bg-yellow-100{
+  background: rgba(234,179,8,.28) !important;
+  border-color: rgba(234,179,8,.55);
+  color: #fef9c3 !important;
+}
+
+/* DANGER */
+#uhiLegendRight .pollTile.bg-red-100{
+  background: rgba(220,38,38,.30) !important;
+  border-color: rgba(220,38,38,.55);
+  color: #fee2e2 !important;
+}
+
+/* Text inside tiles */
+#uhiLegendRight .pollTile .k{
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+#uhiLegendRight .pollTile .v{
+  font-weight: 900;
+}
+
+#uhiLegendRight .pollTile .u{
+  opacity: .85;
+  font-size: 10px;
+}
+
 
 /* Tighten tiles for legend context */
 #uhiLegendRight .pollTile{
