@@ -35,7 +35,7 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   border-radius: 10px !important;
   line-height: 1.25;
 }
-#controlPanel        { width: 16rem !important; }  /* ~256px (was w-80 / 320px) */
+/*#controlPanel        { width: 16rem !important; }  /* ~256px (was w-80 / 320px) */
 #pollutionPanel      { width: 13rem !important; }  /* ~208px (was w-72 / 288px) */
 #pollutionChartPanel { width: 760px !important; }  /* (was 900px) */
 #ictPanel { width: 380px !important; padding: 10px !important; }
@@ -235,6 +235,84 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   border: 1px solid rgba(15,23,42,.10);
 }
 .panel .toolbtn:hover{ background: rgba(15,23,42,.08); }
+
+/* =========================================================
+   Control panel: fit on one screen (smaller text + scroll)
+   ========================================================= */
+
+/* Widen a bit, but keep sane bounds on small screens */
+#controlPanel{
+  width: clamp(300px, 22vw, 380px) !important;
+}
+
+/* Make ONLY the control panel typography tighter/smaller */
+#controlPanel{
+  font-size: 12px;      /* base text inside panel */
+  line-height: 1.15;
+}
+
+#controlPanel .ui-title{
+  font-size: 12px;
+}
+#controlPanel .ui-subtitle{
+  font-size: 10.5px;
+}
+
+#controlPanel label.block.font-medium{
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+
+#controlPanel .ui-section-title{
+  font-size: 10px;
+  letter-spacing: .08em;
+  margin-bottom: 6px;
+}
+
+/* Tighten vertical spacing between sections */
+#controlPanel .ui-section{
+  padding-top: 8px;
+  margin-top: 8px;
+}
+#controlPanel .hint{
+  font-size: 10.5px;
+  margin-top: 6px;
+}
+
+/* Reduce control padding so items take less height */
+#controlPanel select,
+#controlPanel input[type="number"],
+#controlPanel input[type="text"]{
+  padding: 5px 8px;
+  border-radius: 9px;
+}
+
+/* Range slider & small counters */
+#controlPanel input[type="range"]{
+  margin-top: 4px;
+}
+#controlPanel #binCountLabel{
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Make the BODY scroll within viewport so the panel always fits */
+#controlPanel .ui-body{
+  /* header ~44-52px + padding; this ensures body fits in viewport */
+  max-height: calc(100vh - 110px);
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+/* Slightly tighter row layout */
+#controlPanel .ui-row{
+  gap: 8px;
+}
+
+/* Optional: smaller drag handle text */
+#controlPanel .drag-handle{
+  font-size: 11px;
+}
 
 
   </style>
