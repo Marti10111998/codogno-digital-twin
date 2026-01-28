@@ -638,6 +638,76 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   </div>
 </div>
 
+<!-- API / System Health expand panel (hidden by default) -->
+<div id="ictExpand" class="hidden"
+  style="
+    position: fixed;
+    right: 12px;
+    top: 56px;
+    z-index: 40001;
+    width: 380px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 90px);
+    overflow: auto;
+    background: rgba(255,255,255,0.92);
+    border: 1px solid rgba(15,23,42,.12);
+    border-radius: 16px;
+    box-shadow: 0 12px 28px rgba(0,0,0,.14);
+    backdrop-filter: blur(8px);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  ">
+
+  <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid rgba(15,23,42,.08);">
+    <div style="min-width:0;">
+      <div style="font-weight:750; font-size:13px; color:rgba(15,23,42,.92);">API / System Health</div>
+      <div id="ictExpandStamp" style="font-size:11px; color:rgba(15,23,42,.55);">—</div>
+    </div>
+    <button id="ictCloseBtn"
+      style="
+        margin-left:auto;
+        width:28px; height:28px;
+        border-radius:10px;
+        border:1px solid rgba(15,23,42,.10);
+        background: rgba(15,23,42,.05);
+        cursor:pointer;
+      " aria-label="Close">✕</button>
+  </div>
+
+  <div style="padding:12px;">
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+      <div style="padding:10px 12px; border-radius:14px; border:1px solid rgba(15,23,42,.10); background: rgba(255,255,255,.70);">
+        <div style="font-size:11px; color:rgba(15,23,42,.55);">Status</div>
+        <div id="ictStatStatus" style="font-size:14px; font-weight:750; color:rgba(15,23,42,.92);">—</div>
+      </div>
+
+      <div style="padding:10px 12px; border-radius:14px; border:1px solid rgba(15,23,42,.10); background: rgba(255,255,255,.70);">
+        <div style="font-size:11px; color:rgba(15,23,42,.55);">Latency</div>
+        <div id="ictStatLatency" style="font-size:14px; font-weight:750; color:rgba(15,23,42,.92);">—</div>
+      </div>
+
+      <div style="padding:10px 12px; border-radius:14px; border:1px solid rgba(15,23,42,.10); background: rgba(255,255,255,.70);">
+        <div style="font-size:11px; color:rgba(15,23,42,.55);">Uptime (24h)</div>
+        <div id="ictStatUptime" style="font-size:14px; font-weight:750; color:rgba(15,23,42,.92);">—</div>
+      </div>
+
+      <div style="padding:10px 12px; border-radius:14px; border:1px solid rgba(15,23,42,.10); background: rgba(255,255,255,.70);">
+        <div style="font-size:11px; color:rgba(15,23,42,.55);">Last OK</div>
+        <div id="ictStatLastOk" style="font-size:14px; font-weight:750; color:rgba(15,23,42,.92);">—</div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(15,23,42,.08);">
+      <div style="font-size:11px; font-weight:800; color:rgba(15,23,42,.55); letter-spacing:.06em; text-transform:uppercase; margin-bottom:8px;">
+        Last 24h pings
+      </div>
+      <div style="height:180px;">
+        <canvas id="ictChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 
 <!-- Weather Forecast panel -->
 <div id="weatherPanel"
@@ -2040,6 +2110,35 @@ async function refreshICT(){
   const lastOk = [...samples].reverse().find(s => s.ok);
   const lastOkText = lastOk ? new Date(lastOk.ts).toLocaleTimeString() : "—";
 
+    // --- Expand panel fields (if present)
+  const stampEl  = document.getElementById("ictExpandStamp");
+  const stEl     = document.getElementById("ictStatStatus");
+  const latEl    = document.getElementById("ictStatLatency");
+  const upEl     = document.getElementById("ictStatUptime");
+  const lastOkEl = document.getElementById("ictStatLastOk");
+
+  if (stampEl) stampEl.textContent = `updated ${new Date().toLocaleTimeString()}`;
+  if (stEl)    stEl.textContent = ok ? "Online" : "Offline";
+  if (latEl)   latEl.textContent = ok ? `${latencyMs ?? "—"} ms` : "—";
+  if (upEl)    upEl.textContent = `${uptimeClamped}%`;
+  if (lastOkEl) lastOkEl.textContent = lastOkText;
+
+  // --- Chart (only if the canvas exists)
+  const chartCanvas = document.getElementById("ictChart");
+  if (chartCanvas) {
+    const buckets = bucketByHourHealth(samples);
+    const ptsOk = buckets.map(b => ({ x: b.t, y: b.ok }));
+    const ptsLat = buckets.map(b => ({ x: b.t, y: b.latN ? (b.latSum / b.latN) : null })).filter(p => p.y != null);
+
+    const ch = ensureIctChart();
+    ch.data.datasets = [
+      { type:"bar",  label:"OK pings/hour", data: ptsOk,  yAxisID:"y",  borderWidth: 0 },
+      { type:"line", label:"Avg latency (ms)", data: ptsLat, yAxisID:"y1", borderWidth: 2 }
+    ];
+    ch.update();
+  }
+
+
   // Paint pill
   if (ok){
     dotEl.style.background = "#22c55e"; // green
@@ -2053,6 +2152,127 @@ async function refreshICT(){
 
   subEl.textContent = `Uptime(24h): ${uptimeClamped}% • last OK: ${lastOkText} • ${new Date().toLocaleTimeString()}`;
 }
+
+// ===== ICT pill: draggable + expandable =====
+(function ictPillUI(){
+  const pill = document.getElementById("ictPill");
+  const expand = document.getElementById("ictExpand");
+  const closeBtn = document.getElementById("ictCloseBtn");
+
+  if (!pill || !expand) return;
+
+  const open = () => expand.classList.remove("hidden");
+  const close = () => expand.classList.add("hidden");
+  const toggle = () => expand.classList.toggle("hidden");
+
+  closeBtn?.addEventListener("click", (e) => { e.stopPropagation(); close(); });
+
+  window.addEventListener("mousedown", (e) => {
+    if (expand.classList.contains("hidden")) return;
+    if (!pill.contains(e.target) && !expand.contains(e.target)) close();
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+
+  // --- draggable pill with click-vs-drag threshold
+  let dragging = false;
+  let moved = false;
+  let startX = 0, startY = 0;
+  let startLeft = 0, startTop = 0;
+
+  function normalizeToLeftTop(){
+    const r = pill.getBoundingClientRect();
+    pill.style.left = `${r.left}px`;
+    pill.style.top  = `${r.top}px`;
+    pill.style.right = "";
+    pill.style.bottom = "";
+    pill.style.position = "fixed";
+  }
+
+  function clampToViewport(left, top){
+    const pad = 8;
+    const r = pill.getBoundingClientRect();
+    const maxL = window.innerWidth  - r.width  - pad;
+    const maxT = window.innerHeight - r.height - pad;
+    return [
+      Math.max(pad, Math.min(left, maxL)),
+      Math.max(pad, Math.min(top,  maxT)),
+    ];
+  }
+
+  const onDown = (ev) => {
+    if (ev.target.closest("button, a, input, select, textarea")) return;
+
+    normalizeToLeftTop();
+    dragging = true;
+    moved = false;
+
+    const p = ev.touches ? ev.touches[0] : ev;
+    startX = p.clientX;
+    startY = p.clientY;
+
+    startLeft = parseFloat(pill.style.left) || 0;
+    startTop  = parseFloat(pill.style.top)  || 0;
+
+    pill.style.zIndex = "50000";
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp, { once: true });
+    window.addEventListener("touchmove", onMove, { passive:false });
+    window.addEventListener("touchend", onUp, { once: true });
+
+    ev.preventDefault();
+  };
+
+  const onMove = (ev) => {
+    if (!dragging) return;
+    const p = ev.touches ? ev.touches[0] : ev;
+    const dx = p.clientX - startX;
+    const dy = p.clientY - startY;
+
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+
+    let nextLeft = startLeft + dx;
+    let nextTop  = startTop  + dy;
+    [nextLeft, nextTop] = clampToViewport(nextLeft, nextTop);
+
+    pill.style.left = `${nextLeft}px`;
+    pill.style.top  = `${nextTop}px`;
+
+    // keep the panel anchored under the pill when open
+    if (!expand.classList.contains("hidden")) {
+      expand.style.left = `${nextLeft}px`;
+      expand.style.right = "";
+      expand.style.top = `${nextTop + pill.getBoundingClientRect().height + 8}px`;
+    }
+
+    ev.preventDefault();
+  };
+
+  const onUp = () => {
+    dragging = false;
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("touchmove", onMove);
+  };
+
+  pill.addEventListener("mousedown", onDown);
+  pill.addEventListener("touchstart", onDown, { passive:false });
+
+  pill.addEventListener("click", (e) => {
+    if (moved) return;
+    toggle();
+
+    // when opening, place panel under the pill (respect custom pill position)
+    if (!expand.classList.contains("hidden")) {
+      const r = pill.getBoundingClientRect();
+      expand.style.left = `${r.left}px`;
+      expand.style.right = "";
+      expand.style.top = `${r.top + r.height + 8}px`;
+    }
+  });
+})();
 
 
 // Weather Forecast (Open-Meteo) (NEW)
@@ -2165,77 +2385,6 @@ async function refreshWeatherForecast(){
     console.warn("Weather forecast error:", e);
   }
 }
-
-// ===== Draggable ICT pill (no click) =====
-(function makeIctPillDraggable(){
-  const pill = document.getElementById("ictPill");
-  if (!pill) return;
-
-  // switch from fixed anchor to movable coordinates
-  pill.style.position = "fixed";
-  pill.style.left = "";
-  pill.style.top  = "";
-  // ensure it has explicit starting coords (based on current fixed top/right)
-  const r = pill.getBoundingClientRect();
-  pill.style.right = "auto";
-  pill.style.bottom = "auto";
-  pill.style.left = `${r.left}px`;
-  pill.style.top  = `${r.top}px`;
-
-  let dragging = false;
-  let startX = 0, startY = 0;
-  let startLeft = 0, startTop = 0;
-
-  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-
-  const onDown = (ev) => {
-    // don't start drag from interactive controls (none inside pill, but safe)
-    if (ev.target.closest("input,select,textarea,button,label")) return;
-
-    dragging = true;
-    pill.classList.add("dragging");
-
-    const p = ev.touches ? ev.touches[0] : ev;
-    startX = p.clientX;
-    startY = p.clientY;
-
-    startLeft = parseFloat(pill.style.left) || r.left;
-    startTop  = parseFloat(pill.style.top)  || r.top;
-
-    ev.preventDefault();
-  };
-
-  const onMove = (ev) => {
-    if (!dragging) return;
-
-    const p = ev.touches ? ev.touches[0] : ev;
-    const dx = p.clientX - startX;
-    const dy = p.clientY - startY;
-
-    const rect = pill.getBoundingClientRect();
-    const nextLeft = clamp(startLeft + dx, 8, window.innerWidth  - rect.width  - 8);
-    const nextTop  = clamp(startTop  + dy, 8, window.innerHeight - rect.height - 8);
-
-    pill.style.left = `${nextLeft}px`;
-    pill.style.top  = `${nextTop}px`;
-
-    ev.preventDefault();
-  };
-
-  const onUp = () => {
-    dragging = false;
-    pill.classList.remove("dragging");
-  };
-
-  pill.addEventListener("mousedown", onDown);
-  pill.addEventListener("touchstart", onDown, { passive: false });
-  window.addEventListener("mousemove", onMove);
-  window.addEventListener("touchmove", onMove, { passive: false });
-  window.addEventListener("mouseup", onUp);
-  window.addEventListener("touchend", onUp);
-})();
-
-
 
 
     // ==========================
