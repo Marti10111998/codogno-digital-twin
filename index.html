@@ -497,6 +497,68 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   z-index: 40000 !important;
 }
 
+/* ===========================
+   Bottom-right stacked panels
+   =========================== */
+
+#brStack{
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 20000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+  max-height: calc(100vh - 24px);
+  pointer-events: none; /* stack itself ignores hits; panels re-enable */
+}
+
+#brStack .panel{
+  pointer-events: auto;
+  position: relative !important;  /* IMPORTANT: stop absolute chaos */
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+}
+
+/* Panel sizing tuned for bottom-right */
+#weatherPanel{
+  width: clamp(360px, 34vw, 520px) !important;
+  max-height: 44vh !important;
+}
+#weatherPanel .ui-body{
+  max-height: calc(44vh - 52px); /* header height */
+  overflow: auto;
+}
+
+#envPanel{
+  width: clamp(360px, 34vw, 520px) !important;
+  max-height: 44vh !important;
+}
+#envPanel .ui-body{
+  max-height: calc(44vh - 52px);
+  overflow: auto;
+}
+
+/* Keep charts compact inside bottom-right */
+#envPanel canvas#pollutionChart{ max-height: 160px !important; }
+#weatherPanel canvas#wTrendChart{ max-height: 140px !important; }
+
+/* Optional: make 7-day row wrap nicely in narrower widths */
+#weatherPanel #w7Row{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 8px;
+}
+@media (min-width: 980px){
+  #weatherPanel #w7Row{
+    grid-template-columns: repeat(7, minmax(0,1fr));
+  }
+}
+
 
   </style>
 </head>
@@ -666,58 +728,26 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   <div id="tooltip"></div>
 
   <!-- Small tiles -->
-<!-- Unified Environment Panel (Pollution + Weather) -->
-<div id="envPanel"
-     class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 font-sans rounded-xl panel">
+<!-- Bottom-right stack: Environment (top) + Weather (bottom) -->
+<div id="brStack">
 
-
-  <!-- Header / Drag handle -->
-  <div class="drag-handle ui-header">
-    <div style="min-width:0;">
-      <div class="ui-title">Environment</div>
-      <div class="ui-subtitle">Pollution • Weather</div>
+  <!-- =============== Environment Panel (Pollution) =============== -->
+  <div id="envPanel" class="panel font-sans rounded-xl">
+    <div class="drag-handle ui-header">
+      <div style="min-width:0;">
+        <div class="ui-title">Environment</div>
+        <div class="ui-subtitle">Pollution</div>
+      </div>
+      <div style="margin-left:auto;" class="ui-subtitle">⠿ Drag</div>
     </div>
-    <div style="margin-left:auto;" class="ui-subtitle">⠿ Drag</div>
-  </div>
 
-  <!-- Tabs -->
-  <!-- No tabs: Pollution + Weather side-by-side in the same scrollable body -->
-  <div class="ui-body">
-    <div class="envGrid">
-
-
-    <!-- ===================== POLLUTION TAB ===================== -->
-    <div id="envTabPollution" class="envTabPane">
-      <!-- Pollution tiles (reuse SAME ids so your JS keeps working) -->
-      <!-- Chart + compact pollutant tiles side-by-side (IDs unchanged) -->
+    <div class="ui-body">
+      <!-- Chart + tiles -->
       <div class="pollRow">
         <div>
-    </div> <!-- ✅ closes #envTabPollution -->
-
-    <!-- ===================== WEATHER TAB ===================== -->
-    <div id="envTabWeather" class="envTabPane">
-      <!-- Needed by your existing JS (do not rename) -->
-      <div class="ui-subtitle" id="weatherStamp" style="margin-bottom:8px;">—</div>
-
-      <div class="grid grid-cols-4 gap-3 mt-1 text-sm">
-        ...
-      </div>
-
-      <div id="w7Row" class="mt-3 grid grid-cols-7 gap-2"></div>
-
-      <div class="mt-3">
-        <canvas id="wTrendChart" height="100"></canvas>
-      </div>
-
-      <div class="mt-2 text-[12px] text-gray-600">
-        Next 48h temperature trend • 7-day outlook • Uses timezone Europe/Rome
-      </div>
-    </div> <!-- ✅ closes #envTabWeather -->
-
           <div class="mt-2">
             <canvas id="pollutionChart" height="120"></canvas>
           </div>
-
           <div class="mt-2 text-[12px] text-gray-600">
             Tips: hover for exact values • peaks highlighted • change granularity for smoother trends.
           </div>
@@ -729,17 +759,16 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
         </div>
       </div>
 
-
-      <!-- Chart controls (reuse SAME ids so your JS keeps working) -->
-      <div class="mt-3 grid grid-cols-7 gap-3">
-        <div class="col-span-2">
+      <!-- Controls (IDs unchanged) -->
+      <div class="mt-3 grid grid-cols-2 gap-3">
+        <div>
           <label class="block text-sm font-medium">Pollutant</label>
           <select id="chartPollutant" class="w-full border rounded px-2 py-1">
             <option>O3</option><option>NO2</option><option>NO</option><option>CO</option><option>NH3</option><option>Noise</option>
           </select>
         </div>
 
-        <div class="col-span-2">
+        <div>
           <label class="block text-sm font-medium">Granularity</label>
           <select id="chartGranularity" class="w-full border rounded px-2 py-1">
             <option value="10m">10 minutes</option>
@@ -777,10 +806,20 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
       </div>
 
       <div class="mt-2 ui-subtitle" id="pollutionChartStatus">—</div>
+    </div>
+  </div>
 
+  <!-- =============== Weather Panel =============== -->
+  <div id="weatherPanel" class="panel font-sans rounded-xl">
+    <div class="drag-handle ui-header">
+      <div style="min-width:0;">
+        <div class="ui-title">Weather</div>
+        <div class="ui-subtitle">Forecast • Europe/Rome</div>
+      </div>
+      <div style="margin-left:auto;" class="ui-subtitle">⠿ Drag</div>
+    </div>
 
-    <!-- ===================== WEATHER TAB ===================== -->
-    <div id="envTabWeather" class="envTabPane">
+    <div class="ui-body">
       <!-- Needed by your existing JS (do not rename) -->
       <div class="ui-subtitle" id="weatherStamp" style="margin-bottom:8px;">—</div>
 
@@ -807,7 +846,7 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
       </div>
 
       <!-- 7-day cards row (reuse SAME id) -->
-      <div id="w7Row" class="mt-3 grid grid-cols-7 gap-2"></div>
+      <div id="w7Row" class="mt-3"></div>
 
       <!-- Trend chart (reuse SAME id) -->
       <div class="mt-3">
@@ -818,11 +857,10 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
         Next 48h temperature trend • 7-day outlook • Uses timezone Europe/Rome
       </div>
     </div>
-
-    </div> <!-- closes .envGrid -->
   </div>
 
-</div> <!-- closes envPanel -->
+</div>
+
 
 
 
@@ -2627,8 +2665,9 @@ setInterval(refreshICT, 60_000);
 const PANELS = [
   { id:'#controlPanel',   handle:'.drag-handle' },
   { id:'#uhiLegendRight', handle:'.drag-handle' },
-  { id:'#envPanel',       handle:'.drag-handle' },
+  // bottom-right stack panels are fixed-layout; don't auto-absolute them
 ];
+
 
 
       PANELS.forEach(cfg=>{
