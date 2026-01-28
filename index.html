@@ -314,6 +314,68 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   font-size: 11px;
 }
 
+/* =========================================================
+   System Health -> compact status pill
+   ========================================================= */
+.ictPill{
+  position: fixed;
+  right: 12px;
+  top: 12px;
+  z-index: 40000;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 8px 10px;
+  border-radius: 999px;
+
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(15,23,42,.12);
+  box-shadow: 0 10px 24px rgba(0,0,0,.12);
+  backdrop-filter: blur(8px);
+
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  line-height: 1.1;
+  max-width: 340px;
+}
+
+.ictDot{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #9ca3af; /* default gray */
+  box-shadow: 0 0 0 3px rgba(156,163,175,.18);
+  flex: 0 0 auto;
+}
+
+.ictPillText{
+  min-width: 0;
+}
+
+.ictMain{
+  font-size: 12px;
+  font-weight: 750;
+  color: rgba(15,23,42,.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ictSub{
+  font-size: 10.5px;
+  color: rgba(15,23,42,.60);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Optional: slightly smaller on narrow screens */
+@media (max-width: 420px){
+  .ictPill{ max-width: 280px; }
+}
+
 
   </style>
 </head>
@@ -2018,13 +2080,14 @@ function ensureIctChart(){
 }
 
 async function refreshICT(){
-  const stampEl  = document.getElementById("ictStamp");
-  const upEl     = document.getElementById("ictUptime");
-  const latestEl = document.getElementById("ictLatest");
-  const latEl    = document.getElementById("ictLatency");
+  // NEW pill elements
+  const pill      = document.getElementById("ictPill");
+  const dotEl     = document.getElementById("ictPillDot");
+  const mainEl    = document.getElementById("ictPillMain");
+  const subEl     = document.getElementById("ictPillSub");
 
-  const now = new Date();
-  stampEl.textContent = `as of ${now.toLocaleTimeString()}`;
+  // If pill is missing, just bail silently
+  if (!pill || !dotEl || !mainEl || !subEl) return;
 
   // Ping the current API (ngrok) health endpoint
   const url = `${POLLUTION_API}/health`;
@@ -2039,57 +2102,38 @@ async function refreshICT(){
     latencyMs = null;
   }
 
-  // Store sample locally
+  // Store sample locally (reuse your existing localStorage sampling)
   let samples = pruneIctSamples(loadIctSamples());
   samples.push({ ts: Date.now(), ok, ms: latencyMs });
   samples = pruneIctSamples(samples);
   saveIctSamples(samples);
-
-  // Latest update = last OK ping
-  const lastOk = [...samples].reverse().find(s => s.ok);
-  latestEl.textContent = lastOk ? new Date(lastOk.ts).toLocaleTimeString() : "offline";
-
-  // Latency tile
-  latEl.textContent = ok && latencyMs != null ? `${latencyMs} ms` : "offline";
 
   // Uptime % over last 24h based on local samples
   // expected = 1 ping per minute (because we refresh every 60s)
   const expected = ICT_RETENTION_HRS * 60;
   const okCount = samples.filter(s => s.ok).length;
   const uptime = expected ? Math.round((okCount / expected) * 100) : 0;
-  upEl.textContent = `${Math.max(0, Math.min(100, uptime))}%`;
+  const uptimeClamped = Math.max(0, Math.min(100, uptime));
 
-  // Chart: bars = OK pings/hour; line = avg latency/hour
-  const hourly = bucketByHourHealth(samples).slice(-24);
-  const chart = ensureIctChart();
+  // Last OK time
+  const lastOk = [...samples].reverse().find(s => s.ok);
+  const lastOkText = lastOk ? new Date(lastOk.ts).toLocaleTimeString() : "—";
 
-  chart.data.labels = hourly.map(b => b.t);
+  // Paint pill
+  if (ok){
+    dotEl.style.background = "#22c55e"; // green
+    dotEl.style.boxShadow = "0 0 0 3px rgba(34,197,94,.18)";
+    mainEl.textContent = `API: online • ${latencyMs ?? "—"} ms`;
+  } else {
+    dotEl.style.background = "#ef4444"; // red
+    dotEl.style.boxShadow = "0 0 0 3px rgba(239,68,68,.18)";
+    mainEl.textContent = `API: offline`;
+  }
 
-  chart.data.datasets = [
-    {
-      type: "bar",
-      label: "OK pings/hour",
-      data: hourly.map(b => ({ x:b.t, y:b.ok })),
-      borderWidth: 0
-    },
-    {
-      type: "line",
-      label: "Avg latency (ms)",
-      yAxisID: "y1",
-      data: hourly.map(b => ({ x:b.t, y: b.latN ? Math.round(b.latSum / b.latN) : 0 })),
-      borderWidth: 2,
-      pointRadius: 0
-    }
-  ];
-
-  chart.update();
+  subEl.textContent = `Uptime(24h): ${uptimeClamped}% • last OK: ${lastOkText} • ${new Date().toLocaleTimeString()}`;
 }
 
-    // call on startup & refresh every minute
-    refreshICT();
-    setInterval(refreshICT, 60_000);
 
-    // ==========================
 // Weather Forecast (Open-Meteo) (NEW)
 // ==========================
 const CODOGNO = { lat: 45.165, lon: 9.703 }; // your town center
