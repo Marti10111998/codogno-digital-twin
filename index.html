@@ -94,10 +94,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
     .dragging    { opacity: .95; }
 
     /* === universal panel helpers === */
-    .panel { position:absolute; }
-    .panel .panel-tools {
-      position:absolute; right:8px; top:6px; display:flex; gap:6px; z-index:5;
-    }
     .panel .toolbtn{
       width:22px; height:22px; line-height:22px; text-align:center;
       font-size:12px; border-radius:6px; background:rgba(0,0,0,.06);
@@ -116,12 +112,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   padding-right: 86px; /* space for ☾ − ⤺ */
 }
 
-/* Align tools vertically to the header center */
-.panel .panel-tools{
-  top: 50%;
-  transform: translateY(-50%);
-  right: 10px;
-}
 
 /* Give the pollution chart a real, larger drawing area */
 #envPanel .pollChartWrap{
@@ -706,18 +696,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 #uhiLegendRight .pollTile{
   padding: 5px 8px;
   border-radius: 8px;
-}
-
-/* Tool buttons: vertical stack + consistent placement */
-.panel .panel-tools{
-  position: absolute;
-  right: 10px;
-  top: 10px;
-
-  display: flex;
-  flex-direction: column;   /* ✅ one under the other */
-  gap: 8px;
-  z-index: 10;
 }
 
 /* Slightly larger + cleaner hit area */
