@@ -41,11 +41,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 /* Drag handles & headings smaller */
 .drag-handle { font-size: 10px !important; padding: 2px 4px !important; }
 
-/* Labels / helper text nudge down a bit */
-#controlPanel .font-medium { font-weight: 600; font-size: .9rem !important; }
-#controlPanel .text-sm     { font-size: .8rem !important; }
-#controlPanel .text-xs     { font-size: .7rem !important; }
-
 /* Tooltip a touch smaller */
 #tooltip { font-size: 12px; padding: 4px 6px; }
 
@@ -113,19 +108,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   padding-right: 86px; /* space for ☾ − ⤺ */
 }
 
-
-/* Give the pollution chart a real, larger drawing area */
-#envPanel .pollChartWrap{
-  width: 100%;
-  height: 220px;      /* "full length" + more downward */
-  margin-top: 8px;
-}
-
-/* Let Chart.js fill the wrapper */
-#envPanel #pollutionChart{
-  width: 100% !important;
-  height: 100% !important;
-}
 
 /* Remove the old cap (override it) */
 #envPanel canvas#pollutionChart{
@@ -410,9 +392,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   max-width: 340px;
 }
 
-/* pill becomes draggable */
-#ictPill.dragging { opacity: .95; }
-
 
 .ictDot{
   width: 10px;
@@ -483,23 +462,8 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   width: clamp(420px, 70vw, 920px) !important;
   max-height: 48vh !important;
 }
-#envPanel .ui-body{
-  max-height: calc(48vh - 92px);
-  overflow: auto;
-}
 
 
-/* ===== EnvPanel: side-by-side Pollution + Weather (same scroll) ===== */
-.envGrid{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-/* stack on smaller screens */
-@media (max-width: 980px){
-  .envGrid{ grid-template-columns: 1fr; }
-}
 
 /* Pollution layout: chart should use FULL width */
 .pollRow{
@@ -538,25 +502,7 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 .pollTile .u{ font-size: 10px; opacity: .75; margin-left: 6px; }
 
 
-/* Make env panel content scroll inside the panel */
-#envPanel .ui-body{
-  max-height: calc(42vh - 92px); /* header + tabs */
-  overflow: auto;
-}
 
-/* ===== EnvPanel: Pollution + Weather side-by-side ===== */
-.envGrid{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-/* Stack on small screens */
-@media (max-width: 980px){
-  .envGrid{
-    grid-template-columns: 1fr;
-  }
-}
 
 #ictPill{
   position: fixed !important;
@@ -744,56 +690,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 }
 
 
-/* Buttons styling (unchanged, just consistent) */
-.panel .toolbtn{
-  width: 20px;
-  height: 20px;
-  line-height: 20px;
-  border-radius: 7px;
-  font-size: 11px;
-
-  /* Header: single row, classic layout */
-.ui-header{
-  position: relative;
-  display: flex;
-  align-items: flex-start;      /* title stays up */
-  gap: 6px;                     /* vertical distance inside title block */
-  padding: 10px 12px;
-  padding-right: 70px;          /* reserve space for buttons */
-}
-
-/* Title block keeps title + subtitle stacked */
-.ui-header > div:first-child{
-  display: flex;
-  flex-direction: column;
-  gap: 1px;                     /* distance between title & subtitle */
-}
-
-/* Buttons exactly like before: top-right */
-.panel .panel-tools{
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  display: flex;
-  gap: 6px;
-}
-
-}
-
-/* ============================
-   Pollution chart sizing
-   ============================ */
-
-#envPanel .pollChartWrap{
-  width: 100%;
-  height: 360px;     /* ⬅️ make the graph MUCH larger */
-  margin-top: 12px;
-}
-#envPanel #pollutionChart{
-  width: 100% !important;
-  height: 100% !important;
-  display: block;
-}
 #envPanel canvas{
   max-height: none !important;
 }
@@ -816,18 +712,9 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   margin-top: 12px;
 }
 
-#envPanel #pollutionChart{
-  width: 100% !important;
-  height: 100% !important;
-  display: block;
-}
 
 #envPanel canvas{
   max-height: none !important;
-}
-/* ===== Bigger Pollution chart (single source of truth) ===== */
-#envPanel .pollChartWrap{
-  height: 520px;           /* <-- increase this (e.g. 520–700) */
 }
 
 /* Let Chart.js fill the wrapper */
@@ -837,17 +724,10 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   display: block;
 }
 
-/* Ensure no hidden caps apply */
-#envPanel canvas#pollutionChart{
-  max-height: none !important;
-}
 #envPanel{
   height: 60vh;                 /* starting size */
 }
-#envPanel .pollChartWrap{
-  height: calc(100% - 210px);   /* chart grows/shrinks with panel */
-  min-height: 320px;
-}
+
 .drag-handle{ cursor: move; }
 .ui-header{ pointer-events: auto; }
 
