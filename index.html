@@ -714,39 +714,40 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 }
 
 /* ============================
-   Panel tool buttons (global)
+   Panel header + tool buttons
    ============================ */
 
-
-   /* Header spacing */
+/* Make room in the header so buttons never overlap text */
 .ui-header{
   position: relative;
-  padding-right: 72px;
+  padding-right: 72px;     /* space for two buttons */
   padding-top: 14px;
   padding-bottom: 14px;
 }
 
-/* Tool stack position */
+/* Tool buttons container (side by side) */
 .panel .panel-tools{
   position: absolute;
-  right: 26px;   /* ← more left */
-  top: 40px;     /* ← more down */
+  top: 30px;               /* move DOWN */
+  right: 22px;             /* move LEFT */
 
   display: flex;
-  flex-direction: column;
+  flex-direction: row;    /* side by side */
   gap: 6px;
 
   z-index: 10;
 }
 
-/* Buttons */
+/* Individual buttons */
 .panel .toolbtn{
   width: 20px;
   height: 20px;
   line-height: 20px;
-  border-radius: 7px;
+
   font-size: 11px;
+  border-radius: 7px;
 }
+
 
 
 
