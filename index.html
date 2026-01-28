@@ -2086,6 +2086,9 @@ async function refreshICT(){
   const mainEl    = document.getElementById("ictPillMain");
   const subEl     = document.getElementById("ictPillSub");
 
+  document.getElementById("ictPill")?.addEventListener("click", ()=> window.open(`${POLLUTION_API}/health`, "_blank"));
+
+
   // If pill is missing, just bail silently
   if (!pill || !dotEl || !mainEl || !subEl) return;
 
