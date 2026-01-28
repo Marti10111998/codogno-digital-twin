@@ -621,17 +621,15 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
     </div>
   </div>
 
-  <!-- ICT / Ops panel -->
-<div id="ictPanel"
-     class="absolute top-4 right-4 w-[520px] z-20 font-sans rounded-xl">
-
-  <div class="drag-handle ui-header">
-    <div style="min-width:0;">
-      <div class="ui-title">System Health</div>
-      <div class="ui-subtitle">Ops telemetry</div>
-    </div>
-    <div id="ictStamp" class="ui-subtitle" style="margin-left:auto;">—</div>
+<!-- System Health (compact status pill) -->
+<div id="ictPill" class="ictPill">
+  <span id="ictPillDot" class="ictDot"></span>
+  <div class="ictPillText">
+    <div id="ictPillMain" class="ictMain">API: —</div>
+    <div id="ictPillSub" class="ictSub">—</div>
   </div>
+</div>
+
 
   <div class="ui-body">
     <div class="grid grid-cols-3 gap-3 text-sm">
