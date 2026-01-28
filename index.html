@@ -459,6 +459,21 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   overflow: auto;
 }
 
+/* ===== EnvPanel: Pollution + Weather side-by-side ===== */
+.envGrid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Stack on small screens */
+@media (max-width: 980px){
+  .envGrid{
+    grid-template-columns: 1fr;
+  }
+}
+
+
 /* Smaller chart area so it doesn't grow the panel */
 #envPanel canvas#pollutionChart{ max-height: 160px !important; }
 #envPanel canvas#wTrendChart{ max-height: 140px !important; }
@@ -2266,16 +2281,19 @@ async function refreshICT(){
 }
 
 // ===== ICT pill: draggable + expandable =====
+// ===== ICT pill: fixed position + expandable (NO dragging, NO moving the expand panel) =====
 (function ictPillUI(){
-  const pill = document.getElementById("ictPill");
-  const expand = document.getElementById("ictExpand");
+  const pill     = document.getElementById("ictPill");
+  const expand   = document.getElementById("ictExpand");
   const closeBtn = document.getElementById("ictCloseBtn");
 
   if (!pill || !expand) return;
 
-  const open = () => expand.classList.remove("hidden");
-  const close = () => expand.classList.add("hidden");
+  const close  = () => expand.classList.add("hidden");
   const toggle = () => expand.classList.toggle("hidden");
+
+  // Keep original fixed CSS positioning (do not override right/top/left)
+  // pill stays fixed top-right via CSS; expand stays fixed via its inline style (right/top)
 
   closeBtn?.addEventListener("click", (e) => { e.stopPropagation(); close(); });
 
@@ -2288,103 +2306,12 @@ async function refreshICT(){
     if (e.key === "Escape") close();
   });
 
-  // --- draggable pill with click-vs-drag threshold
-  let dragging = false;
-  let moved = false;
-  let startX = 0, startY = 0;
-  let startLeft = 0, startTop = 0;
-
-  function normalizeToLeftTop(){
-    const r = pill.getBoundingClientRect();
-    pill.style.left = `${r.left}px`;
-    pill.style.top  = `${r.top}px`;
-    pill.style.right = "";
-    pill.style.bottom = "";
-    pill.style.position = "fixed";
-  }
-
-  function clampToViewport(left, top){
-    const pad = 8;
-    const r = pill.getBoundingClientRect();
-    const maxL = window.innerWidth  - r.width  - pad;
-    const maxT = window.innerHeight - r.height - pad;
-    return [
-      Math.max(pad, Math.min(left, maxL)),
-      Math.max(pad, Math.min(top,  maxT)),
-    ];
-  }
-
-  const onDown = (ev) => {
-    if (ev.target.closest("button, a, input, select, textarea")) return;
-
-    normalizeToLeftTop();
-    dragging = true;
-    moved = false;
-
-    const p = ev.touches ? ev.touches[0] : ev;
-    startX = p.clientX;
-    startY = p.clientY;
-
-    startLeft = parseFloat(pill.style.left) || 0;
-    startTop  = parseFloat(pill.style.top)  || 0;
-
-    pill.style.zIndex = "50000";
-
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp, { once: true });
-    window.addEventListener("touchmove", onMove, { passive:false });
-    window.addEventListener("touchend", onUp, { once: true });
-
-    ev.preventDefault();
-  };
-
-  const onMove = (ev) => {
-    if (!dragging) return;
-    const p = ev.touches ? ev.touches[0] : ev;
-    const dx = p.clientX - startX;
-    const dy = p.clientY - startY;
-
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
-
-    let nextLeft = startLeft + dx;
-    let nextTop  = startTop  + dy;
-    [nextLeft, nextTop] = clampToViewport(nextLeft, nextTop);
-
-    pill.style.left = `${nextLeft}px`;
-    pill.style.top  = `${nextTop}px`;
-
-    // keep the panel anchored under the pill when open
-    if (!expand.classList.contains("hidden")) {
-      expand.style.left = `${nextLeft}px`;
-      expand.style.right = "";
-      expand.style.top = `${nextTop + pill.getBoundingClientRect().height + 8}px`;
-    }
-
-    ev.preventDefault();
-  };
-
-  const onUp = () => {
-    dragging = false;
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("touchmove", onMove);
-  };
-
-  pill.addEventListener("mousedown", onDown);
-  pill.addEventListener("touchstart", onDown, { passive:false });
-
   pill.addEventListener("click", (e) => {
-    if (moved) return;
+    if (e.target.closest("button, a, input, select, textarea")) return;
     toggle();
-
-    // when opening, place panel under the pill (respect custom pill position)
-    if (!expand.classList.contains("hidden")) {
-      const r = pill.getBoundingClientRect();
-      expand.style.left = `${r.left}px`;
-      expand.style.right = "";
-      expand.style.top = `${r.top + r.height + 8}px`;
-    }
   });
 })();
+
 
 
 // Weather Forecast (Open-Meteo) (NEW)
