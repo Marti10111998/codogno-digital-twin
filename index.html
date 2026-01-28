@@ -708,6 +708,34 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   border-radius: 8px;
 }
 
+/* Tool buttons: vertical stack + consistent placement */
+.panel .panel-tools{
+  position: absolute;
+  right: 10px;
+  top: 10px;
+
+  display: flex;
+  flex-direction: column;   /* ✅ one under the other */
+  gap: 8px;
+  z-index: 10;
+}
+
+/* Slightly larger + cleaner hit area */
+.panel .toolbtn{
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+/* Reserve a right gutter in every panel header so tools never overlap text */
+.ui-header{
+  position: relative;
+  padding-right: 54px; /* ✅ enough for a vertical 28px tool column */
+}
+
+
 
   </style>
 </head>
@@ -2889,8 +2917,8 @@ const PANELS = [
           tools.innerHTML = `
   <div class="toolbtn" title="Toggle theme (this panel)" data-act="theme">☾</div>
   <div class="toolbtn" title="Collapse/Expand" data-act="toggle">−</div>
-  <div class="toolbtn" title="Reset size" data-act="reset">⤺</div>
 `;
+
 
 // ✅ set icon based on current theme at startup
 const themeBtn = tools.querySelector('[data-act="theme"]');
@@ -2902,12 +2930,9 @@ if (themeBtn) themeBtn.textContent = (el.dataset.theme === "dark" ? "☀" : "☾
             const btn = e.target.closest('.toolbtn'); if (!btn) return;
             if (btn.dataset.act === 'theme') {
   el.__toggleTheme?.();
-  // icon flip
   btn.textContent = (el.dataset.theme === "dark" ? "☀" : "☾");
 }
 if (btn.dataset.act === 'toggle') el.classList.toggle('panel-collapsed');
-if (btn.dataset.act === 'reset') { el.style.width=''; el.style.height=''; }
-
           });
         }
 
