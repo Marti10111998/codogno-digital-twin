@@ -1989,10 +1989,28 @@ function forceForecastUIOn(){
   } } },
   thresholdLine: { value: 0 },
   // turn on day labels along the bottom of the chart
-  dayLines: { showLabels: true }
+  dayLines: { showLabels: false }
 },
           scales: {
-            x: { type: "time" },
+            x: {
+  type: "time",
+  time: {
+    unit: "hour",
+    displayFormats: {
+      minute: "HH:mm",
+      hour: "HH:mm",
+      day: "MMM d"
+    }
+  },
+  ticks: {
+    autoSkip: true,
+    maxTicksLimit: 8,
+    maxRotation: 0,
+    minRotation: 0,
+    padding: 6
+  }
+},
+
             y: { title: { display: true, text: "concentration (µg/m³ or ppm)" } }
           },
           elements: { point: { radius: 0 }, line: { tension: 0.25 } }
@@ -2039,6 +2057,13 @@ function forceForecastUIOn(){
 
       chart.options.scales.x.time.unit =
         (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
+        // keep x labels readable (dynamic density)
+chart.options.scales.x.ticks.maxTicksLimit =
+  (gran === "day") ? 7 : (gran === "hour") ? 8 : 6;
+
+// show day labels only when it makes sense (daily view)
+chart.options.plugins.dayLines.showLabels = (gran === "day");
+
 
 const measuredAgg = aggregateSeries(
   sliceDaysBack(tsStore[pollutant] || [], daysBack), gran
