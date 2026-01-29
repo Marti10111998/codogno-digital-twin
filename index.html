@@ -970,6 +970,16 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 #ictPill{ cursor: grab; }
 #ictPill.dragging{ cursor: grabbing; }
 
+/* ===== Footer: dark theme ===== */
+footer{
+  background: rgba(0,0,0,0.60) !important;
+  border: 1px solid rgba(255,255,255,0.16) !important;
+  color: rgba(255,255,255,0.85) !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.35) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
 
   </style>
 </head>
@@ -2645,15 +2655,12 @@ setInterval(refreshWeatherForecast, 15 * 60_000); // every 15 minutes
       // ====== Live Traffic (TomTom) ======
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
       const trafficRefresh = document.getElementById("trafficRefresh");
-      const trafficStatus = document.createElement("div");
       Object.assign(trafficStatus.style, {
         position:"absolute", right:"1rem", top:"1rem", zIndex:20,
         background:"rgba(255,255,255,0.9)", padding:"6px 10px", borderRadius:"10px",
         fontFamily:"system-ui, sans-serif", fontSize:"12px", boxShadow:"0 2px 6px rgba(0,0,0,.15)"
       });
       trafficStatus.textContent = "Traffic: starting…";
-      document.body.appendChild(trafficStatus);
-      const setTrafficStatus = (msg)=>trafficStatus.textContent = `Traffic: ${msg}`;
 
       function addOrUpdateTrafficLayer(){
         const ts = Date.now();
