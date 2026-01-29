@@ -951,9 +951,15 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
       <div class="mt-3 grid grid-cols-2 gap-3">
         <div>
           <label class="block text-sm font-medium">Pollutant</label>
-          <select id="chartPollutant" class="w-full border rounded px-2 py-1">
-            <option>O3</option><option>NO2</option><option>NO</option><option>CO</option><option>NH3</option><option>Noise</option>
-          </select>
+<select id="chartPollutant" class="w-full border rounded px-2 py-1">
+  <option>O3</option>
+  <option selected>NO2</option>
+  <option>NO</option>
+  <option>CO</option>
+  <option>NH3</option>
+  <option>Noise</option>
+</select>
+
         </div>
 
         <div>
@@ -2021,22 +2027,29 @@ function updateUhiHalo(){
       setPredictedHorizon(latestPredictions, baseTs);
       renderPollutionChart();
     }
-    function initChartUI(){
-      ["chartPollutant","chartGranularity","chartDaysBack","chartShowPred","chartHorizon"]
-        .forEach(id=> document.getElementById(id).addEventListener("change", renderPollutionChart));
+    
+function initChartUI(){
 
-      const thrInput = document.getElementById('chartThreshold');
-      if (thrInput){
-        thrInput.addEventListener('change', ()=>{
-          const pol = document.getElementById("chartPollutant").value;
-          const v = parseFloat(thrInput.value);
-          if (Number.isFinite(v)) THRESHOLDS[pol] = v;
-          renderPollutionChart();
-        });
-      }
+  // ✅ Force default pollutant to NO2 on startup
+  const polSel = document.getElementById("chartPollutant");
+  if (polSel) polSel.value = "NO2";
 
+  ["chartPollutant","chartGranularity","chartDaysBack","chartShowPred","chartHorizon"]
+    .forEach(id=> document.getElementById(id).addEventListener("change", renderPollutionChart));
+
+  const thrInput = document.getElementById('chartThreshold');
+  if (thrInput){
+    thrInput.addEventListener('change', ()=>{
+      const pol = document.getElementById("chartPollutant").value;
+      const v = parseFloat(thrInput.value);
+      if (Number.isFinite(v)) THRESHOLDS[pol] = v;
       renderPollutionChart();
-    }
+    });
+  }
+
+  renderPollutionChart();
+}
+
 
     // ==========================
     // Pollution tiles panel
