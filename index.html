@@ -911,6 +911,25 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   padding-bottom: 10px;
 }
 
+/* ===========================
+   THEME-AWARE SUN BUTTON
+   (match UHI legend style)
+   =========================== */
+
+.sun-btn{
+  color: var(--accent-uhi);     /* same token used by UHI legend */
+  background: transparent;
+  border: none;
+}
+
+/* Hover / active states stay subtle */
+.sun-btn:hover{
+  color: color-mix(in srgb, var(--accent-uhi) 85%, white);
+}
+
+.panel[data-theme="dark"] .sun-btn:hover{
+  color: color-mix(in srgb, var(--accent-uhi) 85%, black);
+}
 
 
   </style>
