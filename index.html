@@ -504,14 +504,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   background: rgba(255,255,255,.75);
 }
 
-/* Env panel: compact + never cover the whole viewport */
-#envPanel{
-  width: clamp(420px, 70vw, 920px) !important;
-  max-height: 48vh !important;
-}
-
-
-
 /* Pollution layout: chart should use FULL width */
 .pollRow{
   display: block !important;   /* no second column */
@@ -830,6 +822,21 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 .panel .panel-body .ui-body{
   overflow: visible;
   max-height: none;
+}
+
+/* ===========================
+   ENV PANEL: SMALL WHEN STACKED
+   =========================== */
+#brStack #envPanel{
+  width: clamp(360px, 34vw, 520px) !important;
+  height: auto !important;
+  max-height: 44vh !important;
+}
+
+/* Make the scroll container match the stack height */
+#brStack #envPanel .panel-body{
+  max-height: calc(44vh - 52px) !important;
+  overflow: auto !important;
 }
 
 
