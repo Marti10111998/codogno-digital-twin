@@ -29,15 +29,6 @@
 /* make all Tailwind rem-based sizes smaller */
 html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. */
 
-/* Apply the same base panel tuning to BOTH bottom-right panels */
-#envPanel, #weatherPanel{
-  padding: 12px !important;
-  border-radius: 10px !important;
-  line-height: 1.25;
-}
-
-
-
 /* Drag handles & headings smaller */
 .drag-handle { font-size: 10px !important; padding: 2px 4px !important; }
 
@@ -868,6 +859,46 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 #envPanel .panel-body,
 #weatherPanel .panel-body{
   background: transparent;
+}
+
+/* =====================================================
+   FORCE Env + Weather to MATCH Control panel styling
+   (style only — NOT size)
+   ===================================================== */
+
+/* Panels themselves have NO padding (same as control) */
+#envPanel,
+#weatherPanel{
+  padding: 0 !important;
+  border-radius: 16px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--panel-shadow);
+}
+
+/* Header matches control exactly */
+#envPanel .ui-header,
+#weatherPanel .ui-header{
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--panel-divider);
+  background: var(--panel-handle);
+}
+
+/* Body matches control exactly */
+#envPanel .ui-body,
+#weatherPanel .ui-body{
+  padding: 12px;          /* SAME as control panel */
+  background: transparent;
+}
+
+/* Kill ALL extra inner containers visually */
+#envPanel .panel-body,
+#weatherPanel .panel-body{
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 
