@@ -845,16 +845,29 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 
 /* Light theme */
 .panel .ui-header{
-  border-bottom: 1px solid rgba(0,0,0,0.12);
-  box-shadow:
-    inset 0 -1px 0 rgba(255,255,255,0.35); /* soft glass edge */
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  box-shadow: none;
 }
+
 
 /* Dark theme */
 .panel[data-theme="dark"] .ui-header{
-  border-bottom: 1px solid rgba(255,255,255,0.18);
-  box-shadow:
-    inset 0 -1px 0 rgba(0,0,0,0.45);
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+
+
+/* === Normalize Env + Weather panels to match Control panel === */
+
+/* Remove the "double inset" feeling */
+#envPanel .ui-body,
+#weatherPanel .ui-body{
+  padding: 10px 10px;   /* was effectively thicker */
+}
+
+/* Ensure body does not add an inner border illusion */
+#envPanel .panel-body,
+#weatherPanel .panel-body{
+  background: transparent;
 }
 
 
