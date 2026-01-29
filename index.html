@@ -1505,8 +1505,13 @@ const DEVICE_KEY = "device_id_v1";
         paintPollutionPanelNow();
 
       } catch (err) {
-        console.error("Weather/UHI fetch error:", err);
-      }
+  console.error("Weather/UHI fetch error:", err);
+
+  // ✅ still compute Holt-Winters forecast from whatever history we have
+  requestForecast();
+  renderPollutionChart();
+}
+
     }
 
     function computeUHI(urbanTemp, height, wind, clouds){
@@ -1841,7 +1846,21 @@ function updateUhiHalo(){
     const CH_BLUE_PREDICTED = '#3b82f6';               // blue-500 (dashed)
     const CH_BLUE_BAND      = 'rgba(59,130,246,0.10)'; // uncertainty fill
 
-    let pollutionChart = null;
+let pollutionChart = null;
+
+function hasUsableMeasuredData(points){
+  return Array.isArray(points) && points.length >= 3;
+}
+
+function forceForecastUIOn(){
+  const showPredEl = document.getElementById("chartShowPred");
+  const horizonEl  = document.getElementById("chartHorizon");
+  if (showPredEl) showPredEl.checked = true;
+  if (horizonEl && (!horizonEl.value || horizonEl.value === "0")) {
+    horizonEl.value = "168"; // default 7 days
+  }
+}
+
     function ensureChart(){
       const ctx = document.getElementById("pollutionChart").getContext("2d");
       if (pollutionChart) return pollutionChart;
@@ -1924,38 +1943,63 @@ function updateUhiHalo(){
       chart.options.scales.x.time.unit =
         (gran === 'day' ? 'day' : (gran === 'hour' ? 'hour' : 'minute'));
 
-      const measuredAgg = aggregateSeries(
-        sliceDaysBack(tsStore[pollutant] || [], daysBack), gran
-      ).map(p=>({ x:p.t, y:p.v }));
+const measuredAgg = aggregateSeries(
+  sliceDaysBack(tsStore[pollutant] || [], daysBack), gran
+).map(p=>({ x:p.t, y:p.v }));
 
-      let predictedAgg = [];
-      if (showPred && horizonHrs > 0) {
-        const now = Date.now(), horizonMs = horizonHrs * 3600 * 1000;
-        const future = (tsStore.pred?.[pollutant] || [])
-          .filter(p => p.ts >= now && p.ts <= now + horizonMs);
-        predictedAgg = aggregateSeries(future, gran).map(p=>({ x:p.t, y:p.v }));
-      }
+// --- Forecast (Holt-Winters) selection ---
+let predictedAgg = [];
+const now = Date.now();
+const horizonMs = horizonHrs * 3600 * 1000;
+
+// If measured is missing, FORCE forecast to show
+const measuredOk = hasUsableMeasuredData(measuredAgg);
+let effectiveShowPred = showPred;
+
+if (!measuredOk) {
+  forceForecastUIOn();
+  effectiveShowPred = true;
+}
+
+// Build predicted series if enabled
+if (effectiveShowPred && horizonHrs > 0) {
+  const future = (tsStore.pred?.[pollutant] || [])
+    .filter(p => p.ts >= now && p.ts <= now + horizonMs);
+
+  predictedAgg = aggregateSeries(future, gran).map(p=>({ x:p.t, y:p.v }));
+}
+
 
       const thr = Number.isFinite(THRESHOLDS[pollutant]) ? THRESHOLDS[pollutant] : Infinity;
       const peaks = findPeaks(measuredAgg);
       const band  = buildPredictionBand(measuredAgg, predictedAgg);
       const unit  = UNITS[pollutant] || '';
 
-      const dsMeasured = {
-        label: `${pollutant} (measured)`,
-        data: measuredAgg,
-        borderWidth: 3,
-        borderColor: CH_BLUE_MEASURED,
-        backgroundColor: 'transparent',
-        pointRadius: 0,
-        metaPollutant: pollutant,
-        order: 20
-      };
+      const measuredOk2 = hasUsableMeasuredData(measuredAgg);
 
-      const datasets = [dsMeasured];
+// If no measured data, show forecast as the primary series (forecast-only mode)
+const primaryData  = measuredOk2 ? measuredAgg : predictedAgg;
+const primaryLabel = measuredOk2 ? `${pollutant} (measured)` : `${pollutant} (forecast — API offline)`;
 
-      if (showPred && predictedAgg.length){
-  // keep lower series (for the fill target) but hide it from the legend
+const dsPrimary = {
+  label: primaryLabel,
+  data: primaryData,
+  borderWidth: 3,
+  borderColor: CH_BLUE_MEASURED,
+  backgroundColor: 'transparent',
+  pointRadius: 0,
+  metaPollutant: pollutant,
+  order: 20
+};
+
+const datasets = [dsPrimary];
+
+
+// Only add separate forecast layers if we ALSO have measured data.
+// (If we're forecast-only, dsPrimary already *is* the forecast)
+if (measuredOk2 && effectiveShowPred && predictedAgg.length){
+  const band  = buildPredictionBand(measuredAgg, predictedAgg);
+
   const dsPredLower = {
     label: "",
     skipLegend: true,
@@ -1979,6 +2023,7 @@ function updateUhiHalo(){
   datasets.push(dsPredLower, dsPredUpper, dsPred);
 }
 
+
       if (peaks.length){
         datasets.push({
           type: 'scatter',
@@ -1994,8 +2039,10 @@ function updateUhiHalo(){
       chart.options.scales.y.title.text = `${pollutant} (${unit})`;
       chart.options.plugins.thresholdLine.value = thr;
 
-      document.getElementById("pollutionChartStatus").textContent =
-        `${pollutant} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • pts: ${measuredAgg.length}`;
+      const mode = measuredOk2 ? "measured+forecast" : "forecast-only (API offline)";
+document.getElementById("pollutionChartStatus").textContent =
+  `${pollutant} • ${mode} • granularity: ${gran} • past: ${daysBack}d • future: ${horizonHrs}h • measured pts: ${measuredAgg.length} • forecast pts: ${predictedAgg.length}`;
+
 
       chart.update();
 
@@ -2027,7 +2074,7 @@ function updateUhiHalo(){
       setPredictedHorizon(latestPredictions, baseTs);
       renderPollutionChart();
     }
-    
+
 function initChartUI(){
 
   // ✅ Force default pollutant to NO2 on startup
@@ -2122,6 +2169,9 @@ function initChartUI(){
     // ==========================
     async function startCesiumApp(){
       loadTsStore();
+      // If we already have any stored measured points, forecast immediately
+requestForecast();
+
 
       const viewerOpts = { baseLayerPicker:true, timeline:false, animation:false, shadows:true };
       // Show Codogno from above as the default overview (Home button too)
