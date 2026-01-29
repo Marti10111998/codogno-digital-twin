@@ -165,6 +165,53 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   --panel-handle: rgba(255,255,255,.08);
 }
 
+/* ===========================
+   THEME-AWARE SCROLLBARS
+   =========================== */
+
+/* Firefox */
+.panel{
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15,23,42,.28) transparent;
+}
+.panel[data-theme="dark"]{
+  scrollbar-color: rgba(255,255,255,.22) transparent;
+}
+
+/* WebKit (Chrome/Edge/Safari) */
+.panel ::-webkit-scrollbar{
+  width: 10px;
+  height: 10px;
+}
+
+.panel ::-webkit-scrollbar-track{
+  background: transparent;
+  border-radius: 999px;
+}
+
+.panel ::-webkit-scrollbar-thumb{
+  background: rgba(15,23,42,.18);
+  border-radius: 999px;
+  border: 2px solid transparent;     /* creates a “floating” thumb */
+  background-clip: content-box;
+}
+
+.panel[data-theme="dark"] ::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.16);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.panel ::-webkit-scrollbar-thumb:hover{
+  background: rgba(15,23,42,.28);
+  background-clip: content-box;
+}
+.panel[data-theme="dark"] ::-webkit-scrollbar-thumb:hover{
+  background: rgba(255,255,255,.26);
+  background-clip: content-box;
+}
+
+
 
 .panel{
   background: var(--panel-bg) !important;
@@ -545,15 +592,15 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   width: clamp(360px, 34vw, 520px) !important;
   max-height: 44vh !important;
 }
-#weatherPanel .ui-body{
-  max-height: calc(44vh - 52px); /* header height */
+#weatherPanel .panel-body{
+  max-height: calc(44vh - 52px);
+  overflow: auto;
+}
+#envPanel .panel-body{
+  max-height: calc(44vh - 52px);
   overflow: auto;
 }
 
-#envPanel{
-  width: clamp(360px, 34vw, 520px) !important;
-  max-height: 44vh !important;
-}
 #envPanel .ui-body{
   max-height: calc(44vh - 52px);
   overflow: auto;
@@ -742,6 +789,49 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   max-height: none !important;
   display: block;
 }
+
+/* ===========================
+   CLIP PANELS + SCROLL INSIDE
+   =========================== */
+
+/* Ensure the panel itself always clips its contents */
+.panel{
+  overflow: hidden;                 /* <-- prevents scrollbar/contents from escaping */
+  border-radius: 16px;              /* keep consistent clipping */
+}
+
+/* Make sure the panel header never scrolls */
+.panel .ui-header{
+  flex: 0 0 auto;
+}
+
+/* Make the content area the ONLY scrolling region */
+.panel .ui-body,
+.panel .panel-body{
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;     /* prevents “scroll chaining” to page */
+}
+
+/* Prevent content from forcing overflow outside */
+.panel .ui-body,
+.panel .panel-body,
+.panel *{
+  box-sizing: border-box;
+}
+
+/* Prefer the wrapper created by enhancePanels() as the scroll container */
+.panel .panel-body{
+  overflow: auto;
+  max-height: 100%;
+}
+
+/* If ui-body exists inside panel-body, it should NOT create a second scrollbar */
+.panel .panel-body .ui-body{
+  overflow: visible;
+  max-height: none;
+}
+
 
   </style>
 </head>
