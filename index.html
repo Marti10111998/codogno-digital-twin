@@ -2299,17 +2299,17 @@ if (measuredOk2 && effectiveShowPred && predictedAgg.length){
         });
       }
 
-      // ---- Threshold legend entry (orange) ----
+// ---- Threshold legend entry (orange, solid) ----
 datasets.push({
   label: "Threshold",
-  data: [],                // no data, legend-only
-  borderColor: "#f59e0b",  // same orange as threshold line
+  data: [],                 // legend-only
+  borderColor: "#f59e0b",   // same orange as threshold line
   borderWidth: 2,
-  borderDash: [6, 4],
   pointRadius: 0,
   fill: false,
-  skipLegend: false        // ensure legend shows it
+  skipLegend: false
 });
+
 
 
       chart.data.datasets = datasets;
