@@ -712,21 +712,21 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   grid-row: 1;
 }
 
-/* Header: single-row layout */
+/* Header: title + tools grouped together on the LEFT */
 .ui-header{
-  display: grid;
-  grid-template-columns: 1fr auto; /* title | tools */
+  display: flex;
   align-items: center;
-  gap: 12px;                       /* ⬅️ the “distance” you want */
+  gap: 10px;
   padding: 10px 12px;
 }
 
-/* Tools stay in the same row, right side */
+/* Keep tools inline next to the title */
 .panel .panel-tools{
-  grid-column: 2;
   display: flex;
   gap: 6px;
+  margin-left: 8px;   /* spacing between title block and buttons */
 }
+
 
 
 #envPanel canvas{
