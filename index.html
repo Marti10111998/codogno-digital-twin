@@ -956,6 +956,26 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   margin-left: 10px !important;  /* tweak 8–16px */
 }
 
+/* ===== API pill: DARK THEME ===== */
+#ictPill.ictPill{
+  background: rgba(0,0,0,0.60) !important;
+  border: 1px solid rgba(255,255,255,0.16) !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.35) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+#ictPill .ictMain{
+  color: rgba(255,255,255,.92) !important;
+}
+#ictPill .ictSub{
+  color: rgba(255,255,255,.65) !important;
+}
+
+/* Optional: nicer “grab” feel */
+#ictPill{ cursor: grab; }
+#ictPill.dragging{ cursor: grabbing; }
+
 
   </style>
 </head>
@@ -2844,8 +2864,7 @@ async function refreshICT(){
   subEl.textContent = `Uptime(24h): ${uptimeClamped}% • last OK: ${lastOkText} • ${new Date().toLocaleTimeString()}`;
 }
 
-// ===== ICT pill: draggable + expandable =====
-// ===== ICT pill: fixed position + expandable (NO dragging, NO moving the expand panel) =====
+// ===== ICT pill: draggable + expandable (NEW) =====
 (function ictPillUI(){
   const pill     = document.getElementById("ictPill");
   const expand   = document.getElementById("ictExpand");
@@ -2853,28 +2872,147 @@ async function refreshICT(){
 
   if (!pill || !expand) return;
 
+  const POS_KEY = "ict_pill_pos_v1";
+
+  // restore saved position
+  try{
+    const saved = JSON.parse(localStorage.getItem(POS_KEY) || "null");
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)){
+      pill.style.left = saved.left + "px";
+      pill.style.top  = saved.top  + "px";
+      pill.style.right = "auto";
+      pill.style.bottom = "auto";
+    }
+  }catch{}
+
+  const clamp = (v, min, max)=> Math.max(min, Math.min(max, v));
+
+  function placeExpandNearPill(){
+    const r = pill.getBoundingClientRect();
+    const gap = 8;
+
+    // default: below pill, left-aligned
+    let left = r.left;
+    let top  = r.bottom + gap;
+
+    // clamp inside viewport
+    const exW = expand.offsetWidth  || 380;
+    const exH = expand.offsetHeight || 260;
+    left = clamp(left, 8, window.innerWidth  - exW - 8);
+    top  = clamp(top,  8, window.innerHeight - exH - 8);
+
+    // switch expand to left/top positioning
+    expand.style.left = Math.round(left) + "px";
+    expand.style.top  = Math.round(top)  + "px";
+    expand.style.right = "auto";
+  }
+
   const close  = () => expand.classList.add("hidden");
-  const toggle = () => expand.classList.toggle("hidden");
+  const open   = () => { expand.classList.remove("hidden"); placeExpandNearPill(); };
+  const toggle = () => expand.classList.contains("hidden") ? open() : close();
 
-  // Keep original fixed CSS positioning (do not override right/top/left)
-  // pill stays fixed top-right via CSS; expand stays fixed via its inline style (right/top)
+  closeBtn?.addEventListener("click", (e)=>{ e.stopPropagation(); close(); });
 
-  closeBtn?.addEventListener("click", (e) => { e.stopPropagation(); close(); });
-
-  window.addEventListener("mousedown", (e) => {
+  window.addEventListener("mousedown", (e)=>{
     if (expand.classList.contains("hidden")) return;
     if (!pill.contains(e.target) && !expand.contains(e.target)) close();
   });
 
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") close();
-  });
+  window.addEventListener("keydown", (e)=>{ if (e.key === "Escape") close(); });
 
-  pill.addEventListener("click", (e) => {
+  // click to toggle (but not when dragging)
+  let dragged = false;
+  pill.addEventListener("click", (e)=>{
+    if (dragged) { dragged = false; return; }
     if (e.target.closest("button, a, input, select, textarea")) return;
     toggle();
   });
+
+  // --- drag logic ---
+  let isDown=false, sx=0, sy=0, startL=0, startT=0;
+
+  function onDown(e){
+    if (e.target.closest("button, a, input, select, textarea")) return;
+
+    isDown = true;
+    dragged = false;
+    pill.classList.add("dragging");
+
+    const p = e.touches ? e.touches[0] : e;
+    sx = p.clientX;
+    sy = p.clientY;
+
+    const r = pill.getBoundingClientRect();
+    // Ensure we're using left/top (not right/top)
+    pill.style.right = "auto";
+    pill.style.bottom = "auto";
+    pill.style.left = (pill.style.left || r.left + "px");
+    pill.style.top  = (pill.style.top  || r.top  + "px");
+
+    startL = parseFloat(pill.style.left) || r.left;
+    startT = parseFloat(pill.style.top)  || r.top;
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("touchmove", onMove, { passive:false });
+    window.addEventListener("mouseup", onUp, { once:true });
+    window.addEventListener("touchend", onUp, { once:true });
+
+    e.preventDefault();
+  }
+
+  function onMove(e){
+    if (!isDown) return;
+    const p = e.touches ? e.touches[0] : e;
+
+    const dx = p.clientX - sx;
+    const dy = p.clientY - sy;
+
+    const r = pill.getBoundingClientRect();
+    const w = r.width, h = r.height;
+
+    let left = startL + dx;
+    let top  = startT + dy;
+
+    left = clamp(left, 8, window.innerWidth  - w - 8);
+    top  = clamp(top,  8, window.innerHeight - h - 8);
+
+    pill.style.left = left + "px";
+    pill.style.top  = top  + "px";
+
+    dragged = true;
+
+    // keep expand attached if open
+    if (!expand.classList.contains("hidden")) placeExpandNearPill();
+
+    e.preventDefault();
+  }
+
+  function onUp(){
+    isDown = false;
+    pill.classList.remove("dragging");
+
+    // persist position
+    try{
+      const left = parseFloat(pill.style.left);
+      const top  = parseFloat(pill.style.top);
+      if (Number.isFinite(left) && Number.isFinite(top)){
+        localStorage.setItem(POS_KEY, JSON.stringify({ left, top }));
+      }
+    }catch{}
+
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("touchmove", onMove);
+  }
+
+  pill.addEventListener("mousedown", onDown);
+  pill.addEventListener("touchstart", onDown, { passive:false });
+
+  // reposition expand on resize if open
+  window.addEventListener("resize", ()=>{
+    if (!expand.classList.contains("hidden")) placeExpandNearPill();
+  });
 })();
+
 
 
 
