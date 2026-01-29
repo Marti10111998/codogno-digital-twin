@@ -931,6 +931,24 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   color: color-mix(in srgb, var(--accent-uhi) 85%, black);
 }
 
+/* === FINAL OVERRIDES: header breathing room (Env + Weather only) === */
+#envPanel > .ui-header,
+#weatherPanel > .ui-header{
+  padding-top: 16px !important;
+  padding-bottom: 10px !important;
+}
+
+#envPanel .ui-header .panel-tools,
+#weatherPanel .ui-header .panel-tools{
+  margin-left: 10px !important;
+}
+
+/* Theme button: match panel/legend tone (no yellow emoji look) */
+.panel .panel-tools [data-act="theme"]{
+  color: var(--text-strong) !important;
+  font-variant-emoji: text; /* helps on some browsers */
+}
+
 
   </style>
 </head>
@@ -3201,7 +3219,7 @@ const PANELS = [
 
 // ✅ set icon based on current theme at startup
 const themeBtn = tools.querySelector('[data-act="theme"]');
-if (themeBtn) themeBtn.textContent = (el.dataset.theme === "dark" ? "☀" : "☾");
+if (themeBtn) themeBtn.textContent = (el.dataset.theme === "dark" ? "☀︎" : "☾");
 
 
 (el.querySelector('.ui-header') || el).appendChild(tools);
@@ -3209,7 +3227,7 @@ if (themeBtn) themeBtn.textContent = (el.dataset.theme === "dark" ? "☀" : "☾
             const btn = e.target.closest('.toolbtn'); if (!btn) return;
             if (btn.dataset.act === 'theme') {
   el.__toggleTheme?.();
-  btn.textContent = (el.dataset.theme === "dark" ? "☀" : "☾");
+btn.textContent = (el.dataset.theme === "dark" ? "☀︎" : "☾");
 }
 if (btn.dataset.act === 'toggle') el.classList.toggle('panel-collapsed');
           });
