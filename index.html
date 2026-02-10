@@ -2834,17 +2834,19 @@ async function refreshICT(){
   if (!pill || !dotEl || !mainEl || !subEl) return;
 
   // Ping the current API (ngrok) health endpoint
-  const url = `${POLLUTION_API}/api/health`;
-  let ok = false, latencyMs = null;
+  const url = `${POLLUTION_API}/health`;
+let ok = false, latencyMs = null, payload = null;
 
-  try{
-    const t = await timedFetch(url, { cache:"no-store" });
-    latencyMs = t.ms;
-    ok = !!t.res.ok;
-  }catch(e){
-    ok = false;
-    latencyMs = null;
-  }
+try{
+  const t = await timedFetch(url, { cache:"no-store" });
+  latencyMs = t.ms;
+  ok = !!t.res.ok;
+  if (ok) payload = await t.res.json();
+}catch(e){
+  ok = false;
+  latencyMs = null;
+}
+
 
   // Store sample locally (reuse your existing localStorage sampling)
   let samples = pruneIctSamples(loadIctSamples());
@@ -2903,7 +2905,8 @@ async function refreshICT(){
     mainEl.textContent = `API: offline`;
   }
 
-  subEl.textContent = `Uptime(24h): ${uptimeClamped}% • last OK: ${lastOkText} • ${new Date().toLocaleTimeString()}`;
+const apiMeta = payload?.precip_feature_kind ? `• precip: ${payload.precip_feature_kind}` : "";
+subEl.textContent = `Uptime(24h): ${uptimeClamped}% • last OK: ${lastOkText} ${apiMeta} • ${new Date().toLocaleTimeString()}`;
 }
 
 // ===== ICT pill: draggable + expandable (NEW) =====
