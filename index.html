@@ -2834,7 +2834,7 @@ async function refreshICT(){
   if (!pill || !dotEl || !mainEl || !subEl) return;
 
   // Ping the current API (ngrok) health endpoint
-  const url = `${POLLUTION_API}/health`;
+  const url = `${POLLUTION_API}/api/health`;
   let ok = false, latencyMs = null;
 
   try{
