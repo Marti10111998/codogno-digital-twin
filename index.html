@@ -1397,7 +1397,16 @@ footer{
     Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjODA1Mzg0My0zMDBjLTQ4MDEtODlmOC01OTc4M2QyODllYWEiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NjA5NTUyMjJ9.G754yiSXNU-RMeD3mwyIH6W6sIU-dEwNrrdqOp8uCXk";
 
 // Optional backend (predict/backfill); app works without it
-const POLLUTION_API = "https://f155-194-141-4-100.ngrok-free.app"
+const POLLUTION_API = " https://aa7b-194-141-4-100.ngrok-free.app";
+const API_BASE = (POLLUTION_API || "").replace(/\/+$/, ""); // remove trailing slash
+
+function apiFetch(path, init = {}) {
+  const headers = {
+    "ngrok-skip-browser-warning": "true",
+    ...(init.headers || {})
+  };
+  return fetch(`${API_BASE}${path}`, { ...init, headers, cache: "no-store" });
+}
 
 
 
@@ -1655,27 +1664,30 @@ const DEVICE_KEY = "device_id_v1";
     // RF API helper (optional)
     // ==========================
 async function predictWithAPI(weather) {
-  const features = {
-    Temperature: weather.temp,
-    Humidity: weather.humidity,
-    // IMPORTANT: match training (your API default is PRESSURE_HPA)
-    Precipitation: weather.pressure ?? 1013,
-    WindSpeed_m_s: weather.wind
-  };
-
   try {
-    const r = await fetch(`${POLLUTION_API}/predict`, {
+    const features = {
+      Temperature: weather.temp,
+      Humidity: weather.humidity,
+      // IMPORTANT: match training (your API default is PRESSURE_HPA)
+      Precipitation: weather.pressure ?? 1013,
+      WindSpeed_m_s: weather.wind
+    };
+
+    const r = await apiFetch(`/predict`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(features)
     });
+
     if (!r.ok) throw new Error(`API error ${r.status}`);
-    return await r.json(); // {O3,CO,NO2,NO,NH3}
+
+    return await r.json(); // {O3, CO, NO2, NO, NH3}
   } catch (e) {
     console.warn("Model API failed, using heuristic", e);
     return null;
   }
 }
+
 
 
     // ==========================
@@ -2334,7 +2346,7 @@ document.getElementById("pollutionChartStatus").textContent =
 
     async function backfillHistory(days=7){
       try{
-        const r = await fetch(`${POLLUTION_API}/history?days=${days}`, { cache: "no-store" });
+        const r = await apiFetch(`/history?days=${days}`);
         if (!r.ok) throw new Error("history api error");
         const rows = await r.json();
         for (const row of rows){
@@ -2438,7 +2450,7 @@ function paintPollutionPanelNow(){
           const payload = collectPointsSince(lastTs);
           if (!payload.length) return;
 
-          const r = await fetch(`${POLLUTION_API}/ingest`, {
+                    const r = await apiFetch(`/ingest`, {
             method: "POST",
             headers: { "Content-Type":"application/json" },
             body: JSON.stringify({ device: getDeviceId(), rows: payload })
@@ -2834,11 +2846,11 @@ async function refreshICT(){
   if (!pill || !dotEl || !mainEl || !subEl) return;
 
   // Ping the current API (ngrok) health endpoint
-  const url = `${POLLUTION_API}/health`;
+  const url = `${API_BASE}/health`;
 let ok = false, latencyMs = null, payload = null;
 
 try{
-  const t = await timedFetch(url, { cache:"no-store" });
+  const t = await timedFetch(url, { headers: { "ngrok-skip-browser-warning": "true" } });
   latencyMs = t.ms;
   ok = !!t.res.ok;
   if (ok) payload = await t.res.json();
@@ -2846,6 +2858,7 @@ try{
   ok = false;
   latencyMs = null;
 }
+
 
 
   // Store sample locally (reuse your existing localStorage sampling)
