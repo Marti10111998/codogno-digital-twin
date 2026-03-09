@@ -988,10 +988,11 @@ footer{
 /* Force API pill above Cesium UI */
 #ictPill{
   position: fixed !important;
-  top: 70px !important;
-  right: 16px !important;
+  top: 80px !important;
+  left: auto !important;
+  right: 20px !important;
   z-index: 999999 !important;
-  pointer-events: auto;
+  max-width: calc(100vw - 40px);
 }
 
 /* Ensure Cesium container does not block overlays */
@@ -2863,26 +2864,7 @@ setInterval(refreshWeatherForecast, 15 * 60_000); // every 15 minutes
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
 const trafficRefresh = document.getElementById("trafficRefresh");
 
-let trafficStatus = document.getElementById("trafficStatus");
-if (!trafficStatus) {
-  trafficStatus = document.createElement("div");
-  trafficStatus.id = "trafficStatus";
-  document.body.appendChild(trafficStatus);
-}
 
-Object.assign(trafficStatus.style, {
-  position: "fixed",
-  right: "16px",
-  top: "120px",
-  zIndex: "30000",
-  background: "rgba(0,0,0,0.60)",
-  color: "white",
-  padding: "6px 10px",
-  borderRadius: "10px",
-  fontFamily: "system-ui, sans-serif",
-  fontSize: "12px",
-  boxShadow: "0 2px 6px rgba(0,0,0,.15)"
-});
 
 trafficStatus.textContent = "Traffic: idle";
 
