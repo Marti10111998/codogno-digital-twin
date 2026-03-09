@@ -1397,7 +1397,7 @@ footer{
 // Optional backend (predict/backfill); app works without it
 const POLLUTION_API = "https://uneducative-eximiously-zada.ngrok-free.dev";
 
-
+const DEV_MODE = true;
 
 // ======== CLOUD SYNC SETTINGS (NEW) ========
 const CLOUD_SYNC_ENABLED = !!POLLUTION_API;
@@ -2450,20 +2450,35 @@ function initChartUI(){
 requestForecast();
 
 
-      const viewerOpts = { baseLayerPicker:true, timeline:false, animation:false, shadows:true };
-      // Show Codogno from above as the default overview (Home button too)
-Cesium.Camera.DEFAULT_VIEW_RECTANGLE = Cesium.Rectangle.fromDegrees(
-  9.65, 45.13,   // west, south
-  9.76, 45.20    // east, north
-);
-Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5; // how wide to frame inside that rectangle
+      const viewerOpts = {
+  baseLayerPicker: false,
+  timeline: false,
+  animation: false,
+  shadows: true,
+  imageryProvider: new Cesium.OpenStreetMapImageryProvider({
+    url: "https://tile.openstreetmap.org/"
+  })
+};
 
-      viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
-      viewer.scene.globe.depthTestAgainstTerrain = true;
-      viewer.scene.requestRenderMode = true;
-      viewer.scene.maximumRenderTimeChange = 1/30;
-      viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
-      viewer.scene.globe.enableLighting = true;
+// Show Codogno from above as the default overview (Home button too)
+Cesium.Camera.DEFAULT_VIEW_RECTANGLE = Cesium.Rectangle.fromDegrees(
+  9.65, 45.13,
+  9.76, 45.20
+);
+Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5;
+
+viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
+viewer.scene.requestRenderMode = true;
+viewer.scene.maximumRenderTimeChange = 1 / 30;
+viewer.scene.globe.enableLighting = true;
+
+if (DEV_MODE) {
+  viewer.scene.globe.depthTestAgainstTerrain = false;
+} else {
+  viewer.scene.globe.depthTestAgainstTerrain = true;
+  viewer.terrainProvider = await Cesium.createWorldTerrainAsync();
+}
+
       // Improve shadow behavior (terrain/globe receives shadows)
 viewer.shadows = true;
 viewer.scene.shadowMap.enabled = true;
