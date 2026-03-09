@@ -1411,6 +1411,12 @@ footer{
 // Optional backend (predict/backfill); app works without it
 const POLLUTION_API = "https://uneducative-eximiously-zada.ngrok-free.dev";
 
+function apiUrl(path = "") {
+  const base = (POLLUTION_API || "").replace(/\/+$/, "");
+  const cleanPath = String(path || "").startsWith("/") ? path : `/${path}`;
+  return `${base}${cleanPath}`;
+}
+
 // ==========================
 // API HEALTH CHECK (POLLUTION API)
 // ==========================
@@ -1445,7 +1451,8 @@ async function checkPollutionAPI(){
 const DEV_MODE = true;
 
 // ======== CLOUD SYNC SETTINGS (NEW) ========
-const CLOUD_SYNC_ENABLED = !!POLLUTION_API;
+// Set to true only if your backend really has /history and /ingest
+const CLOUD_SYNC_ENABLED = false;
 const SYNC_KEY = "pollution_is_sync_v1";
 const DEVICE_KEY = "device_id_v1";
 
@@ -1698,26 +1705,36 @@ const DEVICE_KEY = "device_id_v1";
     // RF API helper (optional)
     // ==========================
     async function predictWithAPI(weather) {
-      const features = {
-        Temperature: weather.temp,
-        Humidity: weather.humidity,
-        Precipitation: (weather.rain1h || 0),
-        WindSpeed_m_s: weather.wind
-      };
-      try {
-        const r = await fetch(apiUrl("/predict"), {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(features),
-  cache: "no-store"
-});
-        if (!r.ok) throw new Error("API error");
-        return await r.json();
-      } catch (e) {
-        console.warn("Model API failed, using heuristic", e);
-        return null;
-      }
+  const features = {
+    Temperature: weather.temp,
+    Humidity: weather.humidity,
+    Precipitation: (weather.rain1h || 0),
+    WindSpeed_m_s: weather.wind
+  };
+
+  try {
+    const r = await fetch(apiUrl("/predict"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(features),
+      cache: "no-store"
+    });
+
+    if (!r.ok) {
+      throw new Error(`Predict API error: ${r.status}`);
     }
+
+    const contentType = r.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      throw new Error("Predict API did not return JSON");
+    }
+
+    return await r.json();
+  } catch (e) {
+    console.warn("Model API failed, using heuristic", e);
+    return null;
+  }
+}
 
     // ==========================
     // Noise heuristic
@@ -1989,9 +2006,6 @@ function updateUhiHalo(){
       viewer.scene.requestRender();
     }
 
-    // START API HEALTH MONITOR
-checkPollutionAPI();
-setInterval(checkPollutionAPI, 30000);
 
 // ==========================
 // DIGITAL TWIN SERVICE HEALTH
@@ -2461,18 +2475,42 @@ document.getElementById("pollutionChartStatus").textContent =
       if (thrInput && document.activeElement !== thrInput) thrInput.value = String(thr);
     }
 
-    async function backfillHistory(days=7){
-      try{
-        const r = await fetch(`${POLLUTION_API}/history?days=${days}`, { cache: "no-store" });
-        if (!r.ok) throw new Error("history api error");
-        const rows = await r.json();
-        for (const row of rows){
-          const ts = Number(row.ts); if (!Number.isFinite(ts)) continue;
-          for (const k of KEYS){ if (k in row) pushMeasured(k, ts, Number(row[k])); }
-        }
-        pruneOldData(); saveTsStore(); renderPollutionChart();
-      }catch(e){ console.warn("History backfill failed or unavailable:", e); }
+    async function backfillHistory(days = 7) {
+  try {
+    const r = await fetch(apiUrl(`/history?days=${days}`), { cache: "no-store" });
+
+    if (!r.ok) {
+      throw new Error(`history api error: ${r.status}`);
     }
+
+    const contentType = r.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      const txt = await r.text();
+      throw new Error(`history endpoint did not return JSON. First 120 chars: ${txt.slice(0, 120)}`);
+    }
+
+    const rows = await r.json();
+
+    if (!Array.isArray(rows)) {
+      throw new Error("history response is not an array");
+    }
+
+    for (const row of rows) {
+      const ts = Number(row.ts);
+      if (!Number.isFinite(ts)) continue;
+
+      for (const k of KEYS) {
+        if (k in row) pushMeasured(k, ts, Number(row[k]));
+      }
+    }
+
+    pruneOldData();
+    saveTsStore();
+    renderPollutionChart();
+  } catch (e) {
+    console.warn("History backfill failed or unavailable:", e);
+  }
+}
 
     function syncMeasuredSeries(nowPoll){
       const ts = Date.now();
@@ -2823,13 +2861,30 @@ setInterval(refreshWeatherForecast, 15 * 60_000); // every 15 minutes
 
       // ====== Live Traffic (TomTom) ======
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
-      const trafficRefresh = document.getElementById("trafficRefresh");
-      Object.assign(trafficStatus.style, {
-        position:"absolute", right:"1rem", top:"1rem", zIndex:20,
-        background:"rgba(255,255,255,0.9)", padding:"6px 10px", borderRadius:"10px",
-        fontFamily:"system-ui, sans-serif", fontSize:"12px", boxShadow:"0 2px 6px rgba(0,0,0,.15)"
-      });
-      trafficStatus.textContent = "Traffic: starting…";
+const trafficRefresh = document.getElementById("trafficRefresh");
+
+let trafficStatus = document.getElementById("trafficStatus");
+if (!trafficStatus) {
+  trafficStatus = document.createElement("div");
+  trafficStatus.id = "trafficStatus";
+  document.body.appendChild(trafficStatus);
+}
+
+Object.assign(trafficStatus.style, {
+  position: "fixed",
+  right: "16px",
+  top: "120px",
+  zIndex: "30000",
+  background: "rgba(0,0,0,0.60)",
+  color: "white",
+  padding: "6px 10px",
+  borderRadius: "10px",
+  fontFamily: "system-ui, sans-serif",
+  fontSize: "12px",
+  boxShadow: "0 2px 6px rgba(0,0,0,.15)"
+});
+
+trafficStatus.textContent = "Traffic: idle";
 
       function addOrUpdateTrafficLayer(){
         const ts = Date.now();
