@@ -985,6 +985,20 @@ footer{
   display: none !important;
 }
 
+/* Force API pill above Cesium UI */
+#ictPill{
+  position: fixed !important;
+  top: 70px !important;
+  right: 16px !important;
+  z-index: 999999 !important;
+  pointer-events: auto;
+}
+
+/* Ensure Cesium container does not block overlays */
+#cesiumContainer{
+  z-index: 0 !important;
+}
+
 
   </style>
 </head>
