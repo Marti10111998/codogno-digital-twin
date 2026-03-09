@@ -1974,6 +1974,10 @@ function updateUhiHalo(){
       viewer.scene.requestRender();
     }
 
+    // START API HEALTH MONITOR
+checkPollutionAPI();
+setInterval(checkPollutionAPI, 30000);
+
 
     // ==========================
     // Time-series chart wiring
@@ -2608,9 +2612,6 @@ option.textContent = stableId;
       await fetchUHIAndUpdate();
       setInterval(fetchUHIAndUpdate, 60_000);
 
-      // ADD THIS HERE
-      checkPollutionAPI();
-      setInterval(checkPollutionAPI, 30000);
 
       // Weather forecast (Open-Meteo)
 await refreshWeatherForecast();
