@@ -989,9 +989,11 @@ footer{
 #ictPill{
   position: fixed !important;
   top: 80px !important;
-  left: auto !important;
-  right: 20px !important;
+  left: 20px !important;   /* use left, not right */
+  right: auto !important;
+  bottom: auto !important;
   z-index: 999999 !important;
+  pointer-events: auto;
   max-width: calc(100vw - 40px);
 }
 
