@@ -870,6 +870,11 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
   box-shadow: var(--panel-shadow);
 }
 
+#envPanel,
+#weatherPanel{
+  contain: layout paint;
+}
+
 /* Header matches control exactly */
 #envPanel .ui-header,
 #weatherPanel .ui-header{
@@ -2238,6 +2243,7 @@ async function checkSystemHealth(){
     const CH_BLUE_BAND      = 'rgba(59,130,246,0.10)'; // uncertainty fill
 
 let pollutionChart = null;
+window.pollutionChart = null;
 
 function hasUsableMeasuredData(points){
   return Array.isArray(points) && points.length >= 3;
@@ -2310,6 +2316,7 @@ function forceForecastUIOn(){
           elements: { point: { radius: 0 }, line: { tension: 0.25 } }
         }
       });
+      window.pollutionChart = pollutionChart;
       return pollutionChart;
     }
 
@@ -3359,6 +3366,7 @@ function render7DayCards(forecastJson){
 }
 
 let wTrendChart = null;
+window.wTrendChart = null;
 
 function ensureWeatherTrendChart(){
   const canvas = document.getElementById("wTrendChart");
@@ -3418,7 +3426,7 @@ scales: {
       elements: { point: { radius: 0 }, line: { tension: 0.25 } }
     }
   });
-
+  window.wTrendChart = wTrendChart;
   return wTrendChart;
 }
 
@@ -3691,20 +3699,41 @@ const undockIfStacked = ()=>{
   const stack = el.closest("#brStack");
   if (!stack) return;
 
-  // capture current on-screen position
   const rect = el.getBoundingClientRect();
   const scrollX = window.scrollX || 0;
   const scrollY = window.scrollY || 0;
 
-  // move to body so it can freely move across viewport
+  // Freeze current visual size before removing from #brStack
+  el.style.width = rect.width + "px";
+  el.style.height = rect.height + "px";
+  el.style.maxHeight = rect.height + "px";
+
   document.body.appendChild(el);
 
-  // now it must be absolutely positioned
   el.style.position = "absolute";
   el.style.left = (rect.left + scrollX) + "px";
   el.style.top  = (rect.top  + scrollY) + "px";
-  el.style.right = "";
-  el.style.bottom = "";
+  el.style.right = "auto";
+  el.style.bottom = "auto";
+
+  // Keep inner body constrained after undocking
+  const panelBody = el.querySelector(".panel-body");
+  if (panelBody) {
+    panelBody.style.maxHeight = Math.max(120, rect.height - 52) + "px";
+    panelBody.style.overflow = "auto";
+  }
+
+  // Force Chart.js to recalculate after DOM move
+  requestAnimationFrame(() => {
+    if (el.id === "envPanel" && window.pollutionChart) {
+      pollutionChart.resize();
+      pollutionChart.update("none");
+    }
+    if (el.id === "weatherPanel" && window.wTrendChart) {
+      wTrendChart.resize();
+      wTrendChart.update("none");
+    }
+  });
 };
 
 const onDown = (e)=>{
@@ -3760,9 +3789,25 @@ const onMove = (e)=>{
 const onUp = ()=>{
   state.dragging = false;
   el.classList.remove('dragging');
-  if (el.dataset.prevZ !== undefined) el.style.zIndex = el.dataset.prevZ;
+
+  if (el.dataset.prevZ !== undefined) {
+    el.style.zIndex = el.dataset.prevZ;
+  }
+
   window.removeEventListener('mousemove', onMove);
   window.removeEventListener('touchmove', onMove);
+
+  // Recalculate chart layout after drag finishes
+  requestAnimationFrame(() => {
+    if (el.id === "envPanel" && window.pollutionChart) {
+      pollutionChart.resize();
+      pollutionChart.update("none");
+    }
+    if (el.id === "weatherPanel" && window.wTrendChart) {
+      wTrendChart.resize();
+      wTrendChart.update("none");
+    }
+  });
 };
 
 grip.addEventListener('mousedown', onDown);
