@@ -1397,6 +1397,37 @@ footer{
 // Optional backend (predict/backfill); app works without it
 const POLLUTION_API = "https://uneducative-eximiously-zada.ngrok-free.dev";
 
+// ==========================
+// API HEALTH CHECK (POLLUTION API)
+// ==========================
+async function checkPollutionAPI(){
+  const dot  = document.getElementById("ictPillDot");
+  const main = document.getElementById("ictPillMain");
+  const sub  = document.getElementById("ictPillSub");
+
+  const start = performance.now();
+
+  try{
+    // simple ping
+    const res = await fetch(`${POLLUTION_API}/health`, { cache:"no-store" });
+
+    const latency = Math.round(performance.now() - start);
+
+    if(res.ok){
+      dot.style.background = "#22c55e";     // green
+      main.textContent = "Pollution API: ONLINE";
+      sub.textContent = `Latency ${latency} ms`;
+    } else {
+      throw new Error("API returned error");
+    }
+
+  }catch(err){
+    dot.style.background = "#ef4444";       // red
+    main.textContent = "Pollution API: OFFLINE";
+    sub.textContent = "Colab backend not responding";
+  }
+}
+
 const DEV_MODE = true;
 
 // ======== CLOUD SYNC SETTINGS (NEW) ========
@@ -2576,6 +2607,10 @@ option.textContent = stableId;
 
       await fetchUHIAndUpdate();
       setInterval(fetchUHIAndUpdate, 60_000);
+
+      // ADD THIS HERE
+      checkPollutionAPI();
+      setInterval(checkPollutionAPI, 30000);
 
       // Weather forecast (Open-Meteo)
 await refreshWeatherForecast();
