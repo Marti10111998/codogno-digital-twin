@@ -1409,7 +1409,7 @@ footer{
     Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjODA1Mzg0My0zMDBjLTQ4MDEtODlmOC01OTc4M2QyODllYWEiLCJpZCI6MzA0ODA3LCJpYXQiOjE3NjA5NTUyMjJ9.G754yiSXNU-RMeD3mwyIH6W6sIU-dEwNrrdqOp8uCXk";
 
 // Optional backend (predict/backfill); app works without it
-const POLLUTION_API = "https://uneducative-eximiously-zada.ngrok-free.dev/";
+const POLLUTION_API = "https://uneducative-eximiously-zada.ngrok-free.dev";
 
 // ==========================
 // API HEALTH CHECK (POLLUTION API)
@@ -1423,7 +1423,7 @@ async function checkPollutionAPI(){
 
   try{
     // simple ping
-    const res = await fetch(`${POLLUTION_API}/health`, { cache:"no-store" });
+    const res = await fetch(`${POLLUTION_API}/health`, { cache: "no-store" });
 
     const latency = Math.round(performance.now() - start);
 
@@ -1705,11 +1705,12 @@ const DEVICE_KEY = "device_id_v1";
         WindSpeed_m_s: weather.wind
       };
       try {
-        const r = await fetch(`${POLLUTION_API}/predict`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(features)
-        });
+        const r = await fetch(apiUrl("/predict"), {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(features),
+  cache: "no-store"
+});
         if (!r.ok) throw new Error("API error");
         return await r.json();
       } catch (e) {
@@ -2014,7 +2015,7 @@ async function checkSystemHealth(){
   try{
     const start = performance.now();
 
-    const res = await fetch(`${POLLUTION_API}/health`, {cache:"no-store"});
+    const res = await fetch(`${POLLUTION_API}/health`, { cache: "no-store" });
 
     latency = Math.round(performance.now() - start);
 
@@ -2561,10 +2562,11 @@ function initChartUI(){
           if (!payload.length) return;
 
           const r = await fetch(`${POLLUTION_API}/ingest`, {
-            method: "POST",
-            headers: { "Content-Type":"application/json" },
-            body: JSON.stringify({ device: getDeviceId(), rows: payload })
-          });
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ device: getDeviceId(), rows: payload }),
+  cache: "no-store"
+});
           if (!r.ok) throw new Error("ingest error");
           const newest = payload[payload.length - 1].ts;
           setLastSynced(newest);
@@ -2961,16 +2963,16 @@ async function refreshICT(){
 
   // Ping the current API (ngrok) health endpoint
   const url = `${POLLUTION_API}/health`;
-  let ok = false, latencyMs = null;
+let ok = false, latencyMs = null;
 
-  try{
-    const t = await timedFetch(url, { cache:"no-store" });
-    latencyMs = t.ms;
-    ok = !!t.res.ok;
-  }catch(e){
-    ok = false;
-    latencyMs = null;
-  }
+try {
+  const t = await timedFetch(url, { cache: "no-store" });
+  latencyMs = t.ms;
+  ok = !!t.res.ok;
+} catch (e) {
+  ok = false;
+  latencyMs = null;
+}
 
   // Store sample locally (reuse your existing localStorage sampling)
   let samples = pruneIctSamples(loadIctSamples());
