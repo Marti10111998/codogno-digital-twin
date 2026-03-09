@@ -1210,12 +1210,12 @@ footer{
         <div>
           <label class="block text-sm font-medium">Pollutant</label>
 <select id="chartPollutant" class="w-full border rounded px-2 py-1">
-  <option>O3</option>
-  <option selected>NO2</option>
-  <option>NO</option>
-  <option>CO</option>
-  <option>NH3</option>
-  <option>Noise</option>
+  <option value="O3">O3</option>
+  <option value="NO2" selected>NO2</option>
+  <option value="NO">NO</option>
+  <option value="CO">CO</option>
+  <option value="NH3">NH3</option>
+  <option value="Noise">Noise</option>
 </select>
 
         </div>
@@ -2529,25 +2529,43 @@ document.getElementById("pollutionChartStatus").textContent =
     }
 
 function initChartUI(){
+  const polSel   = document.getElementById("chartPollutant");
+  const granSel  = document.getElementById("chartGranularity");
+  const daysSel  = document.getElementById("chartDaysBack");
+  const predChk  = document.getElementById("chartShowPred");
+  const horSel   = document.getElementById("chartHorizon");
+  const thrInput = document.getElementById("chartThreshold");
 
-  // ✅ Force default pollutant to NO2 on startup
-  const polSel = document.getElementById("chartPollutant");
   if (polSel) polSel.value = "NO2";
 
-  ["chartPollutant","chartGranularity","chartDaysBack","chartShowPred","chartHorizon"]
-    .forEach(id=> document.getElementById(id).addEventListener("change", renderPollutionChart));
+  function rerenderNow() {
+    if (pollutionChart) {
+      pollutionChart.destroy();
+      pollutionChart = null;
+    }
+    renderPollutionChart();
+  }
 
-  const thrInput = document.getElementById('chartThreshold');
+  if (polSel) {
+    polSel.addEventListener("change", rerenderNow);
+    polSel.addEventListener("input", rerenderNow);
+  }
+
+  if (granSel) granSel.addEventListener("change", rerenderNow);
+  if (daysSel) daysSel.addEventListener("change", rerenderNow);
+  if (predChk) predChk.addEventListener("change", rerenderNow);
+  if (horSel)  horSel.addEventListener("change", rerenderNow);
+
   if (thrInput){
-    thrInput.addEventListener('change', ()=>{
-      const pol = document.getElementById("chartPollutant").value;
+    thrInput.addEventListener("change", ()=>{
+      const pol = polSel ? polSel.value : "NO2";
       const v = parseFloat(thrInput.value);
       if (Number.isFinite(v)) THRESHOLDS[pol] = v;
-      renderPollutionChart();
+      rerenderNow();
     });
   }
 
-  renderPollutionChart();
+  rerenderNow();
 }
 
 
