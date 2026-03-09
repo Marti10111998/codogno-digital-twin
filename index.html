@@ -987,11 +987,15 @@ footer{
 
 /* Force API pill above Cesium UI */
 #ictPill{
-  position: fixed;
-  top: 80px;
-  right: 20px;
-  z-index: 999999;
-  pointer-events: auto;
+  position: fixed !important;
+  top: 70px !important;
+  right: 16px !important;
+  left: auto !important;
+  bottom: auto !important;
+  z-index: 999999 !important;
+  pointer-events: auto !important;
+  max-width: calc(100vw - 32px);
+  transform: none !important;
 }
 
 /* Ensure Cesium container does not block overlays */
@@ -3079,37 +3083,68 @@ try {
   if (!pill || !expand) return;
 
   const POS_KEY = "ict_pill_pos_v1";
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
-  // restore saved position
-  try{
-    const saved = JSON.parse(localStorage.getItem(POS_KEY) || "null");
-    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)){
-      pill.style.left = saved.left + "px";
-      pill.style.top  = saved.top  + "px";
-      pill.style.right = "auto";
-      pill.style.bottom = "auto";
-    }
-  }catch{}
+  function getDefaultPosition(){
+    const pillRect = pill.getBoundingClientRect();
+    return {
+      left: Math.max(8, window.innerWidth - pillRect.width - 16),
+      top: 70
+    };
+  }
 
-  const clamp = (v, min, max)=> Math.max(min, Math.min(max, v));
+  function applyPosition(left, top){
+    const rect = pill.getBoundingClientRect();
+    const maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
+    const maxTop  = Math.max(8, window.innerHeight - rect.height - 8);
+
+    const safeLeft = clamp(left, 8, maxLeft);
+    const safeTop  = clamp(top, 8, maxTop);
+
+    pill.style.left = safeLeft + "px";
+    pill.style.top = safeTop + "px";
+    pill.style.right = "auto";
+    pill.style.bottom = "auto";
+  }
+
+  function savePosition(){
+    try{
+      const left = parseFloat(pill.style.left);
+      const top  = parseFloat(pill.style.top);
+      if (Number.isFinite(left) && Number.isFinite(top)) {
+        localStorage.setItem(POS_KEY, JSON.stringify({ left, top }));
+      }
+    }catch{}
+  }
+
+  function loadPosition(){
+    try{
+      const saved = JSON.parse(localStorage.getItem(POS_KEY) || "null");
+      if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+        applyPosition(saved.left, saved.top);
+        return;
+      }
+    }catch{}
+    const def = getDefaultPosition();
+    applyPosition(def.left, def.top);
+    savePosition();
+  }
 
   function placeExpandNearPill(){
     const r = pill.getBoundingClientRect();
     const gap = 8;
 
-    // default: below pill, left-aligned
     let left = r.left;
     let top  = r.bottom + gap;
 
-    // clamp inside viewport
-    const exW = expand.offsetWidth  || 380;
+    const exW = expand.offsetWidth || 380;
     const exH = expand.offsetHeight || 260;
-    left = clamp(left, 8, window.innerWidth  - exW - 8);
-    top  = clamp(top,  8, window.innerHeight - exH - 8);
 
-    // switch expand to left/top positioning
+    left = clamp(left, 8, window.innerWidth - exW - 8);
+    top  = clamp(top, 8, window.innerHeight - exH - 8);
+
     expand.style.left = Math.round(left) + "px";
-    expand.style.top  = Math.round(top)  + "px";
+    expand.style.top  = Math.round(top) + "px";
     expand.style.right = "auto";
   }
 
@@ -3117,46 +3152,48 @@ try {
   const open   = () => { expand.classList.remove("hidden"); placeExpandNearPill(); };
   const toggle = () => expand.classList.contains("hidden") ? open() : close();
 
-  closeBtn?.addEventListener("click", (e)=>{ e.stopPropagation(); close(); });
+  closeBtn?.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    close();
+  });
 
   window.addEventListener("mousedown", (e)=>{
     if (expand.classList.contains("hidden")) return;
     if (!pill.contains(e.target) && !expand.contains(e.target)) close();
   });
 
-  window.addEventListener("keydown", (e)=>{ if (e.key === "Escape") close(); });
-
-  // click to toggle (but not when dragging)
-  let dragged = false;
-  pill.addEventListener("click", (e)=>{
-    if (dragged) { dragged = false; return; }
-    if (e.target.closest("button, a, input, select, textarea")) return;
-    toggle();
+  window.addEventListener("keydown", (e)=>{
+    if (e.key === "Escape") close();
   });
 
-  // --- drag logic ---
-  let isDown=false, sx=0, sy=0, startL=0, startT=0;
+  let isDown = false;
+  let moved = false;
+  let startX = 0;
+  let startY = 0;
+  let startLeft = 0;
+  let startTop = 0;
 
   function onDown(e){
     if (e.target.closest("button, a, input, select, textarea")) return;
 
     isDown = true;
-    dragged = false;
-    pill.classList.add("dragging");
+    moved = false;
 
     const p = e.touches ? e.touches[0] : e;
-    sx = p.clientX;
-    sy = p.clientY;
+    startX = p.clientX;
+    startY = p.clientY;
 
-    const r = pill.getBoundingClientRect();
-    // Ensure we're using left/top (not right/top)
+    const rect = pill.getBoundingClientRect();
+
+    pill.style.left = rect.left + "px";
+    pill.style.top  = rect.top + "px";
     pill.style.right = "auto";
     pill.style.bottom = "auto";
-    pill.style.left = (pill.style.left || r.left + "px");
-    pill.style.top  = (pill.style.top  || r.top  + "px");
 
-    startL = parseFloat(pill.style.left) || r.left;
-    startT = parseFloat(pill.style.top)  || r.top;
+    startLeft = rect.left;
+    startTop  = rect.top;
+
+    pill.classList.add("dragging");
 
     window.addEventListener("mousemove", onMove);
     window.addEventListener("touchmove", onMove, { passive:false });
@@ -3168,26 +3205,15 @@ try {
 
   function onMove(e){
     if (!isDown) return;
+
     const p = e.touches ? e.touches[0] : e;
+    const dx = p.clientX - startX;
+    const dy = p.clientY - startY;
 
-    const dx = p.clientX - sx;
-    const dy = p.clientY - sy;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
 
-    const r = pill.getBoundingClientRect();
-    const w = r.width, h = r.height;
+    applyPosition(startLeft + dx, startTop + dy);
 
-    let left = startL + dx;
-    let top  = startT + dy;
-
-    left = clamp(left, 8, window.innerWidth  - w - 8);
-    top  = clamp(top,  8, window.innerHeight - h - 8);
-
-    pill.style.left = left + "px";
-    pill.style.top  = top  + "px";
-
-    dragged = true;
-
-    // keep expand attached if open
     if (!expand.classList.contains("hidden")) placeExpandNearPill();
 
     e.preventDefault();
@@ -3197,26 +3223,40 @@ try {
     isDown = false;
     pill.classList.remove("dragging");
 
-    // persist position
-    try{
-      const left = parseFloat(pill.style.left);
-      const top  = parseFloat(pill.style.top);
-      if (Number.isFinite(left) && Number.isFinite(top)){
-        localStorage.setItem(POS_KEY, JSON.stringify({ left, top }));
-      }
-    }catch{}
-
     window.removeEventListener("mousemove", onMove);
     window.removeEventListener("touchmove", onMove);
+
+    savePosition();
   }
 
   pill.addEventListener("mousedown", onDown);
   pill.addEventListener("touchstart", onDown, { passive:false });
 
-  // reposition expand on resize if open
+  pill.addEventListener("click", (e)=>{
+    if (moved) {
+      moved = false;
+      return;
+    }
+    if (e.target.closest("button, a, input, select, textarea")) return;
+    toggle();
+  });
+
   window.addEventListener("resize", ()=>{
+    const left = parseFloat(pill.style.left);
+    const top  = parseFloat(pill.style.top);
+    if (Number.isFinite(left) && Number.isFinite(top)) {
+      applyPosition(left, top);
+      savePosition();
+    } else {
+      const def = getDefaultPosition();
+      applyPosition(def.left, def.top);
+      savePosition();
+    }
+
     if (!expand.classList.contains("hidden")) placeExpandNearPill();
   });
+
+  loadPosition();
 })();
 
 
