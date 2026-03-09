@@ -1978,6 +1978,90 @@ function updateUhiHalo(){
 checkPollutionAPI();
 setInterval(checkPollutionAPI, 30000);
 
+// ==========================
+// DIGITAL TWIN SERVICE HEALTH
+// ==========================
+
+async function checkSystemHealth(){
+
+  const dot  = document.getElementById("ictPillDot");
+  const main = document.getElementById("ictPillMain");
+  const sub  = document.getElementById("ictPillSub");
+
+  let pollutionStatus = "OFFLINE";
+  let weatherStatus   = "OFFLINE";
+  let trafficStatus   = "OFFLINE";
+
+  let latency = "-";
+
+  // -----------------------
+  // Pollution API
+  // -----------------------
+  try{
+    const start = performance.now();
+
+    const res = await fetch(`${POLLUTION_API}/health`, {cache:"no-store"});
+
+    latency = Math.round(performance.now() - start);
+
+    if(res.ok) pollutionStatus = "ONLINE";
+  }catch{}
+
+  // -----------------------
+  // Weather API
+  // -----------------------
+  try{
+
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=45.165&lon=9.703&appid=${weatherApiKey}`;
+
+    const res = await fetch(url);
+
+    if(res.ok) weatherStatus = "ONLINE";
+
+  }catch{}
+
+  // -----------------------
+  // Traffic API
+  // -----------------------
+  try{
+
+    const url = `https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json?point=45.165,9.703&key=${tomtomKey}`;
+
+    const res = await fetch(url);
+
+    if(res.ok) trafficStatus = "ONLINE";
+
+  }catch{}
+
+  // -----------------------
+  // Update pill
+  // -----------------------
+
+  const statuses = {
+    pollution: pollutionStatus,
+    weather: weatherStatus,
+    traffic: trafficStatus
+  };
+
+  const onlineCount =
+    (pollutionStatus==="ONLINE") +
+    (weatherStatus==="ONLINE") +
+    (trafficStatus==="ONLINE");
+
+  if(onlineCount === 3){
+    dot.style.background = "#22c55e";
+  }else if(onlineCount >= 1){
+    dot.style.background = "#f59e0b";
+  }else{
+    dot.style.background = "#ef4444";
+  }
+
+  main.textContent = `Services: ${onlineCount}/3 online`;
+
+  sub.textContent =
+    `Pollution ${pollutionStatus} • Weather ${weatherStatus} • Traffic ${trafficStatus}`;
+}
+
 
     // ==========================
     // Time-series chart wiring
