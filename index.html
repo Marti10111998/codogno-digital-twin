@@ -2761,10 +2761,13 @@ async function toggleSatelliteBasemap(){
 
   // create if needed
   if (!satelliteLayer){
-    const provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
-      "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
-    );
-    satelliteLayer = viewer.imageryLayers.addImageryProvider(provider);
+    satelliteLayer = viewer.imageryLayers.addImageryProvider(
+  new Cesium.BingMapsImageryProvider({
+    url: "https://dev.virtualearth.net",
+    key: Cesium.Ion.defaultAccessToken,
+    mapStyle: Cesium.BingMapsStyle.AERIAL
+  })
+);
   }
 
   // show only satellite
