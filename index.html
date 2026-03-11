@@ -2763,7 +2763,8 @@ async function toggleSatelliteBasemap(){
   if (!satelliteLayer){
 satelliteLayer = viewer.imageryLayers.addImageryProvider(
   new Cesium.UrlTemplateImageryProvider({
-    url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief/default/2013-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg"
+    url: "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+    maximumLevel: 20
   })
 );
   }
