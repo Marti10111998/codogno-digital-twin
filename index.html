@@ -1003,6 +1003,29 @@ footer{
   transform: none !important;
 }
 
+.basemap-btn{
+  flex:1;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.basemap-btn:hover{
+  filter: brightness(1.05);
+}
+
+.basemap-btn.active{
+  background: rgba(37,99,235,.16);
+  border-color: rgba(37,99,235,.45);
+  box-shadow: 0 0 0 2px rgba(37,99,235,.12) inset;
+}
+
 /* Ensure Cesium container does not block overlays */
 #cesiumContainer{
   z-index: 0 !important;
@@ -1068,10 +1091,12 @@ footer{
       </div>
 
       <div style="margin-top:10px;">
-  <label class="flex items-center gap-2">
-    <input type="checkbox" id="satelliteToggle">
-    Satellite Imagery
-  </label>
+  <label class="block font-medium">Basemap</label>
+
+  <div id="basemapToggle" style="display:flex; gap:6px; margin-top:6px;">
+    <button type="button" id="mapBtn" class="basemap-btn">Map</button>
+    <button type="button" id="satelliteBtn" class="basemap-btn">Satellite</button>
+  </div>
 </div>
 
       <div style="margin-top:10px;">
@@ -2664,9 +2689,7 @@ requestForecast();
   timeline: false,
   animation: false,
   shadows: true,
-  imageryProvider: new Cesium.OpenStreetMapImageryProvider({
-    url: "https://tile.openstreetmap.org/"
-  })
+  imageryProvider: false
 };
 
 // Show Codogno from above as the default overview (Home button too)
@@ -2677,45 +2700,59 @@ Cesium.Camera.DEFAULT_VIEW_RECTANGLE = Cesium.Rectangle.fromDegrees(
 Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5;
 
 viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
-// Basemap toggle: OSM by default, Satellite only when checkbox is ON
-let osmLayer = viewer.imageryLayers.get(0);
+// Basemap toggle buttons: Map default ON, Satellite default OFF
+let osmLayer = null;
 let satelliteLayer = null;
 
-async function enableSatellite() {
-  if (satelliteLayer) {
-    satelliteLayer.show = true;
-    if (osmLayer) osmLayer.show = false;
-    viewer.scene.requestRender();
-    return;
+const mapBtn = document.getElementById("mapBtn");
+const satelliteBtn = document.getElementById("satelliteBtn");
+
+function clearButtons(){
+  mapBtn?.classList.remove("active");
+  satelliteBtn?.classList.remove("active");
+}
+
+async function showMapBasemap(){
+
+  if (!osmLayer){
+    osmLayer = viewer.imageryLayers.addImageryProvider(
+      new Cesium.OpenStreetMapImageryProvider({
+        url: "https://tile.openstreetmap.org/"
+      })
+    );
   }
 
-  const provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
-    "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
-  );
+  if (satelliteLayer) satelliteLayer.show = false;
+  osmLayer.show = true;
 
-  satelliteLayer = viewer.imageryLayers.addImageryProvider(provider, 0);
+  clearButtons();
+  mapBtn?.classList.add("active");
 
-  if (osmLayer) {
-    osmLayer.show = false;
+  viewer.scene.requestRender();
+}
+
+async function showSatelliteBasemap(){
+
+  if (!satelliteLayer){
+    const provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
+      "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
+    );
+    satelliteLayer = viewer.imageryLayers.addImageryProvider(provider);
   }
 
+  if (osmLayer) osmLayer.show = false;
   satelliteLayer.show = true;
-  viewer.scene.requestRender();
-}
 
-
-function disableSatellite() {
-  if (satelliteLayer) {
-    satelliteLayer.show = false;
-  }
-
-  if (osmLayer) {
-    osmLayer.show = true;
-  }
+  clearButtons();
+  satelliteBtn?.classList.add("active");
 
   viewer.scene.requestRender();
 }
-disableSatellite();
+
+mapBtn?.addEventListener("click", showMapBasemap);
+satelliteBtn?.addEventListener("click", showSatelliteBasemap);
+
+// default state
 viewer.scene.requestRenderMode = true;
 viewer.scene.maximumRenderTimeChange = 1 / 30;
 viewer.scene.globe.enableLighting = true;
@@ -2865,19 +2902,13 @@ setInterval(refreshWeatherForecast, 15 * 60_000); // every 15 minutes
       document.getElementById("palette").addEventListener("change", updateStyles);
       document.getElementById("binCount").addEventListener("input", updateStyles);
 
-      document.getElementById("satelliteToggle")?.addEventListener("change", async (e) => {
-
-  if (e.target.checked) {
-    await enableSatellite();
-  } else {
-    disableSatellite();
-  }
-
+      document.getElementById("mapBtn")?.addEventListener("click", async () => {
+  await showMapBasemap();
 });
 
-
-
-
+document.getElementById("satelliteBtn")?.addEventListener("click", async () => {
+  await showSatelliteBasemap();
+});
 
       // ====== Traffic Heatmap dots (static) ======
       function clearHeatmap(){
@@ -2947,10 +2978,6 @@ setInterval(refreshWeatherForecast, 15 * 60_000); // every 15 minutes
       // ====== Live Traffic (TomTom) ======
       const liveTrafficToggle = document.getElementById("liveTrafficToggle");
 const trafficRefresh = document.getElementById("trafficRefresh");
-
-
-
-trafficStatus.textContent = "Traffic: idle";
 
       function addOrUpdateTrafficLayer(){
         const ts = Date.now();
