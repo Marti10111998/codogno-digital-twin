@@ -2701,8 +2701,14 @@ Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5;
 
 viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
 // Basemap toggle buttons: Map default ON, Satellite default OFF
+// ==========================
+// Basemap toggle buttons
+// BOTH inactive by default
+// click active button again = turn it OFF
+// ==========================
 let osmLayer = null;
 let satelliteLayer = null;
+let activeBasemap = null; // "map" | "satellite" | null
 
 const mapBtn = document.getElementById("mapBtn");
 const satelliteBtn = document.getElementById("satelliteBtn");
@@ -2712,8 +2718,22 @@ function clearButtons(){
   satelliteBtn?.classList.remove("active");
 }
 
-async function showMapBasemap(){
+function hideAllBasemaps(){
+  if (osmLayer) osmLayer.show = false;
+  if (satelliteLayer) satelliteLayer.show = false;
+  activeBasemap = null;
+  clearButtons();
+  viewer.scene.requestRender();
+}
 
+async function toggleMapBasemap(){
+  // if already active -> turn OFF
+  if (activeBasemap === "map"){
+    hideAllBasemaps();
+    return;
+  }
+
+  // create if needed
   if (!osmLayer){
     osmLayer = viewer.imageryLayers.addImageryProvider(
       new Cesium.OpenStreetMapImageryProvider({
@@ -2722,17 +2742,24 @@ async function showMapBasemap(){
     );
   }
 
+  // show only map
   if (satelliteLayer) satelliteLayer.show = false;
   osmLayer.show = true;
+  activeBasemap = "map";
 
   clearButtons();
   mapBtn?.classList.add("active");
-
   viewer.scene.requestRender();
 }
 
-async function showSatelliteBasemap(){
+async function toggleSatelliteBasemap(){
+  // if already active -> turn OFF
+  if (activeBasemap === "satellite"){
+    hideAllBasemaps();
+    return;
+  }
 
+  // create if needed
   if (!satelliteLayer){
     const provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
       "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
@@ -2740,17 +2767,21 @@ async function showSatelliteBasemap(){
     satelliteLayer = viewer.imageryLayers.addImageryProvider(provider);
   }
 
+  // show only satellite
   if (osmLayer) osmLayer.show = false;
   satelliteLayer.show = true;
+  activeBasemap = "satellite";
 
   clearButtons();
   satelliteBtn?.classList.add("active");
-
   viewer.scene.requestRender();
 }
 
-mapBtn?.addEventListener("click", showMapBasemap);
-satelliteBtn?.addEventListener("click", showSatelliteBasemap);
+mapBtn?.addEventListener("click", toggleMapBasemap);
+satelliteBtn?.addEventListener("click", toggleSatelliteBasemap);
+
+// default state = BOTH OFF
+hideAllBasemaps();
 
 // default state
 viewer.scene.requestRenderMode = true;
