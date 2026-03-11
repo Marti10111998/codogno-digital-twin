@@ -2762,10 +2762,8 @@ async function toggleSatelliteBasemap(){
   // create if needed
   if (!satelliteLayer){
 satelliteLayer = viewer.imageryLayers.addImageryProvider(
-  new Cesium.BingMapsImageryProvider({
-    url: "https://dev.virtualearth.net",
-    key: Cesium.Ion.defaultAccessToken,
-    mapStyle: Cesium.BingMapsStyle.AERIAL_WITH_LABELS
+  new Cesium.UrlTemplateImageryProvider({
+    url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief/default/2013-01-01/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg"
   })
 );
   }
