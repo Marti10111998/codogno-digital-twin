@@ -2677,29 +2677,45 @@ Cesium.Camera.DEFAULT_VIEW_RECTANGLE = Cesium.Rectangle.fromDegrees(
 Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5;
 
 viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
-// Satellite layer (OFF by default)
+// Basemap toggle: OSM by default, Satellite only when checkbox is ON
+let osmLayer = viewer.imageryLayers.get(0);
 let satelliteLayer = null;
 
 async function enableSatellite() {
-
-  if (satelliteLayer) return;
+  if (satelliteLayer) {
+    satelliteLayer.show = true;
+    if (osmLayer) osmLayer.show = false;
+    viewer.scene.requestRender();
+    return;
+  }
 
   const provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
     "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
   );
 
-  satelliteLayer = viewer.imageryLayers.addImageryProvider(provider);
+  satelliteLayer = viewer.imageryLayers.addImageryProvider(provider, 0);
 
+  if (osmLayer) {
+    osmLayer.show = false;
+  }
+
+  satelliteLayer.show = true;
+  viewer.scene.requestRender();
 }
+
 
 function disableSatellite() {
+  if (satelliteLayer) {
+    satelliteLayer.show = false;
+  }
 
-  if (!satelliteLayer) return;
+  if (osmLayer) {
+    osmLayer.show = true;
+  }
 
-  viewer.imageryLayers.remove(satelliteLayer, false);
-  satelliteLayer = null;
-
+  viewer.scene.requestRender();
 }
+disableSatellite();
 viewer.scene.requestRenderMode = true;
 viewer.scene.maximumRenderTimeChange = 1 / 30;
 viewer.scene.globe.enableLighting = true;
