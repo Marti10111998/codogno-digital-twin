@@ -2688,8 +2688,7 @@ requestForecast();
   baseLayerPicker: false,
   timeline: false,
   animation: false,
-  shadows: true,
-  imageryProvider: false
+  shadows: true
 };
 
 // Show Codogno from above as the default overview (Home button too)
@@ -2700,15 +2699,18 @@ Cesium.Camera.DEFAULT_VIEW_RECTANGLE = Cesium.Rectangle.fromDegrees(
 Cesium.Camera.DEFAULT_VIEW_FACTOR = 0.5;
 
 viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
-// Basemap toggle buttons: Map default ON, Satellite default OFF
+
 // ==========================
-// Basemap toggle buttons
-// BOTH inactive by default
-// click active button again = turn it OFF
+// Basemap toggle
+// Map = OSM
+// Satellite = Cesium default imagery
+// Both inactive by default
+// Click active one again = OFF
 // ==========================
 let osmLayer = null;
-let satelliteLayer = null;
-let activeBasemap = null; // "map" | "satellite" | null
+let activeBasemap = null;
+
+const cesiumDefaultLayer = viewer.imageryLayers.get(0);
 
 const mapBtn = document.getElementById("mapBtn");
 const satelliteBtn = document.getElementById("satelliteBtn");
@@ -2720,20 +2722,20 @@ function clearButtons(){
 
 function hideAllBasemaps(){
   if (osmLayer) osmLayer.show = false;
-  if (satelliteLayer) satelliteLayer.show = false;
+  if (cesiumDefaultLayer) cesiumDefaultLayer.show = false;
   activeBasemap = null;
   clearButtons();
   viewer.scene.requestRender();
 }
 
-async function toggleMapBasemap(){
-  // if already active -> turn OFF
+function toggleMapBasemap(){
+  if (!viewer) return;
+
   if (activeBasemap === "map"){
     hideAllBasemaps();
     return;
   }
 
-  // create if needed
   if (!osmLayer){
     osmLayer = viewer.imageryLayers.addImageryProvider(
       new Cesium.OpenStreetMapImageryProvider({
@@ -2742,8 +2744,7 @@ async function toggleMapBasemap(){
     );
   }
 
-  // show only map
-  if (satelliteLayer) satelliteLayer.show = false;
+  if (cesiumDefaultLayer) cesiumDefaultLayer.show = false;
   osmLayer.show = true;
   activeBasemap = "map";
 
@@ -2752,26 +2753,16 @@ async function toggleMapBasemap(){
   viewer.scene.requestRender();
 }
 
-async function toggleSatelliteBasemap(){
-  // if already active -> turn OFF
+function toggleSatelliteBasemap(){
+  if (!viewer || !cesiumDefaultLayer) return;
+
   if (activeBasemap === "satellite"){
     hideAllBasemaps();
     return;
   }
 
-  // create if needed
-  if (!satelliteLayer){
-satelliteLayer = viewer.imageryLayers.addImageryProvider(
-  new Cesium.UrlTemplateImageryProvider({
-    url: "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-    maximumLevel: 20
-  })
-);
-  }
-
-  // show only satellite
   if (osmLayer) osmLayer.show = false;
-  satelliteLayer.show = true;
+  cesiumDefaultLayer.show = true;
   activeBasemap = "satellite";
 
   clearButtons();
@@ -2782,7 +2773,7 @@ satelliteLayer = viewer.imageryLayers.addImageryProvider(
 mapBtn?.addEventListener("click", toggleMapBasemap);
 satelliteBtn?.addEventListener("click", toggleSatelliteBasemap);
 
-// default state = BOTH OFF
+// start with both OFF
 hideAllBasemaps();
 
 // default state
@@ -2935,13 +2926,7 @@ setInterval(refreshWeatherForecast, 15 * 60_000); // every 15 minutes
       document.getElementById("palette").addEventListener("change", updateStyles);
       document.getElementById("binCount").addEventListener("input", updateStyles);
 
-      document.getElementById("mapBtn")?.addEventListener("click", async () => {
-  await showMapBasemap();
-});
 
-document.getElementById("satelliteBtn")?.addEventListener("click", async () => {
-  await showSatelliteBasemap();
-});
 
       // ====== Traffic Heatmap dots (static) ======
       function clearHeatmap(){
