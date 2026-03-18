@@ -1753,14 +1753,14 @@ const DEVICE_KEY = "device_id_v1";
 
   try {
     const r = await fetch(apiUrl("/predict"), {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "ngrok-skip-browser-warning": "true"
-  },
-  body: JSON.stringify(features),
-  cache: "no-store"
-});
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true"
+      },
+      body: JSON.stringify(features),
+      cache: "no-store"
+    });
 
     if (!r.ok) {
       throw new Error(`Predict API error: ${r.status}`);
