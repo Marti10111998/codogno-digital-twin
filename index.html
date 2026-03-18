@@ -531,11 +531,6 @@ html { font-size: 14px; } /* (was 16px). Try 13px if you want it even smaller. *
 .pollTile .v{ font-weight: 800; font-size: 12px; }
 .pollTile .u{ font-size: 10px; opacity: .75; margin-left: 6px; }
 
-#ictPill{
-  position: fixed !important;
-  z-index: 40000 !important;
-}
-
 
 /* ===========================
    Bottom-right stacked panels
@@ -993,14 +988,11 @@ footer{
 /* Force API pill above Cesium UI */
 #ictPill{
   position: fixed !important;
-  top: 70px !important;
-  right: 16px !important;
-  left: auto !important;
-  bottom: auto !important;
   z-index: 999999 !important;
   pointer-events: auto !important;
   max-width: calc(100vw - 32px);
   transform: none !important;
+  cursor: grab;
 }
 
 .basemap-btn{
