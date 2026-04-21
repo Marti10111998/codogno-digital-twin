@@ -2684,11 +2684,12 @@ function initChartUI(){
 requestForecast();
 
 
-      const viewerOpts = {
+const viewerOpts = {
   baseLayerPicker: false,
   timeline: false,
   animation: false,
-  shadows: true
+  shadows: true,
+  imageryProvider: false   // ← prevents ion imagery session on load
 };
 
 // Show Codogno from above as the default overview (Home button too)
@@ -2710,7 +2711,7 @@ viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
 let osmLayer = null;
 let activeBasemap = null;
 
-const cesiumDefaultLayer = viewer.imageryLayers.get(0);
+const cesiumDefaultLayer = null;
 
 const mapBtn = document.getElementById("mapBtn");
 const satelliteBtn = document.getElementById("satelliteBtn");
