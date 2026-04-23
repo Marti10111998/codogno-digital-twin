@@ -2832,8 +2832,8 @@ function toggleSatelliteBasemap(){
 mapBtn?.addEventListener("click", toggleMapBasemap);
 satelliteBtn?.addEventListener("click", toggleSatelliteBasemap);
 
-// start with both OFF
-hideAllBasemaps();
+// start with satellite ON
+toggleSatelliteBasemap();
 
 // default state
 viewer.scene.requestRenderMode = true;
