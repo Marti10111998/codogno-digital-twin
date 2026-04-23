@@ -1033,52 +1033,52 @@ footer{
   <div id="cesiumContainer"></div>
 
   <!-- Drag hint overlay -->
-  <div id="dragHint" style="
-    position: fixed;
-    bottom: 48px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 30000;
-    background: rgba(0,0,0,0.55);
-    color: white;
-    padding: 10px 20px;
-    border-radius: 999px;
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    font-size: 13px;
-    font-weight: 500;
-    pointer-events: none;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    backdrop-filter: blur(6px);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-    transition: opacity 0.5s ease;
-  ">
-    <span style="font-size:16px">✋</span> Drag on the screen to explore
-  </div>
-  <script>
-    (function(){
-      const hint = document.getElementById('dragHint');
-      let triggered = false;
-      function dismiss(){
-        if (triggered) return;
-        triggered = true;
-        hint.style.opacity = '0';
-        setTimeout(() => hint.remove(), 500);
-      }
-      window.addEventListener('mousedown', function onDown(){
-        window.addEventListener('mousemove', function onMove(){
-          dismiss();
-          window.removeEventListener('mousemove', onMove);
-        }, { once: true });
-        window.removeEventListener('mousedown', onDown);
-      });
-      window.addEventListener('touchmove', function onTouch(){
+<div id="dragHint" style="
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30000;
+  background: rgba(0,0,0,0.55);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  transition: opacity 0.5s ease;
+">
+  <span style="font-size:16px">✋</span> Drag on the screen to explore
+</div>
+<script>
+  (function(){
+    const hint = document.getElementById('dragHint');
+    let triggered = false;
+    function dismiss(){
+      if (triggered) return;
+      triggered = true;
+      hint.style.opacity = '0';
+      setTimeout(() => hint.remove(), 500);
+    }
+    window.addEventListener('mousedown', function onDown(){
+      window.addEventListener('mousemove', function onMove(){
         dismiss();
-        window.removeEventListener('touchmove', onTouch);
-      }, { passive: true });
-    })();
-  </script>
+        window.removeEventListener('mousemove', onMove);
+      }, { once: true });
+      window.removeEventListener('mousedown', onDown);
+    });
+    window.addEventListener('touchmove', function onTouch(){
+      dismiss();
+      window.removeEventListener('touchmove', onTouch);
+    }, { passive: true });
+  })();
+</script>
 
   <!-- Control Panel -->
 <div id="controlPanel" class="absolute top-4 left-4 w-[320px] z-10 font-sans rounded-xl">
@@ -2749,17 +2749,6 @@ Cesium.Camera.DEFAULT_VIEW_FACTOR = 0;
 
 viewer = new Cesium.Viewer("cesiumContainer", viewerOpts);
 
-// Fly to city-level view on startup
-viewer.camera.flyTo({
-  destination: Cesium.Cartesian3.fromDegrees(9.705, 45.162, 3500),
-  orientation: {
-    heading: Cesium.Math.toRadians(0),
-    pitch:   Cesium.Math.toRadians(-55),
-    roll:    0
-  },
-  duration: 0
-});
-
 // ==========================
 // Basemap toggle
 // Map = OSM
@@ -2768,8 +2757,9 @@ viewer.camera.flyTo({
 // Click active one again = OFF
 // ==========================
 let osmLayer = null;
-let satelliteLayer = null;
 let activeBasemap = null;
+
+const cesiumDefaultLayer = null;
 
 const mapBtn = document.getElementById("mapBtn");
 const satelliteBtn = document.getElementById("satelliteBtn");
@@ -2781,7 +2771,7 @@ function clearButtons(){
 
 function hideAllBasemaps(){
   if (osmLayer) osmLayer.show = false;
-  if (satelliteLayer) satelliteLayer.show = false;
+  if (cesiumDefaultLayer) cesiumDefaultLayer.show = false;
   activeBasemap = null;
   clearButtons();
   viewer.scene.requestRender();
@@ -2789,7 +2779,11 @@ function hideAllBasemaps(){
 
 function toggleMapBasemap(){
   if (!viewer) return;
-  if (activeBasemap === "map"){ hideAllBasemaps(); return; }
+
+  if (activeBasemap === "map"){
+    hideAllBasemaps();
+    return;
+  }
 
   if (!osmLayer){
     osmLayer = viewer.imageryLayers.addImageryProvider(
@@ -2799,31 +2793,27 @@ function toggleMapBasemap(){
     );
   }
 
-  if (satelliteLayer) satelliteLayer.show = false;
+  if (cesiumDefaultLayer) cesiumDefaultLayer.show = false;
   osmLayer.show = true;
   activeBasemap = "map";
+
   clearButtons();
   mapBtn?.classList.add("active");
   viewer.scene.requestRender();
 }
 
 function toggleSatelliteBasemap(){
-  if (!viewer) return;
-  if (activeBasemap === "satellite"){ hideAllBasemaps(); return; }
+  if (!viewer || !cesiumDefaultLayer) return;
 
-  // Free Esri World Imagery — no Ion credits needed
-  if (!satelliteLayer){
-    satelliteLayer = viewer.imageryLayers.addImageryProvider(
-      new Cesium.UrlTemplateImageryProvider({
-        url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        credit: "Esri, Maxar, Earthstar Geographics"
-      })
-    );
+  if (activeBasemap === "satellite"){
+    hideAllBasemaps();
+    return;
   }
 
   if (osmLayer) osmLayer.show = false;
-  satelliteLayer.show = true;
+  cesiumDefaultLayer.show = true;
   activeBasemap = "satellite";
+
   clearButtons();
   satelliteBtn?.classList.add("active");
   viewer.scene.requestRender();
