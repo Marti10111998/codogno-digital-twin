@@ -10880,7 +10880,7 @@ buildPanes(R,[
 {id:"vpScn",icon:"&#129514;",label:"What-if",title:"What-if Scenarios",sub:"Policy & resilience sandbox",html:'<div class="vp-explain"><b>Move the sliders</b> (climate, greenery, roofs, wind, traffic, industry, flood, outage, wildfire, evacuation) to simulate interventions; the summary estimates trees, canopy, UHI cooling and CO&#8322; effect.</div>',build:function(p){ moveInto(document.getElementById("scenarioPanel"),p); }}
 ]);
 activate(R,R._panes,"vpViz");
-function reclaim(){ moveInto(document.getElementById("controlPanel"), R._panes.vpViz.pane); moveInto(document.getElementById("uhiLegendRight"), R._panes.vpUhi.pane); moveInto(document.getElementById("rcsPanel"), R._panes.vpRcs.pane); moveInto(document.getElementById("rtsLegend"), R._panes.vpRts.pane); moveInto(document.getElementById("scenarioPanel"), R._panes.vpScn.pane); trafficSection(R._panes.vpTraffic.pane); }
+function reclaim(){ moveInto(document.getElementById("controlPanel"), R._panes.vpViz.pane); moveInto(document.getElementById("uhiLegendRight"), L._panes.vpHeat.pane); moveInto(document.getElementById("rcsPanel"), R._panes.vpRcs.pane); moveInto(document.getElementById("rtsLegend"), R._panes.vpRts.pane); moveInto(document.getElementById("scenarioPanel"), R._panes.vpScn.pane); trafficSection(R._panes.vpTraffic.pane); }
 var mo=new MutationObserver(reclaim); mo.observe(body,{childList:true});
 var root=document.documentElement, LW=360, RW=380;
 function setLW(w){ LW=Math.max(240,Math.min(640,w)); root.style.setProperty("--vp-lw",LW+"px"); }
