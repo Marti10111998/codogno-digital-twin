@@ -1,0 +1,33 @@
+<!--
+  Drop this into index.html to read the free, always-on predictions.json
+  instead of calling a live API. Replace YOUR_USER/YOUR_REPO.
+-->
+<script>
+const PREDICTIONS_URL =
+  "https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/docs/predictions.json";
+// If you enable GitHub Pages you can instead use:
+//   "https://YOUR_USER.github.io/YOUR_REPO/predictions.json";
+
+async function loadPredictions() {
+  try {
+    // cache-bust so you always get the freshest hourly file
+    const res = await fetch(PREDICTIONS_URL + "?t=" + Date.now());
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+
+    console.log("Generated at:", data.generated_at);
+    console.log("Current pollution:", data.current.pollution);
+    console.log("Forecast steps:", data.forecast.length);
+
+    // TODO: feed data.current.pollution + data.forecast into your
+    // existing Cesium overlays and Chart.js charts here.
+    return data;
+  } catch (err) {
+    console.error("Could not load predictions:", err);
+  }
+}
+
+loadPredictions();
+// Refresh every 15 min while the page is open:
+setInterval(loadPredictions, 15 * 60 * 1000);
+</script>

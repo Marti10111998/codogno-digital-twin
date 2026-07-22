@@ -1,0 +1,11 @@
+# For predict_job.py (GitHub Actions) and train_lightgbm.py
+pandas
+numpy
+scikit-learn
+lightgbm
+joblib
+requests
+# Only needed if you also run the live API (pollution_api.py):
+fastapi
+uvicorn[standard]
+pydantic
