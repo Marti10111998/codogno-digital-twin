@@ -1,0 +1,40 @@
+name: Hourly pollution predictions
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r codogno-twin/requirements.txt
+
+      - name: Run prediction job
+        env:
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          MODELS_DIR: codogno-twin/models
+          OUT_PATH: docs/predictions.json
+          CITY: Codogno
+        run: python codogno-twin/predict_job.py
+
+      - name: Commit predictions.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/predictions.json
+          git commit -m "chore: update predictions.json [skip ci]" || echo "No changes"
+          git push
