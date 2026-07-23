@@ -5487,18 +5487,28 @@ try {
     ch.update();
   }
 
-  // Paint pill
+    // Paint pill — prefer live ngrok API, else fall back to the free hourly predictions.json
+  let preds = null;
+  try { preds = await getStaticPredictions(); } catch (e) {}
+  const predsFresh = !!(preds && preds.current && preds.current.pollution);
+
   if (ok){
     dotEl.style.background = "#22c55e"; // green
     dotEl.style.boxShadow = "0 0 0 3px rgba(34,197,94,.18)";
     mainEl.textContent = `API: online • ${latencyMs ?? "—"} ms`;
+    subEl.textContent = `Uptime(24h): ${uptimeClamped}% • last OK: ${lastOkText} • ${new Date().toLocaleTimeString()}`;
+  } else if (predsFresh){
+    dotEl.style.background = "#22c55e"; // green
+    dotEl.style.boxShadow = "0 0 0 3px rgba(34,197,94,.18)";
+    mainEl.textContent = `Predictions: online (hourly)`;
+    const upd = preds.generated_at ? new Date(preds.generated_at).toLocaleString() : "unknown";
+    subEl.textContent = `Auto-updated hourly • last update: ${upd}`;
   } else {
     dotEl.style.background = "#ef4444"; // red
     dotEl.style.boxShadow = "0 0 0 3px rgba(239,68,68,.18)";
     mainEl.textContent = `API: offline`;
+    subEl.textContent = `Uptime(24h): ${uptimeClamped}% • last OK: ${lastOkText} • ${new Date().toLocaleTimeString()}`;
   }
-
-  subEl.textContent = `Uptime(24h): ${uptimeClamped}% • last OK: ${lastOkText} • ${new Date().toLocaleTimeString()}`;
 }
 
 // ===== ICT pill: draggable + expandable (NEW) =====
