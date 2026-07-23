@@ -2446,15 +2446,14 @@ if (!nowPoll) {
 
 // fill any missing pollutants from heuristic model
 const heuristicPoll = simulatePollutionFromWeather(lastWeather);
-for (const k of ["O3","NO2","NO","CO","NH3","Noise","PM10","PM25","SO2","B"]) {
+for (const k of ["O3","NO2","NO","CO","NH3"]) {
   if (!Number.isFinite(nowPoll[k])) {
     nowPoll[k] = heuristicPoll[k];
   }
 }
 
-        if (typeof nowPoll.Noise !== 'number') nowPoll.Noise = estimateNoiseFromContext(lastWeather);
-
-        for (const k of ["O3","NO2","NO","CO","NH3","Noise","PM10","PM25","SO2","B"]) {
+        
+                for (const k of ["O3","NO2","NO","CO","NH3"]) {
   histories[k].push(Number(nowPoll[k]) || 0);
   if (histories[k].length > 2000) histories[k].shift();
 }
@@ -2875,7 +2874,7 @@ async function checkSystemHealth(){
 };
     const RETENTION_DAYS = 7;
     const STORE_KEY = "pollution_ts_v1";
-    const KEYS = ["O3","NO2","NO","CO","NH3","Noise","PM10","PM25","SO2","B"];
+        const KEYS = ["O3","NO2","NO","CO","NH3"];
 
     function pruneOldData() {
       const cutoff = Date.now() - RETENTION_DAYS * 24 * 3600 * 1000;
@@ -2949,12 +2948,7 @@ async function checkSystemHealth(){
   NO2:"µg/m³",
   NO:"µg/m³",
   CO:"ppm",
-  NH3:"µg/m³",
-  Noise:"dB(A)",
-  PM10:"µg/m³",
-  PM25:"µg/m³",
-  SO2:"µg/m³",
-  B:"µg/m³"
+    NH3:"µg/m³"
 };
 
 const THRESHOLDS = {
@@ -2962,12 +2956,7 @@ const THRESHOLDS = {
   NO2:40,
   NO:50,
   CO:10,
-  NH3:2,
-  Noise:65,
-  PM10:40,
-  PM25:25,
-  SO2:20,
-  B:5
+    NH3:2
 };
 
 const LABELS = {
@@ -2975,12 +2964,7 @@ const LABELS = {
   NO2: "NO2",
   NO: "NO",
   CO: "CO",
-  NH3: "NH3",
-  Noise: "Noise",
-  PM10: "PM10",
-  PM25: "PM2.5",
-  SO2: "SO2",
-  B: "B (benzene)"
+    NH3: "NH3"
 };
 
     // Threshold line plugin
@@ -3383,7 +3367,7 @@ function initChartUI(){
     // Pollution tiles panel
     // ==========================
 function paintPollutionPanelNow(){
-  const PANEL_KEYS = ["PM10","PM25","O3","NO2","NO","SO2","B","CO","NH3","Noise"];
+    const PANEL_KEYS = ["O3","NO2","NO","CO","NH3"];
 
   const labelOf = (k) => LABELS[k] || k;
 
